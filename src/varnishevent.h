@@ -56,7 +56,7 @@
 #define DEFAULT_HOUSEKEEP_INTERVAL 10
 #define DEFAULT_TTL 120
 
-#define MAX_VSL_TAG 256
+#define MAX_VSL_TAG SLT__MAX
 
 #define DEFAULT_CFORMAT \
     "%h %l %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-agent}i\""
