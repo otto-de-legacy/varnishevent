@@ -6,8 +6,9 @@
 
 #include "config.h"
 
-#include <sys/types.h>
-#include "varnishapi.h"
+#include <stdlib.h>
+#include <string.h>
+
 #include "base64.h"
 
 static const char b64[] =
@@ -29,17 +30,17 @@ VB64_init(void)
 }
 
 int
-VB64_decode(char *d, unsigned dlen, const char *s)
+VB64_decode(char *d, unsigned dlen, const char *s, const char *e)
 {
 	unsigned u, v, l;
 	int i;
 
+	if (e == NULL)
+		e = s + strlen(s);
 	u = 0;
 	l = 0;
-	while (*s) {
-		for (v = 0; v < 4; v++) {
-			if (!*s)
-				break;
+	while (s < e) {
+		for (v = 0; s < e && v < 4; v++) {
 			i = i64[(int)*s++];
 			if (i < 0)
 				return (-1);
@@ -60,7 +61,8 @@ VB64_decode(char *d, unsigned dlen, const char *s)
 }
 
 #ifdef TEST_DRIVER
-#include <stdio.h>
+
+#include <stdio.h>		// for test-prog
 
 const char *test1 =
 "TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCBieSB0aGlz"
@@ -81,7 +83,7 @@ main(int argc, char **argv)
 
 	VB64_init();
 	l = sizeof buf;
-	VB64_decode(buf, &l, test1);
+	VB64_decode(buf, l, test1, NULL);
 	printf("%s\n", buf);
 	return (0);
 }
