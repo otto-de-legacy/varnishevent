@@ -141,6 +141,8 @@ static int waiting = 0;
 
 static char cli_config_filename[BUFSIZ] = "";
 
+static char tx_type_name[VSL_t__MAX];
+
 int
 RDR_Waiting(void)
 {
@@ -231,9 +233,9 @@ static inline tx_t
 }
 
 static inline void
-take_chunks(linehead_t *lines, unsigned nchunks)
+take_chunks(linehead_t *lineh, unsigned nchunks)
 {
-    (void) lines;
+    (void) lineh;
     (void) nchunks;
 }
 
@@ -291,25 +293,14 @@ event(struct VSL_data *_vsl, struct VSL_transaction * const pt[], void *priv)
         tx = take_tx();
         CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
         assert(tx->state == TX_EMPTY);
-        assert(!VSTAILQ_EMPTY(tx->lines));
+        assert(!VSTAILQ_EMPTY(&tx->lines));
 
-        switch(t->type) {
-        case VSL_t_req:
-            tx->spec = 'c';
-            break;
-        case VSL_t_bereq:
-            tx->spec = 'b';
-            break;
-        case VSL_t_raw:
-            tx->spec = '-';
-            break;
-        default:
-            WRONG("Unexpected transaction type");
-        }
+        assert(t->type == VSL_t_req || t->type == VSL_t_bereq
+               || t->type == VSL_t_raw);
             
-        LOG_Log(LOG_DEBUG, "Tx: [%u %c]", t->vxid, tx->spec);
+        LOG_Log(LOG_DEBUG, "Tx: [%u %c]", t->vxid, tx_type_name[tx->type]);
 
-        logline_t *line = VSTAILQ_FIRST(tx->lines);
+        logline_t *line = VSTAILQ_FIRST(&tx->lines);
         while (1) {
             int len;
 
@@ -339,16 +330,15 @@ event(struct VSL_data *_vsl, struct VSL_transaction * const pt[], void *priv)
             line->len = len;
             if (len != 0) {
                 /* Copy the payload into chunks */
-                AN(line->chunks);
-                assert(!VSTAILQ_EMPTY(line->chunks));
+                assert(VSTAILQ_EMPTY(&line->chunks));
 
                 int nchunks = (len + config.chunk_size - 1) / config.chunk_size;
                 if (nchunks > 1)
                     /* XXX: increment counter */
-                    take_chunks(tx->lines, nchunks);
+                    take_chunks(&tx->lines, nchunks);
 
                 int n = len;
-                chunk_t *chunk = VSTAILQ_FIRST(line->chunks);
+                chunk_t *chunk = VSTAILQ_FIRST(&line->chunks);
                 const char *p = (const char *) VSL_CDATA(t->c->rec.ptr);
                 while (n > 0) {
                     CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
@@ -694,6 +684,12 @@ main(int argc, char *argv[])
         TIM_sleep(1);
 #endif
     }
+
+    for (int i = 0; i < VSL_t__MAX; i++)
+        tx_type_name[i] = 'X';
+    tx_type_name[VSL_t_req] = 'c';
+    tx_type_name[VSL_t_bereq] = 'b';
+    tx_type_name[VSL_t_raw] = '-';
 
     /* Main loop */
     term = 0;

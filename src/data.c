@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2013 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2013 Otto Gmbh & Co KG
+ * Copyright (c) 2013-2015 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2013-2015 Otto Gmbh & Co KG
  * All rights reserved
  * Use only with permission
  *
@@ -48,6 +48,10 @@ static const char *statename[3] = { "EMPTY", "OPEN", "DONE" };
 
 static pthread_mutex_t freelist_lock = PTHREAD_MUTEX_INITIALIZER;
 static char *bufptr;
+static txhead_t freetxhead;
+static linehead_t freerechead;
+static chunkhead_t freechunkhead;
+
 static int lines_per_tx = FAKE_DEFAULT_LINES_PER_TX;
 
 #if 0
@@ -81,57 +85,80 @@ DATA_Clear_Logline(tx_t *tx)
     /* XXX: etc. ... */
 }
 
-#define INIT_HDR_RECORDS(tag, hdr, max) do {                            \
-    if (FMT_Read_Hdr(tag)) {                                            \
-        hdr = (hdr_t *) malloc(sizeof(hdr_t));                          \
-        if (hdr == NULL)                                                \
-            return errno;                                               \
-        hdr->record                                                     \
-            = (record_t *) calloc(max, sizeof(record_t));               \
-        if (hdr->record == NULL)                                        \
-            return errno;                                               \
-        for (int j = 0; j < max; j++) {                                 \
-            hdr->record[j].magic = RECORD_MAGIC;                        \
-            hdr->record[j].data = &bufptr[bufidx++ * config.max_reclen]; \
-        }                                                               \
-    }                                                                   \
-    else {                                                              \
-        hdr = NULL;                                                     \
-    }                                                                   \
-} while(0)
-
 int
 DATA_Init(void)
 {
-    int bufidx = 0;
-    int nrecords;
+        int bufidx = 0, nrecords, nchunks, chunks_per_rec;
 
 #if 0
-    lines_per_tx = FMT_Get_nTags();
+    lines_per_tx = FMT_Get_LinesPerTx();
 #endif
     
-    nrecords = config.max_data * lines_per_tx;
     /* XXX: set up tables of txen, lines & chunks, set/estimate sizes */
+    nrecords = config.max_data * lines_per_tx;
+    AN(config.chunk_size);
+    chunks_per_rec
+        = (config.max_reclen + config.chunk_size - 1) / config.chunk_size;
+    nchunks = nrecords * chunks_per_rec;
 
-    LOG_Log(LOG_DEBUG, "Allocating space for %d records (%d bytes)", nrecords,
-            nrecords * config.max_reclen);
-    bufptr = (char *) calloc(nrecords, config.max_reclen);
+    LOG_Log(LOG_DEBUG, "Allocating space for %d chunks (%d bytes)",
+            nchunks, nchunks * config.chunk_size);
+    bufptr = (char *) calloc(nchunks, config.chunk_size);
     if (bufptr == NULL)
         return errno;
-    
-    txn = (tx_t *) calloc(config.max_data, sizeof(tx_t));
-    if (txn == NULL)
-        return errno;
 
-    VSTAILQ_INIT(&freetxhead);
-    for (int i = 0; i < config.max_data; i++) {
-        /* XXX: init */
-        txn[i].magic = TX_MAGIC;
-        DATA_Clear_Logline(&txn[i]);
-	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
+    LOG_Log(LOG_DEBUG, "Allocating table for %d chunks (%d bytes)", nchunks,
+            nchunks * sizeof(chunk_t));
+    chunks = (chunk_t *) calloc(nchunks, sizeof(chunk_t));
+    if (chunks == NULL) {
+        free(bufptr);
+        return errno;
+    }
+    VSTAILQ_INIT(&freechunkhead);
+    for (int i = 0; i < nchunks; i++) {
+        chunks[i].magic = CHUNK_MAGIC;
+        chunks[i].state = DATA_EMPTY;
+        chunks[i].data = &bufptr[bufidx++ * config.chunk_size];
+        VSTAILQ_INSERT_TAIL(&freechunkhead, &chunks[i], freelist);
+    }
+    assert(bufidx == nchunks);
+
+    LOG_Log(LOG_DEBUG, "Allocating table for %d records (%d bytes)", nrecords,
+            nrecords * sizeof(logline_t));
+    lines = (logline_t *) calloc(nrecords, sizeof(logline_t));
+    if (lines == NULL) {
+        free(bufptr);
+        free(chunks);
+        return errno;
+    }
+    VSTAILQ_INIT(&freerechead);
+    for (int i = 0; i < nrecords; i++) {
+        lines[i].magic = LOGLINE_MAGIC;
+        lines[i].state = DATA_EMPTY;
+        lines[i].tag = SLT__Bogus;
+        lines[i].len = 0;
+        VSTAILQ_INIT(&lines[i].chunks);
+        VSTAILQ_INSERT_TAIL(&freechunkhead, &chunks[i], freelist);
     }
 
-    assert(bufidx == nrecords);
+    LOG_Log(LOG_DEBUG, "Allocating table for %d transactions (%d bytes)",
+            config.max_data, config.max_data * sizeof(tx_t));
+    txn = (tx_t *) calloc(config.max_data, sizeof(tx_t));
+    if (txn == NULL) {
+        free(bufptr);
+        free(chunks);
+        free(lines);
+        return errno;
+    }
+    VSTAILQ_INIT(&freetxhead);
+    for (int i = 0; i < config.max_data; i++) {
+        txn[i].magic = TX_MAGIC;
+        txn[i].state = TX_EMPTY;
+        txn[i].vxid = -1;
+        txn[i].type = VSL_t_unknown;
+        VSTAILQ_INIT(&txn[i].lines);
+	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
+    }
 
     data_open = data_done = data_occ_hi = 0;
     global_nfree = config.max_data;

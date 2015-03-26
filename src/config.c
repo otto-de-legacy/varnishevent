@@ -91,6 +91,8 @@ conf_getUnsignedInt(const char *rval, unsigned *i)
         return(0);                   \
     }
 
+/* XXX: need confNonNegative for chunk.size */
+
 #define confUnsigned(name,fld)                   \
     if (strcmp(lval, name) == 0) {               \
         unsigned int i;                          \
@@ -214,6 +216,7 @@ CONF_Init(void)
     config.max_vcl_call = DEFAULT_MAX_HEADERS;
     config.max_fd = DEFAULT_MAX_FD;
     config.max_data = DEFAULT_MAX_DATA;
+    config.chunk_size = DEFAULT_CHUNK_SIZE;
     config.housekeep_interval = DEFAULT_HOUSEKEEP_INTERVAL;
     config.ttl = DEFAULT_TTL;
 

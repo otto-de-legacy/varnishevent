@@ -30,11 +30,27 @@
  */
 
 #include <time.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <math.h>
 
 #include "strfTIM.h"
 
+#include "vas.h"
 #include "vsb.h"
-#include "libvarnish.h"
+
+/*
+ * cf. vtim.c/VTIM:timespec in libvarnish
+ */
+static struct timespec
+double2timespec(double t)
+{
+    struct timespec tv;
+
+    tv.tv_sec = (time_t)trunc(t);
+    tv.tv_nsec = (int)(1e9 * (t - tv.tv_sec));
+    return (tv);
+}
 
 size_t
 strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, long nsec)
@@ -77,7 +93,7 @@ strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, long nsec)
 size_t                                                          \
 strfTIM##tz(char *s, size_t max, const char *fmt, double t)     \
 {                                                               \
-        struct timespec tim = TIM_timespec(t);                  \
+        struct timespec tim = double2timespec(t);               \
         struct tm tm;                                           \
                                                                 \
         AN(tz##time_r((time_t *) &tim.tv_sec, &tm));            \

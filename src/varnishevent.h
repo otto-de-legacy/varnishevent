@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2013 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2013 Otto Gmbh & Co KG
+ * Copyright (c) 2013-2015 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2013-2015 Otto Gmbh & Co KG
  * All rights reserved.
  * Use only with permission
  *
@@ -49,6 +49,7 @@
 #define DEFAULT_MAX_RECLEN 255	/* shm_reclen */
 #define DEFAULT_MAX_HEADERS 64	/* http_max_hdr */
 
+#define DEFAULT_CHUNK_SIZE 64
 #define DEFAULT_MAX_FD 1024
 #define DEFAULT_MAX_DATA 4096
 #define DEFAULT_PID_FILE "/var/run/varnishevent.pid"
@@ -90,12 +91,13 @@ typedef struct {
 typedef struct chunk_t {
     unsigned magic;
 #define CHUNK_MAGIC 0x676e0d19
+    data_state_e state;
     char *data;
     VSTAILQ_ENTRY(chunk_t) freelist;
     VSTAILQ_ENTRY(chunk_t) chunklist;
 } chunk_t;
 
-VSTAILQ_HEAD(chunkhead_s, chunk_t);
+typedef VSTAILQ_HEAD(chunkhead_s, chunk_t) chunkhead_t;
 
 chunk_t *chunks;
 
@@ -104,11 +106,13 @@ typedef struct logline_t {
 #define LOGLINE_MAGIC 0xf427a374
     enum VSL_tag_e tag;
     data_state_e state;
-    struct chunkhead_s *chunks;
+    chunkhead_t chunks;
     unsigned len;
     VSTAILQ_ENTRY(logline_t) freelist;
     VSTAILQ_ENTRY(logline_t) linelist;
 } logline_t;
+
+logline_t *lines;
 
 typedef VSTAILQ_HEAD(linehead_s, logline_t) linehead_t;
 
@@ -116,15 +120,16 @@ typedef struct tx_t {
     unsigned magic;
 #define TX_MAGIC 0xff463e42
     tx_state_e state;
-    char spec;	/* 'b'/'c'/'-' */
-    linehead_t *lines;
+    int32_t vxid;
+    enum VSL_transaction_e type;
+    linehead_t lines;
     VSTAILQ_ENTRY(tx_t) freelist;
     VSTAILQ_ENTRY(tx_t) spscq;
 } tx_t;
 
 tx_t *txn;
 
-VSTAILQ_HEAD(txhead_s, tx_t);
+typedef VSTAILQ_HEAD(txhead_s, tx_t) txhead_t;
 
 unsigned data_open;
 unsigned data_done;
@@ -135,7 +140,6 @@ enum VSL_tag_e idx2tag[MAX_VSL_TAG];
 
 VSTAILQ_HEAD(freehead_s, logline_t);
 
-struct txhead_s freetxhead;
 unsigned global_nfree;
 
 /* Reader waits for this condition when the freelist is exhausted.
@@ -180,6 +184,8 @@ struct config {
     /* varnishd param shm_reclen */
     unsigned	max_reclen;
 
+    unsigned	chunk_size;
+
     /* varnishd param http_max_hdr */
     unsigned	max_headers;
 
@@ -187,7 +193,6 @@ struct config {
     unsigned	max_vcl_call;
 
     unsigned	max_fd;
-    unsigned	chunk_size;
     unsigned	max_data;    
 
     unsigned	housekeep_interval;

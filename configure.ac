@@ -64,6 +64,7 @@ AC_SUBST(VARNISH_LIBS)
 AC_SUBST(VARNISH_PKG_INCLUDE, $ac_varnish_pkgincludedir)
 AC_SUBST(VARNISH_SHARE_INCLUDE, "$ac_varnish_pkgdatadir/include")
 AC_SUBST(VARNISH_PKG_LIB, $ac_varnish_libdir)
+AC_SUBST(VARNISH_LIBVARNISH_LIB, "-L$ac_varnish_libdir/varnish")
 
 # Checks for header files.
 AC_HEADER_STDC
