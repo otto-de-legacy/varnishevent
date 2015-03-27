@@ -46,10 +46,12 @@
 static const char *statename[3] = { "EMPTY", "OPEN", "DONE" };
 #endif
 
-static pthread_mutex_t freelist_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t freetx_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t freeline_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t freechunk_lock = PTHREAD_MUTEX_INITIALIZER;
 static char *bufptr;
 static txhead_t freetxhead;
-static linehead_t freerechead;
+static linehead_t freelinehead;
 static chunkhead_t freechunkhead;
 
 static int lines_per_tx = FAKE_DEFAULT_LINES_PER_TX;
@@ -73,7 +75,9 @@ data_Cleanup(void)
     }
     free(txn);
     free(bufptr);
-    AZ(pthread_mutex_destroy(&freelist_lock));
+    AZ(pthread_mutex_destroy(&freetx_lock));
+    AZ(pthread_mutex_destroy(&freeline_lock));
+    AZ(pthread_mutex_destroy(&freechunk_lock));
 }
 
 void
@@ -131,14 +135,14 @@ DATA_Init(void)
         free(chunks);
         return errno;
     }
-    VSTAILQ_INIT(&freerechead);
+    VSTAILQ_INIT(&freelinehead);
     for (int i = 0; i < nrecords; i++) {
         lines[i].magic = LOGLINE_MAGIC;
         lines[i].state = DATA_EMPTY;
         lines[i].tag = SLT__Bogus;
         lines[i].len = 0;
         VSTAILQ_INIT(&lines[i].chunks);
-        VSTAILQ_INSERT_TAIL(&freechunkhead, &chunks[i], freelist);
+        VSTAILQ_INSERT_TAIL(&freelinehead, &lines[i], freelist);
     }
 
     LOG_Log(LOG_DEBUG, "Allocating table for %d transactions (%d bytes)",
@@ -161,7 +165,7 @@ DATA_Init(void)
     }
 
     data_open = data_done = data_occ_hi = 0;
-    global_nfree = config.max_data;
+    global_nfree_tx = config.max_data;
 
     atexit(data_Cleanup);
     
@@ -171,18 +175,23 @@ DATA_Init(void)
 /* 
  * take all free entries from the datatable for lockless allocation
  */
-unsigned
-DATA_Take_Freelist(struct txhead_s *dst)
-{
-    unsigned nfree;
-    
-    AZ(pthread_mutex_lock(&freelist_lock));
-    VSTAILQ_CONCAT(dst, &freetxhead);
-    nfree = global_nfree;
-    global_nfree = 0;
-    AZ(pthread_mutex_unlock(&freelist_lock));
-    return nfree;
+#define DATA_Take_Free(type)                            \
+unsigned                                                \
+DATA_Take_Free##type(struct type##head_s *dst)          \
+{                                                       \
+    unsigned nfree;                                     \
+                                                        \
+    AZ(pthread_mutex_lock(&free##type##_lock));         \
+    VSTAILQ_CONCAT(dst, &free##type##head);             \
+    nfree = global_nfree_##type;                        \
+    global_nfree_##type = 0;                            \
+    AZ(pthread_mutex_unlock(&free##type##_lock));       \
+    return nfree;                                       \
 }
+
+DATA_Take_Free(tx)
+DATA_Take_Free(line)
+DATA_Take_Free(chunk)
 
 /*
  * return to global freelist
@@ -191,10 +200,10 @@ DATA_Take_Freelist(struct txhead_s *dst)
 void
 DATA_Return_Freelist(struct txhead_s *returned, unsigned nreturned)
 {
-    AZ(pthread_mutex_lock(&freelist_lock));
+    AZ(pthread_mutex_lock(&freetx_lock));
     VSTAILQ_CONCAT(&freetxhead, returned);
-    global_nfree += nreturned;
-    AZ(pthread_mutex_unlock(&freelist_lock));
+    global_nfree_tx += nreturned;
+    AZ(pthread_mutex_unlock(&freetx_lock));
 }
 
 #define DUMP_HDRS(vsb, ll, hdr) do {                    \

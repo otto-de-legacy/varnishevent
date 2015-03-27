@@ -208,7 +208,7 @@ static inline tx_t
 {
     struct tx_t *tx;
     while (VSTAILQ_EMPTY(&rdr_tx_freelist)) {
-        rdr_tx_free = DATA_Take_Freelist(&rdr_tx_freelist);
+        rdr_tx_free = DATA_Take_Freetx(&rdr_tx_freelist);
         if (VSTAILQ_EMPTY(&rdr_tx_freelist)) {
             AZ(rdr_tx_free);
             signal_spscq_ready();
@@ -221,7 +221,7 @@ static inline tx_t
             }
             waiting = 0;
             AZ(pthread_mutex_unlock(&data_ready_lock));
-            rdr_tx_free = DATA_Take_Freelist(&rdr_tx_freelist);
+            rdr_tx_free = DATA_Take_Freetx(&rdr_tx_freelist);
             LOG_Log(LOG_DEBUG, "Reader: took %u txen from free list",
                     rdr_tx_free);
         }
@@ -668,7 +668,7 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    rdr_free = DATA_Take_Freelist(&rdr_tx_freelist);
+    rdr_free = DATA_Take_Freetx(&rdr_tx_freelist);
     assert(!VSTAILQ_EMPTY(&rdr_tx_freelist));
     assert(rdr_free == config.max_data);
     

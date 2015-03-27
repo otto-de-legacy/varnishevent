@@ -227,10 +227,10 @@ wrt_write(tx_t *tx)
     VSTAILQ_INSERT_TAIL(&wrt_freelist, tx, freelist);
     wrt_nfree++;
 
-    if (global_nfree < (config.max_data >> 1) || RDR_Waiting())
+    if (global_nfree_tx < (config.max_data >> 1) || RDR_Waiting())
         wrt_return_freelist();
 }
-    
+
 static void
 *wrt_main(void *arg)
 {

@@ -140,7 +140,7 @@ enum VSL_tag_e idx2tag[MAX_VSL_TAG];
 
 VSTAILQ_HEAD(freehead_s, logline_t);
 
-unsigned global_nfree;
+unsigned global_nfree_tx, global_nfree_line, global_nfree_chunk;
 
 /* Reader waits for this condition when the freelist is exhausted.
    Writer signals the condition after returning space to the freelist. */
@@ -240,7 +240,9 @@ int LOG_Open(const char *progname);
 /* data.c */
 int DATA_Init(void);
 void DATA_Clear_Logline(tx_t *tx);
-unsigned DATA_Take_Freelist(struct txhead_s *dst);
+unsigned DATA_Take_Freetx(struct txhead_s *dst);
+unsigned DATA_Take_Freeline(struct linehead_s *dst);
+unsigned DATA_Take_Freechunk(struct chunkhead_s *dst);
 void DATA_Return_Freelist(struct txhead_s *returned, unsigned nreturned);
 void DATA_Dump(void);
 

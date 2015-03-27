@@ -48,7 +48,7 @@ log_output(void)
     LOG_Log(LOG_INFO, "Data table: len=%u open=%u done=%u load=%.2f occ_hi=%u "
         "global_free=%u", config.max_data, data_open, data_done,
         100.0 * (data_open + data_done) / config.max_data,
-        data_occ_hi, global_nfree);
+        data_occ_hi, global_nfree_tx);
 
     RDR_Stats();
 
