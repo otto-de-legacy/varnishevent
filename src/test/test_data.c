@@ -154,25 +154,23 @@ static const char
     return NULL;
 }
 
-#if 0
 static const char
-*test_data_return(void)
+*test_data_return_tx(void)
 {
-    logline_t *ll;
+    tx_t *tx;
 
-    printf("... testing freelist return\n");
+    printf("... testing tx freelist return\n");
 
-    DATA_Return_Freelist(&local_freehead, config.max_data);
+    DATA_Return_Freelist(&local_freetx, config.max_data);
 
-    MASSERT(VSTAILQ_EMPTY(&local_freehead));
-    MASSERT(global_nfree == config.max_data);
-    MASSERT(!VSTAILQ_EMPTY(&freehead));
-    VSTAILQ_FOREACH(ll, &freehead, freelist)
-        MCHECK_OBJ_NOTNULL(ll, LOGLINE_MAGIC);
+    MASSERT(VSTAILQ_EMPTY(&local_freetx));
+    MASSERT(global_nfree_tx == config.max_data);
+    /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
+    VSTAILQ_FOREACH(tx, &local_freetx, freelist)
+        MCHECK_OBJ_NOTNULL(tx, LOGLINE_MAGIC);
 
     return NULL;
 }
-#endif
 
 static const char
 *all_tests(void)
@@ -181,9 +179,7 @@ static const char
     mu_run_test(test_data_take_tx);
     mu_run_test(test_data_take_rec);
     mu_run_test(test_data_take_chunks);
-#if 0
-    mu_run_test(test_data_return);
-#endif
+    mu_run_test(test_data_return_tx);
     return NULL;
 }
 
