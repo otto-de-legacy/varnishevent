@@ -92,7 +92,7 @@ DATA_Clear_Logline(tx_t *tx)
 int
 DATA_Init(void)
 {
-        int bufidx = 0, nrecords, nchunks, chunks_per_rec;
+        int bufidx = 0, chunks_per_rec;
 
 #if 0
     lines_per_tx = FMT_Get_LinesPerTx();
@@ -166,6 +166,8 @@ DATA_Init(void)
 
     data_open = data_done = data_occ_hi = 0;
     global_nfree_tx = config.max_data;
+    global_nfree_line = nrecords;
+    global_nfree_chunk = nchunks;
 
     atexit(data_Cleanup);
     

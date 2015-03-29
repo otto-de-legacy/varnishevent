@@ -100,6 +100,7 @@ typedef struct chunk_t {
 typedef VSTAILQ_HEAD(chunkhead_s, chunk_t) chunkhead_t;
 
 chunk_t *chunks;
+unsigned nchunks;                                          
 
 typedef struct logline_t {
     unsigned magic;
@@ -113,6 +114,7 @@ typedef struct logline_t {
 } logline_t;
 
 logline_t *lines;
+unsigned nrecords;
 
 typedef VSTAILQ_HEAD(linehead_s, logline_t) linehead_t;
 

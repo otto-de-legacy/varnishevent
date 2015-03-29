@@ -233,10 +233,10 @@ static inline tx_t
 }
 
 static inline void
-take_chunks(linehead_t *lineh, unsigned nchunks)
+take_chunks(linehead_t *lineh, unsigned _nchunks)
 {
     (void) lineh;
-    (void) nchunks;
+    (void) _nchunks;
 }
 
 static inline void
@@ -332,10 +332,10 @@ event(struct VSL_data *_vsl, struct VSL_transaction * const pt[], void *priv)
                 /* Copy the payload into chunks */
                 assert(VSTAILQ_EMPTY(&line->chunks));
 
-                int nchunks = (len + config.chunk_size - 1) / config.chunk_size;
-                if (nchunks > 1)
+                int nchunk = (len + config.chunk_size - 1) / config.chunk_size;
+                if (nchunk > 1)
                     /* XXX: increment counter */
-                    take_chunks(&tx->lines, nchunks);
+                    take_chunks(&tx->lines, nchunk);
 
                 int n = len;
                 chunk_t *chunk = VSTAILQ_FIRST(&line->chunks);
