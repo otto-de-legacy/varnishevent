@@ -199,14 +199,19 @@ DATA_Take_Free(chunk)
  * return to global freelist
  * returned must be locked by caller, if required
  */
-void
-DATA_Return_Freelist(struct txhead_s *returned, unsigned nreturned)
-{
-    AZ(pthread_mutex_lock(&freetx_lock));
-    VSTAILQ_CONCAT(&freetxhead, returned);
-    global_nfree_tx += nreturned;
-    AZ(pthread_mutex_unlock(&freetx_lock));
+#define DATA_Return_Free(type)                                          \
+void                                                                    \
+DATA_Return_Free##type(struct type##head_s *returned, unsigned nreturned) \
+{                                                                       \
+    AZ(pthread_mutex_lock(&free##type##_lock));                         \
+    VSTAILQ_CONCAT(&free##type##head, returned);                        \
+    global_nfree_##type += nreturned;                                   \
+    AZ(pthread_mutex_unlock(&free##type##_lock));                       \
 }
+
+DATA_Return_Free(tx)
+DATA_Return_Free(line)
+DATA_Return_Free(chunk)
 
 #define DUMP_HDRS(vsb, ll, hdr) do {                    \
     if (ll->hdr)                                        \

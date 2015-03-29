@@ -138,7 +138,7 @@ open_log(void)
 static inline void
 wrt_return_freelist(void)
 {
-    DATA_Return_Freelist(&wrt_freelist, wrt_nfree);
+    DATA_Return_Freetx(&wrt_freelist, wrt_nfree);
     LOG_Log(LOG_DEBUG, "Writer: returned %u to free list", wrt_nfree);
     wrt_nfree = 0;
     assert(VSTAILQ_EMPTY(&wrt_freelist));

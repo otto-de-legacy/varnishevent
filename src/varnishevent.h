@@ -245,7 +245,9 @@ void DATA_Clear_Logline(tx_t *tx);
 unsigned DATA_Take_Freetx(struct txhead_s *dst);
 unsigned DATA_Take_Freeline(struct linehead_s *dst);
 unsigned DATA_Take_Freechunk(struct chunkhead_s *dst);
-void DATA_Return_Freelist(struct txhead_s *returned, unsigned nreturned);
+void DATA_Return_Freetx(struct txhead_s *returned, unsigned nreturned);
+void DATA_Return_Freeline(struct linehead_s *returned, unsigned nreturned);
+void DATA_Return_Freechunk(struct chunkhead_s *returned, unsigned nreturned);
 void DATA_Dump(void);
 
 /* writer.c */

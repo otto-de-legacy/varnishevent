@@ -161,13 +161,49 @@ static const char
 
     printf("... testing tx freelist return\n");
 
-    DATA_Return_Freelist(&local_freetx, config.max_data);
+    DATA_Return_Freetx(&local_freetx, config.max_data);
 
     MASSERT(VSTAILQ_EMPTY(&local_freetx));
     MASSERT(global_nfree_tx == config.max_data);
     /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
     VSTAILQ_FOREACH(tx, &local_freetx, freelist)
-        MCHECK_OBJ_NOTNULL(tx, LOGLINE_MAGIC);
+        MCHECK_OBJ_NOTNULL(tx, TX_MAGIC);
+
+    return NULL;
+}
+
+static const char
+*test_data_return_rec(void)
+{
+    logline_t *rec;
+
+    printf("... testing record freelist return\n");
+
+    DATA_Return_Freeline(&local_freeline, nrecords);
+
+    MASSERT(VSTAILQ_EMPTY(&local_freeline));
+    MASSERT(global_nfree_line == nrecords);
+    /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
+    VSTAILQ_FOREACH(rec, &local_freeline, freelist)
+        MCHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+
+    return NULL;
+}
+
+static const char
+*test_data_return_chunk(void)
+{
+    chunk_t *chunk;
+
+    printf("... testing chunk freelist return\n");
+
+    DATA_Return_Freechunk(&local_freechunk, nchunks);
+
+    MASSERT(VSTAILQ_EMPTY(&local_freechunk));
+    MASSERT(global_nfree_chunk == nchunks);
+    /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
+    VSTAILQ_FOREACH(chunk, &local_freechunk, freelist)
+        MCHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
 
     return NULL;
 }
@@ -180,6 +216,8 @@ static const char
     mu_run_test(test_data_take_rec);
     mu_run_test(test_data_take_chunks);
     mu_run_test(test_data_return_tx);
+    mu_run_test(test_data_return_rec);
+    mu_run_test(test_data_return_chunk);
     return NULL;
 }
 
