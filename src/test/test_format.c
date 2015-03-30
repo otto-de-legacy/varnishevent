@@ -30,6 +30,7 @@
  */
 
 #include <string.h>
+#include <math.h>
 
 #include "vre.h"
 #include "minunit.h"
@@ -295,6 +296,56 @@ static const char
 }
 
 static const char
+*test_format_get_tm(void)
+{
+#define T1 "Start: 1427743146.529143 0.000000 0.000000"
+#define TIME 1427743146.529306
+#define TX_TIME 1427744284.563984
+    tx_t tx;
+    logline_t recs[NRECORDS];
+    chunk_t c[NRECORDS];
+    double tm;
+
+    printf("... testing get_tm()\n");
+
+    tx.magic = TX_MAGIC;
+    tx.t = TX_TIME;
+    VSTAILQ_INIT(&tx.lines);
+    for (int i = 0; i < NRECORDS; i++) {
+        recs[i].magic = LOGLINE_MAGIC;
+        recs[i].tag = SLT_ReqHeader;
+        recs[i].len = strlen("Bar: baz");
+        VSTAILQ_INSERT_TAIL(&tx.lines, &recs[i], linelist);
+        VSTAILQ_INIT(&recs[i].chunks);
+        c[i].magic = CHUNK_MAGIC;
+        c[i].data = (char *) calloc(1, config.chunk_size);
+        strcpy(c[i].data, "Bar: baz");
+        VSTAILQ_INSERT_TAIL(&recs[i].chunks, &c[i], chunklist);
+    }
+    recs[NRECORDS / 2].tag = SLT_Timestamp;
+    recs[NRECORDS / 2].len = strlen(T1);
+    strcpy(c[NRECORDS / 2].data, T1);
+    recs[NRECORDS - 1].tag = SLT_Timestamp;
+    sprintf(c[NRECORDS - 1].data, "Start: %.6f 0.000000 0.000000", TIME);
+    recs[NRECORDS - 1].len = strlen(c[NRECORDS - 1].data);
+    tm = get_tm(&tx);
+    MASSERT(fabs(tm - TIME) < 1e-6);
+
+    /* Start timestamp not found, use the tx timestamp */
+    recs[NRECORDS / 2].tag = SLT_ReqHeader;
+    recs[NRECORDS - 1].tag = SLT_ReqHeader;
+    tm = get_tm(&tx);
+    MASSERT(fabs(tm - TX_TIME) < 1e-6);
+
+    /* Empty line list */
+    VSTAILQ_INIT(&tx.lines);
+    tm = get_tm(&tx);
+    MASSERT(fabs(tm - TX_TIME) < 1e-6);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -303,6 +354,7 @@ static const char
     mu_run_test(test_format_get_hdr);
     mu_run_test(test_format_get_fld);
     mu_run_test(test_format_get_rec_fld);
+    mu_run_test(test_format_get_tm);
     return NULL;
 }
 
