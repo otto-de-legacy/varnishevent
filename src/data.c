@@ -33,7 +33,6 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <errno.h>
-#include <stddef.h>
 
 #include "varnishevent.h"
 #include "vas.h"
@@ -68,24 +67,12 @@ static chunkhead_t freechunkhead;
 
 static int lines_per_tx = FAKE_DEFAULT_LINES_PER_TX;
 
-#if 0
-static void
-free_hdrs(hdr_t *hdrs)
-{
-    if (hdrs != NULL) {
-        free(hdrs->record);
-        free(hdrs);
-    }
-}
-#endif
-
 static void
 data_Cleanup(void)
 {
-    for (int i = 0; i < config.max_data; i++) {
-            /* XXX: etc. ... */
-    }
     free(txn);
+    free(lines);
+    free(chunks);
     free(bufptr);
     AZ(pthread_mutex_destroy(&freetx_lock));
     AZ(pthread_mutex_destroy(&freeline_lock));
