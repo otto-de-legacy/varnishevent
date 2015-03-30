@@ -41,6 +41,6 @@ vre_t *time_start_re;
 void get_payload(logline_t *rec);
 logline_t *get_tag(tx_t *tx, enum VSL_tag_e tag);
 char *get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re);
-char *get_fld(char *str, int n);
+char *get_fld(const char *str, int n);
 char *get_rec_fld(logline_t *rec, int n);
 double get_tm(tx_t *tx);

@@ -38,6 +38,7 @@
 #include "../format.h"
 
 #define NRECORDS 10
+#define SHORT_STRING "foo bar baz quux"
 
 int tests_run = 0;
 
@@ -79,7 +80,6 @@ static const char
     MAN(chunk.data);
 
     /* Record with one chunk */
-#define SHORT_STRING "foo bar baz quux"
     rec.len = strlen(SHORT_STRING);
     sprintf(chunk.data, "%s", SHORT_STRING);
     VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
@@ -207,12 +207,52 @@ static const char
 }
 
 static const char
+*test_format_get_fld(void)
+{
+    char *fld, str[sizeof(SHORT_STRING)];
+
+    printf("... testing get_fld()\n");
+
+    strcpy(str, SHORT_STRING);
+
+    fld = get_fld(str, 0);
+    MAN(fld);
+    MASSERT(strcmp(fld, "foo") == 0);
+
+    fld = get_fld(str, 1);
+    MAN(fld);
+    MASSERT(strcmp(fld, "bar") == 0);
+
+    fld = get_fld(str, 2);
+    MAN(fld);
+    MASSERT(strcmp(fld, "baz") == 0);
+
+    fld = get_fld(str, 3);
+    MAN(fld);
+    MASSERT(strcmp(fld, "quux") == 0);
+
+    fld = get_fld(str, 4);
+    MAZ(fld);
+
+    strcpy(str, "   ");
+    fld = get_fld(str, 0);
+    MAZ(fld);
+    fld = get_fld(str, 1);
+    MAZ(fld);
+    fld = get_fld(str, 2);
+    MAZ(fld);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
     mu_run_test(test_format_get_payload);
     mu_run_test(test_format_get_tag);
     mu_run_test(test_format_get_hdr);
+    mu_run_test(test_format_get_fld);
     return NULL;
 }
 

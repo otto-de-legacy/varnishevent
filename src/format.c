@@ -149,17 +149,22 @@ get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re)
     return hdr_payload;
 }
 
+/*
+ * Get the nth whitespace-separated field from str, counting from 0.
+ */
 char *
-get_fld(char *str, int n)
+get_fld(const char *str, int n)
 {
-    char *fld = NULL, *s;
+    char *fld = NULL, *s, cp[BUFSIZ];
     int i = 0;
 
-    s = str;
+    AN(str);
+    strcpy(cp, str);
+    s = cp;
     do {
         fld = strtok(s, " \t");
         s = NULL;
-    } while (++i < n && fld != NULL);
+    } while (i++ < n && fld != NULL);
     
     return fld;
 }
