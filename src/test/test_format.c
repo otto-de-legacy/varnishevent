@@ -73,7 +73,7 @@ static const char
     rec.magic = LOGLINE_MAGIC;
     VSTAILQ_INIT(&rec.chunks);
     chunk.magic = CHUNK_MAGIC;
-    chunk.data = (char *) calloc(1, DEFAULT_CHUNK_SIZE);
+    chunk.data = (char *) calloc(1, config.chunk_size);
     MAN(chunk.data);
 
     /* Record with one chunk */
@@ -83,6 +83,29 @@ static const char
     VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
     get_payload(&rec);
     MASSERT(strcmp(VSB_data(payload), SHORT_STRING) == 0);
+
+    /* Record with chunks that fill out shm_reclen */
+    rec.len = config.max_reclen;
+    int n = config.max_reclen;
+    sprintf(chunk.data, "%0*d", config.chunk_size, 0);
+    n -= config.chunk_size;
+    while (n > 0) {
+        int cp = n;
+        if (cp > config.chunk_size)
+            cp = config.chunk_size;
+        chunk_t *c = (chunk_t *) malloc(sizeof(chunk_t));
+        MAN(c);
+        c->magic = CHUNK_MAGIC;
+        c->data = (char *) calloc(1, config.chunk_size);
+        sprintf(c->data, "%0*d", cp, 0);
+        VSTAILQ_INSERT_TAIL(&rec.chunks, c, chunklist);
+        n -= cp;
+    }
+    char *str = (char *) malloc(config.max_reclen);
+    MAN(str);
+    sprintf(str, "%0*d", config.max_reclen - 1, 0);
+    get_payload(&rec);
+    MASSERT(strcmp(VSB_data(payload), str) == 0);
 
     return NULL;
 }
