@@ -107,6 +107,12 @@ static const char
     get_payload(&rec);
     MASSERT(strcmp(VSB_data(payload), str) == 0);
 
+    /* Empty record */
+    rec.len = 0;
+    *chunk.data = '\0';
+    get_payload(&rec);
+    MASSERT(strlen(VSB_data(payload)) == 0);
+
     return NULL;
 }
 
