@@ -41,7 +41,7 @@ static txhead_t local_freetx = VSTAILQ_HEAD_INITIALIZER(local_freetx);
 static linehead_t local_freeline = VSTAILQ_HEAD_INITIALIZER(local_freeline);
 static chunkhead_t local_freechunk = VSTAILQ_HEAD_INITIALIZER(local_freechunk);
 
-/* N.B.: Always run this test first */
+/* N.B.: Always run the tests in this order */
 static char
 *test_data_init(void)
 {
@@ -157,8 +157,6 @@ static const char
 static const char
 *test_data_return_tx(void)
 {
-    tx_t *tx;
-
     printf("... testing tx freelist return\n");
 
     DATA_Return_Freetx(&local_freetx, config.max_data);
@@ -166,8 +164,6 @@ static const char
     MASSERT(VSTAILQ_EMPTY(&local_freetx));
     MASSERT(global_nfree_tx == config.max_data);
     /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
-    VSTAILQ_FOREACH(tx, &local_freetx, freelist)
-        MCHECK_OBJ_NOTNULL(tx, TX_MAGIC);
 
     return NULL;
 }
@@ -175,8 +171,6 @@ static const char
 static const char
 *test_data_return_rec(void)
 {
-    logline_t *rec;
-
     printf("... testing record freelist return\n");
 
     DATA_Return_Freeline(&local_freeline, nrecords);
@@ -184,8 +178,6 @@ static const char
     MASSERT(VSTAILQ_EMPTY(&local_freeline));
     MASSERT(global_nfree_line == nrecords);
     /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
-    VSTAILQ_FOREACH(rec, &local_freeline, freelist)
-        MCHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
 
     return NULL;
 }
@@ -193,8 +185,6 @@ static const char
 static const char
 *test_data_return_chunk(void)
 {
-    chunk_t *chunk;
-
     printf("... testing chunk freelist return\n");
 
     DATA_Return_Freechunk(&local_freechunk, nchunks);
@@ -202,8 +192,49 @@ static const char
     MASSERT(VSTAILQ_EMPTY(&local_freechunk));
     MASSERT(global_nfree_chunk == nchunks);
     /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
-    VSTAILQ_FOREACH(chunk, &local_freechunk, freelist)
-        MCHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
+
+    return NULL;
+}
+
+static const char
+*test_data_prepend(void)
+{
+    tx_t *tx;
+    int n = 0;
+
+    printf("... testing freelist prepend\n");
+
+    MASSERT(VSTAILQ_EMPTY(&local_freetx));
+    /* Return an empty list */
+    DATA_Return_Freetx(&local_freetx, 0);
+    MASSERT(VSTAILQ_EMPTY(&local_freetx));
+    MASSERT(global_nfree_tx == config.max_data);
+
+    DATA_Take_Freetx(&local_freetx);
+    VSTAILQ_INIT(&local_freetx);
+    /* insert the first 10 txn to the local list */
+    for (int i = 0; i < 10; i++)
+        VSTAILQ_INSERT_TAIL(&local_freetx, &txn[i], freelist);
+    /* Prepend them to the global free list */
+    DATA_Return_Freetx(&local_freetx, 10);
+    /* insert the next 10 txn */
+    VSTAILQ_INIT(&local_freetx);
+    for (int i = 10; i < 20; i++)
+        VSTAILQ_INSERT_TAIL(&local_freetx, &txn[i], freelist);
+    /* Prepend them to the global list */
+    DATA_Return_Freetx(&local_freetx, 10);
+    /*
+     * Take the global list, and verify that txn 10-19 are at the front,
+     * followed by txn 0-9.
+     */
+    DATA_Take_Freetx(&local_freetx);
+    VSTAILQ_FOREACH(tx, &local_freetx, freelist) {
+        if (n < 10)
+            MASSERT(tx == &txn[n + 10]);
+        else
+            MASSERT(tx == &txn[n]);
+        n++;
+    }
 
     return NULL;
 }
@@ -218,6 +249,7 @@ static const char
     mu_run_test(test_data_return_tx);
     mu_run_test(test_data_return_rec);
     mu_run_test(test_data_return_chunk);
+    mu_run_test(test_data_prepend);
     return NULL;
 }
 

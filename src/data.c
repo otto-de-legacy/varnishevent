@@ -33,12 +33,26 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <errno.h>
+#include <stddef.h>
 
 #include "varnishevent.h"
 #include "vas.h"
 #include "miniobj.h"
 #include "vqueue.h"
 #include "vsb.h"
+
+/* Preprend head2 before head1, result in head1, head2 empty afterward */
+#define	VSTAILQ_PREPEND(head1, head2) do {                      \
+	if (VSTAILQ_EMPTY((head1))) {                           \
+		(head1)->vstqh_first = (head2)->vstqh_first;    \
+		(head1)->vstqh_last = (head2)->vstqh_last;      \
+	}                                                       \
+	else if (!VSTAILQ_EMPTY((head2))) {                     \
+		(head2)->vstqh_last = &(head1)->vstqh_first;    \
+		(head1)->vstqh_first = (head2)->vstqh_first;    \
+		VSTAILQ_INIT((head2));                          \
+	}                                                       \
+} while (0)
 
 #define FAKE_DEFAULT_LINES_PER_TX 10
 
@@ -184,7 +198,7 @@ DATA_Take_Free##type(struct type##head_s *dst)          \
     unsigned nfree;                                     \
                                                         \
     AZ(pthread_mutex_lock(&free##type##_lock));         \
-    VSTAILQ_CONCAT(dst, &free##type##head);             \
+    VSTAILQ_PREPEND(dst, &free##type##head);            \
     nfree = global_nfree_##type;                        \
     global_nfree_##type = 0;                            \
     AZ(pthread_mutex_unlock(&free##type##_lock));       \
@@ -204,7 +218,7 @@ void                                                                    \
 DATA_Return_Free##type(struct type##head_s *returned, unsigned nreturned) \
 {                                                                       \
     AZ(pthread_mutex_lock(&free##type##_lock));                         \
-    VSTAILQ_CONCAT(&free##type##head, returned);                        \
+    VSTAILQ_PREPEND(&free##type##head, returned);                       \
     global_nfree_##type += nreturned;                                   \
     AZ(pthread_mutex_unlock(&free##type##_lock));                       \
 }
