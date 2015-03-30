@@ -192,6 +192,17 @@ static const char
     MAN(hdr);
     MASSERT(strcmp(hdr, "wilco") == 0);
 
+    /* Record not found */
+    recs[NRECORDS / 2].tag = SLT_RespHeader;
+    recs[NRECORDS - 1].tag = SLT_RespHeader;
+    hdr = get_hdr(&tx, SLT_ReqHeader, hdr_re);
+    MAZ(hdr);
+
+    /* Empty line list */
+    VSTAILQ_INIT(&tx.lines);
+    hdr = get_hdr(&tx, SLT_ReqHeader, hdr_re);
+    MAZ(hdr);
+
     return NULL;
 }
 
