@@ -78,25 +78,6 @@
 #define DISPATCH_CONTINUE 0
 #define DISPATCH_TERMINATE 7
 
-typedef enum {
-    FD_EMPTY = 0,
-    FD_OPEN
-} fd_state_e;
-
-typedef struct fd_t {
-    unsigned magic;
-#define FD_MAGIC 0xa06b2960
-    logline_t *ll;
-    fd_state_e state;
-    double t;
-    VTAILQ_ENTRY(fd_t) insert_list;
-} fd_t;
-
-static fd_t *fd_tbl;
-
-VTAILQ_HEAD(insert_head_s, fd_t);
-static struct insert_head_s insert_head = VTAILQ_HEAD_INITIALIZER(insert_head);
-
 static unsigned open = 0, occ_hi = 0, len_hi = 0;
 
 static unsigned long seen = 0, submitted = 0, not_logged = 0,
@@ -261,16 +242,6 @@ submit(tx_t *tx)
     signal_spscq_ready();
     MON_StatsUpdate(STATS_DONE);
     submitted++;
-}
-
-static inline void
-fd_free(fd_t *entry)
-{
-    CHECK_OBJ_NOTNULL(entry, FD_MAGIC);
-    VTAILQ_REMOVE(&insert_head, entry, insert_list);
-    entry->state = FD_EMPTY;
-    entry->ll = NULL;
-    open--;
 }
 
 static int
@@ -640,17 +611,6 @@ main(int argc, char *argv[])
         LOG_Log(LOG_ALERT, "Cannot init data table: %s\n",
                 strerror(errnum));
         exit(EXIT_FAILURE);
-    }
-
-    fd_tbl = (fd_t *) calloc(config.max_fd, sizeof(fd_t));
-    if (fd_tbl == NULL) {
-        LOG_Log(LOG_ALERT, "Cannot init fd table: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    for (int k = 0; k < config.max_fd; k++) {
-        fd_tbl[k].magic = FD_MAGIC;
-        fd_tbl[k].ll = NULL;
-        fd_tbl[k].state = FD_EMPTY;
     }
 
     AZ(pthread_cond_init(&data_ready_cond, NULL));
