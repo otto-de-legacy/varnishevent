@@ -81,7 +81,7 @@ static const char
 
     /* Record with one chunk */
     rec.len = strlen(SHORT_STRING);
-    sprintf(chunk.data, "%s", SHORT_STRING);
+    strcpy(chunk.data, SHORT_STRING);
     VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
     get_payload(&rec);
     MASSERT(strcmp(VSB_data(payload), SHORT_STRING) == 0);
@@ -246,6 +246,55 @@ static const char
 }
 
 static const char
+*test_format_get_rec_fld(void)
+{
+    logline_t rec;
+    chunk_t chunk;
+    char *fld;
+
+    printf("... testing get_rec_fld()\n");
+
+    rec.magic = LOGLINE_MAGIC;
+    VSTAILQ_INIT(&rec.chunks);
+    chunk.magic = CHUNK_MAGIC;
+    chunk.data = (char *) calloc(1, config.chunk_size);
+    MAN(chunk.data);
+    rec.len = strlen(SHORT_STRING);
+    strcpy(chunk.data, SHORT_STRING);
+    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
+
+    fld = get_rec_fld(&rec, 0);
+    MAN(fld);
+    MASSERT(strcmp(fld, "foo") == 0);
+
+    fld = get_rec_fld(&rec, 1);
+    MAN(fld);
+    MASSERT(strcmp(fld, "bar") == 0);
+
+    fld = get_rec_fld(&rec, 2);
+    MAN(fld);
+    MASSERT(strcmp(fld, "baz") == 0);
+
+    fld = get_rec_fld(&rec, 3);
+    MAN(fld);
+    MASSERT(strcmp(fld, "quux") == 0);
+
+    fld = get_rec_fld(&rec, 4);
+    MAZ(fld);
+
+    rec.len = strlen("     ");
+    strcpy(chunk.data, "     ");
+    fld = get_rec_fld(&rec, 0);
+    MAZ(fld);
+    fld = get_rec_fld(&rec, 1);
+    MAZ(fld);
+    fld = get_rec_fld(&rec, 2);
+    MAZ(fld);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -253,6 +302,7 @@ static const char
     mu_run_test(test_format_get_tag);
     mu_run_test(test_format_get_hdr);
     mu_run_test(test_format_get_fld);
+    mu_run_test(test_format_get_rec_fld);
     return NULL;
 }
 
