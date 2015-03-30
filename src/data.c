@@ -80,12 +80,30 @@ data_Cleanup(void)
 }
 
 void
-DATA_Clear_Logline(tx_t *tx)
+DATA_Clear_Tx(tx_t *tx)
 {
+    logline_t *rec;
+    chunk_t *chunk;
+
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     
     tx->state = TX_EMPTY;
-    /* XXX: etc. ... */
+    tx->vxid = -1;
+    tx->type = VSL_t_unknown;
+
+    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
+        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        rec->state = DATA_EMPTY;
+        rec->tag = SLT__Bogus;
+        rec->len = 0;
+        VSTAILQ_FOREACH(chunk, &rec->chunks, chunklist) {
+            CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
+            chunk->state = DATA_EMPTY;
+            *chunk->data = '\0';
+        }
+        VSTAILQ_INIT(&rec->chunks);
+    }
+    VSTAILQ_INIT(&tx->lines);
 }
 
 int
@@ -211,17 +229,6 @@ DATA_Return_Free##type(struct type##head_s *returned, unsigned nreturned) \
 DATA_Return_Free(tx)
 DATA_Return_Free(line)
 DATA_Return_Free(chunk)
-
-#define DUMP_HDRS(vsb, ll, hdr) do {                    \
-    if (ll->hdr)                                        \
-        for (j = 0; j < ll->hdr->nrec; j++)             \
-            if (ll->hdr->record[j].len) {               \
-                VSB_putc(vsb, '[');                     \
-                VSB_bcat(vsb, ll->hdr->record[j].data,  \
-                    ll->hdr->record[j].len);            \
-                VSB_cat(vsb, "] ");                     \
-            }                                           \
- } while (0)
 
 void
 DATA_Dump(void)

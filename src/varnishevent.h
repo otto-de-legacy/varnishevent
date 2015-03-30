@@ -241,7 +241,7 @@ int LOG_Open(const char *progname);
 
 /* data.c */
 int DATA_Init(void);
-void DATA_Clear_Logline(tx_t *tx);
+void DATA_Clear_Tx(tx_t *tx);
 unsigned DATA_Take_Freetx(struct txhead_s *dst);
 unsigned DATA_Take_Freeline(struct linehead_s *dst);
 unsigned DATA_Take_Freechunk(struct chunkhead_s *dst);

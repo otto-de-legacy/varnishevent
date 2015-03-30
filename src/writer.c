@@ -223,7 +223,7 @@ wrt_write(tx_t *tx)
     MON_StatsUpdate(STATS_WRITTEN);
 
     /* clean up */
-    DATA_Clear_Logline(tx);
+    DATA_Clear_Tx(tx);
     VSTAILQ_INSERT_TAIL(&wrt_freelist, tx, freelist);
     wrt_nfree++;
 
