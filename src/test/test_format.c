@@ -37,6 +37,8 @@
 #include "../varnishevent.h"
 #include "../format.h"
 
+#define NRECORDS 10
+
 int tests_run = 0;
 
 /* N.B.: Always run the tests in this order */
@@ -120,7 +122,6 @@ static const char
 *test_format_get_tag(void)
 {
     tx_t tx;
-#define NRECORDS 10
     logline_t recs[NRECORDS], *rec;
 
     printf("... testing get_tag()\n");
@@ -152,11 +153,55 @@ static const char
 }
 
 static const char
+*test_format_get_hdr(void)
+{
+    tx_t tx;
+#define HDR_REGEX "^\\s*Foo\\s*:\\s*(.+)$"
+    logline_t recs[NRECORDS];
+    chunk_t c[NRECORDS];
+    vre_t *hdr_re;
+    const char *error;
+    char *hdr;
+    int erroroffset;
+
+    printf("... testing get_hdr()\n");
+
+    hdr_re = VRE_compile(HDR_REGEX, VRE_CASELESS, &error, &erroroffset);
+    VMASSERT(hdr_re != NULL,
+             "Error compiling \"" HDR_REGEX "\": %s (offset %d)",
+             error, erroroffset);
+
+    tx.magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx.lines);
+    for (int i = 0; i < NRECORDS; i++) {
+        recs[i].magic = LOGLINE_MAGIC;
+        recs[i].tag = SLT_ReqHeader;
+        recs[i].len = strlen("Bar: baz");
+        VSTAILQ_INSERT_TAIL(&tx.lines, &recs[i], linelist);
+        VSTAILQ_INIT(&recs[i].chunks);
+        c[i].magic = CHUNK_MAGIC;
+        c[i].data = (char *) calloc(1, config.chunk_size);
+        strcpy(c[i].data, "Bar: baz");
+        VSTAILQ_INSERT_TAIL(&recs[i].chunks, &c[i], chunklist);
+    }
+    recs[NRECORDS / 2].len = strlen("Foo: quux");
+    strcpy(c[NRECORDS / 2].data, "Foo: quux");
+    recs[NRECORDS - 1].len = strlen("Foo: wilco");
+    strcpy(c[NRECORDS - 1].data, "Foo: wilco");
+    hdr = get_hdr(&tx, SLT_ReqHeader, hdr_re);
+    MAN(hdr);
+    MASSERT(strcmp(hdr, "wilco") == 0);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
     mu_run_test(test_format_get_payload);
     mu_run_test(test_format_get_tag);
+    mu_run_test(test_format_get_hdr);
     return NULL;
 }
 

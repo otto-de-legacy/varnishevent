@@ -136,8 +136,8 @@ get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re)
         if (rec->tag != tag)
             continue;
         get_payload(rec);
-        s = VRE_exec(hdr_re, VSB_data(payload), rec->len, 0, VRE_CASELESS,
-                     ov, OV_SIZE, NULL);
+        s = VRE_exec(hdr_re, VSB_data(payload), rec->len, 0, 0, ov, OV_SIZE,
+                     NULL);
         assert(s >= VRE_ERROR_NOMATCH && s != 0);
         if (s == VRE_ERROR_NOMATCH)
             continue;
