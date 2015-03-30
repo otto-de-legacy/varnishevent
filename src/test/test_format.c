@@ -137,6 +137,12 @@ static const char
     rec = get_tag(&tx, SLT_RespHeader);
     MASSERT(rec == &recs[NRECORDS - 1]);
 
+    /* Record not found */
+    recs[NRECORDS / 2].tag = SLT_ReqHeader;
+    recs[NRECORDS - 1].tag = SLT_ReqHeader;
+    rec = get_tag(&tx, SLT_RespHeader);
+    MAZ(rec);
+
     /* Empty line list */
     VSTAILQ_INIT(&tx.lines);
     rec = get_tag(&tx, SLT_ReqHeader);
