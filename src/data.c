@@ -56,9 +56,7 @@
 
 #define FAKE_DEFAULT_LINES_PER_TX 10
 
-#if 0
-static const char *statename[3] = { "EMPTY", "OPEN", "DONE" };
-#endif
+static const char *statename[3] = { "EMPTY", "DONE" };
 
 static pthread_mutex_t freetx_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t freeline_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -241,48 +239,68 @@ DATA_Return_Free(chunk)
 void
 DATA_Dump(void)
 {
-#if 0
     struct vsb *data;
-    logline_t *ll;
+
+    if (txn == NULL)
+        return;
 
     data = VSB_new_auto();
     
     for (int i = 0; i < config.max_data; i++) {
-        int j;
+        tx_t *tx;
+        logline_t *rec;
 
-        if (logline == NULL || logline[i].magic != LOGLINE_MAGIC)
+        if (txn[i].magic != TX_MAGIC) {
+            LOG_Log(LOG_ALERT,
+                "Invalid tx at index %d, magic = 0x%08x, expected 0x%08x",
+                i, txn[i].magic, TX_MAGIC);
             continue;
+        }
         
-        if (logline[i].state == DATA_EMPTY)
+        if (txn[i].state == TX_EMPTY)
             continue;
 
-        ll = &logline[i];
+        tx = &txn[i];
         VSB_clear(data);
 
-        VSB_printf(data, "Data entry %d: state=%s dir=%c tags={",
-            i, statename[ll->state],
-            C(ll->spec) ? 'c' : B(ll->spec) ? 'b' : '-');
+        VSB_printf(data, "Tx entry %d: vxid=%u state=%s dir=%c records={",
+            i, tx->vxid, statename[tx->state],
+            C(tx->type) ? 'c' : B(tx->type) ? 'b' : '-');
 
-        for (j = 0; j < ntags; j++)
-            if (ll->tag[j].len) {
-                VSB_cat(data, VSL_tags[idx2tag[j]]);
-                VSB_cat(data, "=[");
-                VSB_bcat(data, ll->tag[j].data, ll->tag[j].len);
-                VSB_cat(data, "] ");
+        VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
+            if (rec == NULL)
+                continue;
+            if (rec->magic != LOGLINE_MAGIC) {
+                LOG_Log(LOG_ALERT,
+                    "Invalid record at tx %d, magic = 0x%08x, expected 0x%08x",
+                    i, rec->magic, LOGLINE_MAGIC);
+                continue;
             }
+            VSB_printf(data, "%s ", VSL_tags[rec->tag]);
+            if (rec->len) {
+                int n = rec->len;
+                chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
+                while (n > 0 && chunk != NULL) {
+                    if (chunk->magic != CHUNK_MAGIC) {
+                        LOG_Log(LOG_ALERT,
+                            "Invalid chunk at tx %d, magic = 0x%08x, "
+                            "expected 0x%08x",
+                            i, chunk->magic, CHUNK_MAGIC);
+                        continue;
+                    }
+                    int cp = n;
+                    if (cp > config.chunk_size)
+                        cp = config.chunk_size;
+                    VSB_bcat(data, chunk->data, cp);
+                    n -= cp;
+                    chunk = VSTAILQ_NEXT(chunk, chunklist);
+                }
+            }
+        }
 
-        VSB_cat(data, "} rx_headers={");
-        DUMP_HDRS(data, ll, rx_headers);
-
-        VSB_cat(data, "} tx_headers={");
-        DUMP_HDRS(data, ll, tx_headers);
-
-        VSB_cat(data, "} vcl_log={");
-        DUMP_HDRS(data, ll, vcl_log);
         VSB_putc(data, '}');
         VSB_finish(data);
 
         LOG_Log(LOG_INFO, "%s", VSB_data(data));
     }
-#endif        
 }

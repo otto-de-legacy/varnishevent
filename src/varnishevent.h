@@ -41,9 +41,9 @@
 #include "vqueue.h"
 #include "vsb.h"
 
-#define C(spec) ((spec) & VSL_S_CLIENT)
-#define B(spec) ((spec) & VSL_S_BACKEND)
-#define Z(spec) ((spec) == 0)
+#define C(txtype) ((txtype) == VSL_t_req)
+#define B(txtype) ((txtype) == VSL_t_bereq)
+#define Z(txtype) ((txtype) == VSL_t_raw)
 
 /* Defaults from Varnish 3.0.3 */
 #define DEFAULT_MAX_RECLEN 255	/* shm_reclen */
