@@ -33,13 +33,13 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "varnishevent.h"
-
 #include "vas.h"
 #include "miniobj.h"
 #include "base64.h"
+#include "vre.h"
 
-#define TAG(ll,t) ((ll)->tag[tag2idx[(t)]])
+#include "varnishevent.h"
+#include "format.h"
 
 typedef void formatter_f(logline_t *ll, char *name, enum VSL_tag_e tag,
     char **s, size_t *len);
@@ -57,6 +57,8 @@ typedef struct compiled_fmt_t {
     char tags[MAX_VSL_TAG];
 } compiled_fmt_t;
 
+#if 0
+
 static compiled_fmt_t cformat, bformat, zformat;
 
 static char i_arg[BUFSIZ] = "";
@@ -71,82 +73,124 @@ static char miss[5];
 static char pass[5];
 static char dash[2];
 
-static inline record_t *
-get_hdr(const char *hdr, hdr_t *tbl)
+#endif
+
+void
+get_payload(logline_t *rec)
 {
-    int l = strlen(hdr);
-    
-    for (int i = 0; i < tbl->nrec; i++)
-        if (strncasecmp(hdr, tbl->record[i].data, l) == 0
-            && tbl->record[i].data[l] == ':'
-            && tbl->record[i].data[l+1] == ' ')
-            return &tbl->record[i];
-    return NULL;
+    CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+
+    VSB_clear(payload);
+    if (rec->len) {
+        int n = rec->len;
+        chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
+        while (n > 0 && chunk != NULL) {
+            CHECK_OBJ(chunk, CHUNK_MAGIC);
+            int cp = n;
+            if (cp > config.chunk_size)
+                cp = config.chunk_size;
+            VSB_bcat(payload, chunk->data, cp);
+            n -= cp;
+            chunk = VSTAILQ_NEXT(chunk, chunklist);
+        }
+    }
+    VSB_finish(payload);
 }
 
-#define GET_HDR(ll, dir, hdr) get_hdr((hdr), (ll)-> dir## _headers)
-
-static inline char *
-get_fld(record_t *rec, int n)
+/*
+ * Return the *last* record in tx that matches the tag
+ */
+logline_t *
+get_tag(tx_t *tx, enum VSL_tag_e tag)
 {
-    char *ret = NULL, *s;
+    logline_t *rec, *tagrec = NULL;
+
+    CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
+    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
+        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        if (rec->tag == tag)
+            tagrec = rec;
+    }
+    return tagrec;
+}
+
+/*
+ * hdr_re is a pre-compiled regex of the form "^\s*%s\*s:\s*(.+)$",
+ * formatted with the header name in place of %s.
+ * Return the captured substring (the header payload) of the *last* record
+ * in tx that matches the tag and the regex.
+ */
+char *
+get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re)
+{
+    logline_t *rec;
+#define OV_SIZE (2 * 3)
+    int ov[OV_SIZE];
+    char *hdr_payload = NULL;
+
+    CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
+    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
+        int s;
+
+        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        if (rec->tag != tag)
+            continue;
+        get_payload(rec);
+        s = VRE_exec(hdr_re, VSB_data(payload), rec->len, 0, VRE_CASELESS,
+                     ov, OV_SIZE, NULL);
+        assert(s >= VRE_ERROR_NOMATCH && s != 0);
+        if (s == VRE_ERROR_NOMATCH)
+            continue;
+        assert(ov[2] >= 0 && ov[3] >= ov[2]);
+        hdr_payload = VSB_data(payload) + ov[2];
+        hdr_payload[ov[3]] = '\0';
+    }
+
+    return hdr_payload;
+}
+
+char *
+get_fld(char *str, int n)
+{
+    char *fld = NULL, *s;
     int i = 0;
 
-    AN(scratch);
-    strncpy(scratch, rec->data, rec->len);
-    s = scratch;
+    s = str;
     do {
-        ret = strtok(s, " \t");
+        fld = strtok(s, " \t");
         s = NULL;
-    } while (++i < n && ret != NULL);
+    } while (++i < n && fld != NULL);
     
-    return ret;
+    return fld;
 }
 
-static inline int
-get_tm(tx_t *ll, struct tm * t) {
-    char *ts = NULL;
-    record_t *date_rec = NULL;
-    time_t tt = 0;
-            
-    if (C(ll->spec)) {
-        if (TAG(ll,SLT_ReqEnd).len
-            && (ts = get_fld(&TAG(ll,SLT_ReqEnd), 2)) != NULL)
-                tt = (time_t) atol(ts);
-        else
-            date_rec = GET_HDR(ll, rx, "Date");
-    }
-    else if (B(ll->spec)) {
-        if ((date_rec = GET_HDR(ll, rx, "Date")) == NULL)
-            tt = (time_t) ll->t;
-    }
-    else
-        tt = (time_t) ll->t;
-    
-    if (date_rec)
-        tt = TIM_parse(&date_rec->data[strlen("Date: ")]);
-    if (tt != 0) {
-        localtime_r(&tt, t);
-        return 1;
-    }
-    else
-        return 0;
+char *
+get_rec_fld(logline_t *rec, int n)
+{
+    get_payload(rec);
+    return get_fld(VSB_data(payload), n);
 }
 
-#define RETURN_REC(rec, s, len) do {            \
-    (*s) = (rec).data;                          \
-    (*(len)) = (rec).len;                       \
-} while (0)
+double
+get_tm(tx_t *tx)
+{
+    char *ts, *epochstr;
+    double epocht = 0;
 
-#define RETURN_HDR(rec, hdr, s, len) do {	\
-    (*s) = &((rec)->data[strlen(hdr)+2]);	\
-    (*(len)) = (rec)->len - (strlen(hdr)+2);	\
-} while (0)
+    CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
 
-#define RETURN_FLD(rec, fld, s, len) do {	\
-    (*s) = get_fld(&(rec), fld);		\
-    (*(len)) = strlen(*s);			\
-} while (0)
+    ts = get_hdr(tx, SLT_Timestamp, time_start_re);
+    if (ts != NULL && (epochstr = get_fld(ts, 0)) != NULL) {
+        char *p;
+        epocht = strtod(epochstr, &p);
+    }
+    if (epocht == 0)
+        epocht = tx->t;
+
+    return epocht;
+}
+
+#if 0
 
 #define FORMAT(dir, ltr, slt) 						\
 static void								\
@@ -944,3 +988,5 @@ FMT_Shutdown(void)
     if (!EMPTY(config.zformat))
         free_format(&zformat);
 }
+
+#endif

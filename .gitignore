@@ -27,6 +27,7 @@ src/test/.deps/
 *~
 src/test/test_data
 src/test/test_strfTIM
+src/test/test_format
 src/varnishevent
 *.1
 stamp-h1

@@ -21,9 +21,9 @@ varnishevent_SOURCES = \
 	log.c \
 	monitor.c \
 	strfTIM.h \
-	strfTIM.c
+	strfTIM.c \
+	format.c
 
-#	format.c \
 #	handler.c
 
 varnishevent_LDADD = \

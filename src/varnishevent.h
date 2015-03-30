@@ -121,6 +121,7 @@ typedef VSTAILQ_HEAD(linehead_s, logline_t) linehead_t;
 typedef struct tx_t {
     unsigned magic;
 #define TX_MAGIC 0xff463e42
+    double t;
     tx_state_e state;
     int32_t vxid;
     enum VSL_transaction_e type;
