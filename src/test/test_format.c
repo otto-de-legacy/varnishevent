@@ -117,10 +117,40 @@ static const char
 }
 
 static const char
+*test_format_get_tag(void)
+{
+    tx_t tx;
+#define NRECORDS 10
+    logline_t recs[NRECORDS], *rec;
+
+    printf("... testing get_tag()\n");
+
+    tx.magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx.lines);
+    for (int i = 0; i < NRECORDS; i++) {
+        recs[i].magic = LOGLINE_MAGIC;
+        recs[i].tag = SLT_ReqHeader;
+        VSTAILQ_INSERT_TAIL(&tx.lines, &recs[i], linelist);
+    }
+    recs[NRECORDS / 2].tag = SLT_RespHeader;
+    recs[NRECORDS - 1].tag = SLT_RespHeader;
+    rec = get_tag(&tx, SLT_RespHeader);
+    MASSERT(rec == &recs[NRECORDS - 1]);
+
+    /* Empty line list */
+    VSTAILQ_INIT(&tx.lines);
+    rec = get_tag(&tx, SLT_ReqHeader);
+    MAZ(rec);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
     mu_run_test(test_format_get_payload);
+    mu_run_test(test_format_get_tag);
     return NULL;
 }
 
