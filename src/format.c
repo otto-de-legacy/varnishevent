@@ -268,18 +268,38 @@ format_h_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 FORMAT_h(client, ReqStart, 0)
 FORMAT_h(backend, Backend, 2)
 
+static void
+format_IO_client(tx_t *tx, int req_fld, int pipe_fld, char **s, size_t *len)
+{
+    int field;
+
+    logline_t *rec = get_tag(tx, SLT_ReqAcct);
+    if (rec != NULL)
+        field = req_fld;
+    else {
+        rec = get_tag(tx, SLT_PipeAcct);
+        field = pipe_fld;
+    }
+    *s = get_rec_fld(rec, field);
+    *len = strlen(*s);
+}
+
+static inline void
+format_IO_backend(tx_t *tx, int field, char **s, size_t *len)
+{
+    logline_t *rec = get_tag(tx, SLT_BereqAcct);
+    *s = get_rec_fld(rec, field);
+    *len = strlen(*s);
+}
+
 void
 format_I_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-               size_t *len)
+                size_t *len)
 {
     (void) name;
     (void) tag;
 
-    logline_t *rec = get_tag(tx, SLT_ReqAcct);
-    if (rec == NULL)
-        rec = get_tag(tx, SLT_PipeAcct);
-    *s = get_rec_fld(rec, 2);
-    *len = strlen(*s);
+    format_IO_client(tx, 2, 2, s, len);
 }
 
 void
@@ -289,13 +309,31 @@ format_I_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
     (void) name;
     (void) tag;
 
-    logline_t *rec = get_tag(tx, SLT_BereqAcct);
-    *s = get_rec_fld(rec, 5);
-    *len = strlen(*s);
+    format_IO_backend(tx, 5, s, len);
 }
 
 FORMAT(client, m, ReqMethod)
 FORMAT(backend, m, BereqMethod)
+
+void
+format_O_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
+{
+    (void) name;
+    (void) tag;
+
+    format_IO_client(tx, 5, 3, s, len);
+}
+
+void
+format_O_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+
+    format_IO_backend(tx, 2, s, len);
+}
 
 #if 0
 

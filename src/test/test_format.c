@@ -556,6 +556,38 @@ static const char
 }
 
 static const char
+*test_format_O(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_O_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
+    format_O_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "283") == 0);
+    MASSERT(len == 3);
+
+    rec.tag = SLT_BereqAcct;
+    format_O_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "60") == 0);
+    MASSERT(len == 2);
+
+    set_record_data(&rec, &chunk, PIPEACCT_PAYLOAD, SLT_PipeAcct);
+    format_O_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "105") == 0);
+    MASSERT(len == 3);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -571,6 +603,7 @@ static const char
     mu_run_test(test_format_h);
     mu_run_test(test_format_I);
     mu_run_test(test_format_m);
+    mu_run_test(test_format_O);
     return NULL;
 }
 

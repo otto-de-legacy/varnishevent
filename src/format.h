@@ -71,3 +71,6 @@ formatter_f format_I_backend;
 
 formatter_f format_m_client;
 formatter_f format_m_backend;
+
+formatter_f format_O_client;
+formatter_f format_O_backend;
