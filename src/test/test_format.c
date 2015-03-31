@@ -510,6 +510,57 @@ static const char
 }
 
 static const char
+*test_format_I(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_I_*()\n");
+
+    tx.magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
+    rec.magic = LOGLINE_MAGIC;
+    VSTAILQ_INIT(&rec.chunks);
+    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
+    chunk.magic = CHUNK_MAGIC;
+    chunk.data = (char *) calloc(1, config.chunk_size);
+    MAN(chunk.data);
+
+    rec.len = strlen(REQACCT_PAYLOAD);
+    rec.tag = SLT_ReqAcct;
+    strcpy(chunk.data, REQACCT_PAYLOAD);
+    format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "60") == 0);
+    MASSERT(len == 2);
+
+    rec.len = strlen(REQACCT_PAYLOAD);
+    rec.tag = SLT_ReqAcct;
+    strcpy(chunk.data, REQACCT_PAYLOAD);
+    format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "60") == 0);
+    MASSERT(len == 2);
+
+    rec.tag = SLT_BereqAcct;
+    format_I_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "283") == 0);
+    MASSERT(len == 3);
+
+#define PIPEACCT_PAYLOAD "60 60 178 105"
+    rec.tag = SLT_PipeAcct;
+    rec.len = strlen(PIPEACCT_PAYLOAD);
+    strcpy(chunk.data, PIPEACCT_PAYLOAD);
+    format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "178") == 0);
+    MASSERT(len == 3);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -523,6 +574,7 @@ static const char
     mu_run_test(test_format_D);
     mu_run_test(test_format_H);
     mu_run_test(test_format_h);
+    mu_run_test(test_format_I);
     return NULL;
 }
 

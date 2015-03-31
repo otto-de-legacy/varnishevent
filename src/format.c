@@ -208,9 +208,6 @@ format_##ltr##_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, \
     *len = VSB_len(payload);                                            \
 }
 
-FORMAT(client, H, ReqProtocol)
-FORMAT(backend, H, BereqProtocol)
-
 #define FORMAT_b(dir, slt)                                              \
 void                                                                    \
 format_b_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
@@ -252,6 +249,9 @@ format_D_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 FORMAT_D(client, resp)
 FORMAT_D(backend, beresp_body)
 
+FORMAT(client, H, ReqProtocol)
+FORMAT(backend, H, BereqProtocol)
+
 #define FORMAT_h(dir, slt, fld_nr)                                      \
 void                                                                    \
 format_h_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
@@ -267,6 +267,32 @@ format_h_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 
 FORMAT_h(client, ReqStart, 0)
 FORMAT_h(backend, Backend, 2)
+
+void
+format_I_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+               size_t *len)
+{
+    (void) name;
+    (void) tag;
+
+    logline_t *rec = get_tag(tx, SLT_ReqAcct);
+    if (rec == NULL)
+        rec = get_tag(tx, SLT_PipeAcct);
+    *s = get_rec_fld(rec, 2);
+    *len = strlen(*s);
+}
+
+void
+format_I_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+
+    logline_t *rec = get_tag(tx, SLT_BereqAcct);
+    *s = get_rec_fld(rec, 5);
+    *len = strlen(*s);
+}
 
 #if 0
 
