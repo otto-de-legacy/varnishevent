@@ -335,25 +335,28 @@ format_O_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
     format_IO_backend(tx, 2, s, len);
 }
 
-#if 0
-
-#define FORMAT_q(dir, xurl) 						\
-static void								\
-format_q_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,		\
-    char **s, size_t *len)                                              \
-{									\
-    (void) name;							\
-    (void) tag;								\
-    char *qs = NULL;							\
-    qs = memchr(TAG(ll,SLT_##xurl).data, '?', TAG(ll,SLT_##xurl).len);  \
-    if (qs != NULL) {							\
-        *s = qs + 1;							\
-        *len = TAG(ll,SLT_##xurl).len - (qs - TAG(ll,SLT_##xurl).data - 1); \
-    }									\
+#define FORMAT_q(dir, xurl)                                     \
+void                                                            \
+format_q_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,        \
+               char **s, size_t *len)                           \
+{                                                               \
+    char *qs = NULL;                                            \
+    (void) name;                                                \
+    (void) tag;                                                 \
+                                                                \
+    logline_t *rec = get_tag(tx, SLT_##xurl);                   \
+    get_payload(rec);                                           \
+    qs = memchr(VSB_data(payload), '?', rec->len);              \
+    if (qs != NULL) {                                           \
+        *s = qs + 1;                                            \
+        *len = rec->len - (*s - VSB_data(payload));             \
+    }                                                           \
 }
 
-FORMAT_q(client, RxURL)
-FORMAT_q(backend, TxURL)
+FORMAT_q(client, ReqURL)
+FORMAT_q(backend, BereqURL)
+
+#if 0
 
 #define FORMAT_r(dir, dx, hx)                                   \
 static void                                                     \

@@ -588,6 +588,47 @@ static const char
 }
 
 static const char
+*test_format_q(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_q_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+#define URL_QUERY_PAYLOAD "/foo?bar=baz&quux=wilco"
+    set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_ReqURL);
+    format_q_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "bar=baz&quux=wilco") == 0);
+    MASSERT(len == 18);
+
+    rec.tag = SLT_BereqURL;
+    format_q_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "bar=baz&quux=wilco") == 0);
+    MASSERT(len == 18);
+
+#define URL_PAYLOAD "/foo"
+    set_record_data(&rec, &chunk, URL_PAYLOAD, SLT_ReqURL);
+    str = NULL;
+    len = 0;
+    format_q_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MAZ(str);
+    MAZ(len);
+
+    rec.tag = SLT_BereqURL;
+    format_q_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MAZ(str);
+    MAZ(len);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -604,6 +645,7 @@ static const char
     mu_run_test(test_format_I);
     mu_run_test(test_format_m);
     mu_run_test(test_format_O);
+    mu_run_test(test_format_q);
     return NULL;
 }
 
