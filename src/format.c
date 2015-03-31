@@ -406,10 +406,10 @@ format_r_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
 FORMAT_r(client, Req)
 FORMAT_r(backend, Bereq)
 
-#if 0
+FORMAT(client, s, RespStatus)
+FORMAT(backend, s, BerespStatus)
 
-FORMAT(client, s, TxStatus)
-FORMAT(backend, s, RxStatus)
+#if 0
 
 #define FORMAT_tim(ltr, fmt, extra)                                     \
 static void                                                             \

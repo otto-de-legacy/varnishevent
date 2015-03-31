@@ -767,6 +767,34 @@ static const char
 }
 
 static const char
+*test_format_s(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_s_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+#define STATUS_PAYLOAD "200"
+    set_record_data(&rec, &chunk, STATUS_PAYLOAD, SLT_RespStatus);
+    format_s_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, STATUS_PAYLOAD) == 0);
+    MASSERT(len == 3);
+
+    rec.tag = SLT_BerespStatus;
+    format_s_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, STATUS_PAYLOAD) == 0);
+    MASSERT(len == 3);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -785,6 +813,7 @@ static const char
     mu_run_test(test_format_O);
     mu_run_test(test_format_q);
     mu_run_test(test_format_r);
+    mu_run_test(test_format_s);
     return NULL;
 }
 

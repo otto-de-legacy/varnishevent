@@ -83,3 +83,6 @@ formatter_f format_q_backend;
 
 formatter_f format_r_client;
 formatter_f format_r_backend;
+
+formatter_f format_s_client;
+formatter_f format_s_backend;
