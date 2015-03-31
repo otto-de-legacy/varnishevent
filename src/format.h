@@ -44,6 +44,9 @@ vre_t *time_resp_re;
 #define TS_BERESP_BODY_REGEX "^\\s*BerespBody\\s*:\\s*(.+)$"
 vre_t *time_beresp_body_re;
 
+#define HOST_REGEX "^\\s*Host\\s*:\\s*(.+)$"
+vre_t *host_re;
+
 typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
                          char **s, size_t *len);
 
@@ -77,3 +80,6 @@ formatter_f format_O_backend;
 
 formatter_f format_q_client;
 formatter_f format_q_backend;
+
+formatter_f format_r_client;
+formatter_f format_r_backend;

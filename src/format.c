@@ -356,52 +356,57 @@ format_q_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,        \
 FORMAT_q(client, ReqURL)
 FORMAT_q(backend, BereqURL)
 
-#if 0
-
-#define FORMAT_r(dir, dx, hx)                                   \
-static void                                                     \
-format_r_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,   \
-    char **s, size_t *len)                                      \
-{                                                               \
-    (void) name;                                                \
-    (void) tag;                                                 \
-                                                                \
-    record_t *rec;                                              \
-                                                                \
-    rec = &TAG(ll, SLT_##dx##Request);                          \
-    if (rec->len)                                               \
-        snprintf(scratch, rec->len+1, "%s", rec->data);         \
-    else                                                        \
-        strcpy(scratch, "-");                                   \
-    strcat(scratch, " ");                                       \
-                                                                \
-    if ((rec = GET_HDR(ll, hx, "Host")) != NULL) {              \
-        if (strncmp(rec->data, "http://", 7) != 0)              \
-            strcat(scratch, "http://");                         \
-        strncat(scratch, rec->data+6, rec->len-6);              \
-    }                                                           \
-    else                                                        \
-        strcat(scratch, "http://localhost");                    \
-                                                                \
-    rec = &TAG(ll, SLT_##dx##URL);                              \
-    if (rec->len)                                               \
-        strncat(scratch, rec->data, rec->len);                  \
-    else                                                        \
-        strcat(scratch, "-");                                   \
-                                                                \
-    strcat(scratch, " ");                                       \
-    rec = &TAG(ll, SLT_##dx##Protocol);                         \
-    if (rec->len)                                               \
-        strncat(scratch, rec->data, rec->len);                  \
-    else                                                        \
-        strcat(scratch, "HTTP/1.0");                            \
-                                                                \
-    *s = scratch;                                               \
-    *len = strlen(scratch);                                     \
+#define FORMAT_r(dir, dx)                                               \
+void                                                                    \
+format_r_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
+               char **s, size_t *len)                                   \
+{                                                                       \
+    char *str;                                                          \
+    (void) name;                                                        \
+    (void) tag;                                                         \
+                                                                        \
+    logline_t *rec = get_tag(tx, SLT_##dx##Method);                     \
+    if (rec != NULL) {                                                  \
+        get_payload(rec);                                               \
+        sprintf(scratch, VSB_data(payload));           \
+    }                                                                   \
+    else                                                                \
+        strcpy(scratch, "-");                                           \
+    strcat(scratch, " ");                                               \
+                                                                        \
+    if ((str = get_hdr(tx, SLT_##dx##Header, host_re)) != NULL) {       \
+        if (strncmp(str, "http://", 7) != 0)                            \
+            strcat(scratch, "http://");                                 \
+        strcat(scratch, str);                                           \
+    }                                                                   \
+    else                                                                \
+        strcat(scratch, "http://localhost");                            \
+                                                                        \
+    rec = get_tag(tx, SLT_##dx##URL);                                   \
+    if (rec->len) {                                                     \
+        get_payload(rec);                                               \
+        strcat(scratch, VSB_data(payload));                             \
+    }                                                                   \
+    else                                                                \
+        strcat(scratch, "-");                                           \
+                                                                        \
+    strcat(scratch, " ");                                               \
+    rec = get_tag(tx, SLT_##dx##Protocol);                              \
+    if (rec->len) {                                                     \
+        get_payload(rec);                                               \
+        strcat(scratch, VSB_data(payload));                             \
+    }                                                                   \
+    else                                                                \
+        strcat(scratch, "HTTP/1.0");                                    \
+                                                                        \
+    *s = scratch;                                                       \
+    *len = strlen(scratch);                                             \
 }
 
-FORMAT_r(client, Rx, rx)
-FORMAT_r(backend, Tx, tx)
+FORMAT_r(client, Req)
+FORMAT_r(backend, Bereq)
+
+#if 0
 
 FORMAT(client, s, TxStatus)
 FORMAT(backend, s, RxStatus)

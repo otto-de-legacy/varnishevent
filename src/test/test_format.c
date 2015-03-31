@@ -44,16 +44,22 @@
 int tests_run = 0;
 
 static void
-init_tx_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
+add_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
 {
-    tx->magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx->lines);
     VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
     rec->magic = LOGLINE_MAGIC;
     VSTAILQ_INIT(&rec->chunks);
     VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
     chunk->magic = CHUNK_MAGIC;
     chunk->data = (char *) calloc(1, config.chunk_size);
+}
+
+static void
+init_tx_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
+{
+    tx->magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx->lines);
+    add_rec_chunk(tx, rec, chunk);
 }
 
 static void
@@ -96,6 +102,10 @@ static const char
                                       &error, &erroroffset);
     VMASSERT(time_beresp_body_re != NULL,
              "Error compiling " TS_BERESP_BODY_REGEX ": %s (offset %d)",
+             error, erroroffset);
+
+    host_re = VRE_compile(HOST_REGEX, VRE_CASELESS, &error, &erroroffset);
+    VMASSERT(host_re != NULL, "Error compiling " HOST_REGEX ": %s (offset %d)",
              error, erroroffset);
 
     return NULL;
@@ -629,6 +639,134 @@ static const char
 }
 
 static const char
+*test_format_r(void)
+{
+    tx_t tx;
+    logline_t rec_method, rec_host, rec_url, rec_proto;
+    chunk_t chunk_method, chunk_host, chunk_url, chunk_proto;
+    char *str;
+    size_t len;
+
+    printf("... testing format_r_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec_method, &chunk_method);
+    MAN(chunk_method.data);
+    add_rec_chunk(&tx, &rec_host, &chunk_host);
+    MAN(chunk_host.data);
+    add_rec_chunk(&tx, &rec_url, &chunk_url);
+    MAN(chunk_url.data);
+    add_rec_chunk(&tx, &rec_proto, &chunk_proto);
+    MAN(chunk_proto.data);
+
+    set_record_data(&rec_method, &chunk_method, "GET", SLT_ReqMethod);
+    set_record_data(&rec_host, &chunk_host, "Host: www.foobar.com",
+                    SLT_ReqHeader);
+    set_record_data(&rec_url, &chunk_url, URL_PAYLOAD, SLT_ReqURL);
+    set_record_data(&rec_proto, &chunk_proto, PROTOCOL_PAYLOAD,
+                    SLT_ReqProtocol);
+    format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(len == 38);
+
+    rec_method.tag = SLT_BereqMethod;
+    rec_host.tag = SLT_BereqHeader;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
+    format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(len == 38);
+
+    /* No method record */
+    rec_method.tag = SLT__Bogus;
+    rec_host.tag = SLT_ReqHeader;
+    rec_url.tag = SLT_ReqURL;
+    rec_proto.tag = SLT_ReqProtocol;
+    format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "- http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(len == 36);
+
+    rec_host.tag = SLT_BereqHeader;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
+    format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "- http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(len == 36);
+
+    /* No host header */
+    rec_method.tag = SLT_ReqMethod;
+    set_record_data(&rec_host, &chunk_host, "Foo: bar", SLT_ReqHeader);
+    rec_url.tag = SLT_ReqURL;
+    rec_proto.tag = SLT_ReqProtocol;
+    format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(len == 33);
+
+    rec_method.tag = SLT_BereqMethod;
+    rec_host.tag = SLT_BereqHeader;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
+    format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(len == 33);
+
+    /* No header record */
+    rec_method.tag = SLT_ReqMethod;
+    rec_host.tag = SLT__Bogus;
+    rec_url.tag = SLT_ReqURL;
+    rec_proto.tag = SLT_ReqProtocol;
+    format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(len == 33);
+
+    rec_method.tag = SLT_BereqMethod;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
+    format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(len == 33);
+
+    /* URL record empty */
+    set_record_data(&rec_host, &chunk_host, "Host: www.foobar.com",
+                    SLT_ReqHeader);
+    rec_method.tag = SLT_ReqMethod;
+    rec_url.tag = SLT_ReqURL;
+    rec_url.len = 0;
+    rec_proto.tag = SLT_ReqProtocol;
+    format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://www.foobar.com- HTTP/1.1") == 0);
+    MASSERT(len == 35);
+
+    rec_method.tag = SLT_BereqMethod;
+    rec_host.tag = SLT_BereqHeader;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
+    format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://www.foobar.com- HTTP/1.1") == 0);
+    MASSERT(len == 35);
+
+    /* Proto record empty */
+    rec_method.tag = SLT_ReqMethod;
+    rec_host.tag = SLT_ReqHeader;
+    rec_url.tag = SLT_ReqURL;
+    rec_url.len = strlen(URL_PAYLOAD);
+    rec_proto.tag = SLT_ReqProtocol;
+    rec_proto.len = 0;
+    format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.0") == 0);
+    MASSERT(len == 38);
+
+    rec_method.tag = SLT_BereqMethod;
+    rec_host.tag = SLT_BereqHeader;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
+    format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.0") == 0);
+    MASSERT(len == 38);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -646,6 +784,7 @@ static const char
     mu_run_test(test_format_m);
     mu_run_test(test_format_O);
     mu_run_test(test_format_q);
+    mu_run_test(test_format_r);
     return NULL;
 }
 
