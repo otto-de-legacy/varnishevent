@@ -43,6 +43,19 @@
 
 int tests_run = 0;
 
+static void
+init_tx_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
+{
+    tx->magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx->lines);
+    VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
+    rec->magic = LOGLINE_MAGIC;
+    VSTAILQ_INIT(&rec->chunks);
+    VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
+    chunk->magic = CHUNK_MAGIC;
+    chunk->data = (char *) calloc(1, config.chunk_size);
+}
+
 /* N.B.: Always run the tests in this order */
 static const char
 *test_format_init(void)
@@ -368,14 +381,7 @@ static const char
 
     printf("... testing format_H_*()\n");
 
-    tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
-    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
-    rec.magic = LOGLINE_MAGIC;
-    VSTAILQ_INIT(&rec.chunks);
-    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
-    chunk.magic = CHUNK_MAGIC;
-    chunk.data = (char *) calloc(1, config.chunk_size);
+    init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
     rec.len = strlen("HTTP/1.1");
@@ -404,14 +410,7 @@ static const char
 
     printf("... testing format_b_*()\n");
 
-    tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
-    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
-    rec.magic = LOGLINE_MAGIC;
-    VSTAILQ_INIT(&rec.chunks);
-    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
-    chunk.magic = CHUNK_MAGIC;
-    chunk.data = (char *) calloc(1, config.chunk_size);
+    init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
 #define REQACCT_PAYLOAD "60 0 60 178 105 283"
@@ -441,14 +440,7 @@ static const char
 
     printf("... testing format_D_*()\n");
 
-    tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
-    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
-    rec.magic = LOGLINE_MAGIC;
-    VSTAILQ_INIT(&rec.chunks);
-    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
-    chunk.magic = CHUNK_MAGIC;
-    chunk.data = (char *) calloc(1, config.chunk_size);
+    init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
 #define TS_RESP_PAYLOAD "Resp: 1427799478.166798 0.015963 0.000125"
@@ -480,14 +472,7 @@ static const char
 
     printf("... testing format_h_*()\n");
 
-    tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
-    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
-    rec.magic = LOGLINE_MAGIC;
-    VSTAILQ_INIT(&rec.chunks);
-    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
-    chunk.magic = CHUNK_MAGIC;
-    chunk.data = (char *) calloc(1, config.chunk_size);
+    init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
 #define REQSTART_PAYLOAD "127.0.0.1 33544"
@@ -520,14 +505,7 @@ static const char
 
     printf("... testing format_I_*()\n");
 
-    tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
-    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
-    rec.magic = LOGLINE_MAGIC;
-    VSTAILQ_INIT(&rec.chunks);
-    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
-    chunk.magic = CHUNK_MAGIC;
-    chunk.data = (char *) calloc(1, config.chunk_size);
+    init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
     rec.len = strlen(REQACCT_PAYLOAD);
