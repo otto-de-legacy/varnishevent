@@ -38,6 +38,12 @@ struct vsb *payload;
 #define TS_START_REGEX "^\\s*Start\\s*:\\s*(.+)$"
 vre_t *time_start_re;
 
+#define TS_RESP_REGEX "^\\s*Resp\\s*:\\s*(.+)$"
+vre_t *time_resp_re;
+
+#define TS_BERESP_BODY_REGEX "^\\s*BerespBody\\s*:\\s*(.+)$"
+vre_t *time_beresp_body_re;
+
 typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
                          char **s, size_t *len);
 
@@ -50,6 +56,9 @@ double get_tm(tx_t *tx);
 
 formatter_f format_b_client;
 formatter_f format_b_backend;
+
+formatter_f format_D_client;
+formatter_f format_D_backend;
 
 formatter_f format_H_client;
 formatter_f format_H_backend;

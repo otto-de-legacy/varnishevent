@@ -54,6 +54,9 @@ typedef struct compiled_fmt_t {
     char tags[MAX_VSL_TAG];
 } compiled_fmt_t;
 
+/* XXX: When FMT_Init is implemented, malloc to config.max_reclen */
+static char scratch[DEFAULT_MAX_RECLEN];
+
 #if 0
 
 static compiled_fmt_t cformat, bformat, zformat;
@@ -62,8 +65,6 @@ static char i_arg[BUFSIZ] = "";
 
 static int read_rx_hdr = 0, read_tx_hdr = 0, read_vcl_log = 0,
     read_vcl_call = 0, ntags = 0;
-
-static char *scratch;
 
 static char hit[4];
 static char miss[5];
@@ -225,6 +226,31 @@ format_b_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 
 FORMAT_b(client, ReqAcct)
 FORMAT_b(backend, BereqAcct)
+
+#define FORMAT_D(dir, ts)                                               \
+void                                                                    \
+format_D_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
+               size_t *len)                                             \
+{                                                                       \
+    char *t;                                                            \
+    double d;                                                           \
+    (void) name;                                                        \
+    (void) tag;                                                         \
+                                                                        \
+    char *f = get_hdr(tx, SLT_Timestamp, time_##ts##_re);               \
+    t = get_fld(f, 1);                                                  \
+    errno = 0;                                                          \
+    d = strtod(t, NULL);                                                \
+    if (errno != 0)                                                     \
+        scratch[0] = '\0';                                              \
+    else                                                                \
+        sprintf(scratch, "%d", (int) (d * 1e6));                        \
+    *s = scratch;                                                       \
+    *len = strlen(scratch);                                             \
+}
+
+FORMAT_D(client, resp)
+FORMAT_D(backend, beresp_body)
 
 #if 0
 

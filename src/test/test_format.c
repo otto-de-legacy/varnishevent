@@ -63,6 +63,18 @@ static const char
              "Error compiling " TS_START_REGEX ": %s (offset %d)",
              error, erroroffset);
 
+    time_resp_re = VRE_compile(TS_RESP_REGEX, VRE_CASELESS, &error,
+                               &erroroffset);
+    VMASSERT(time_resp_re != NULL,
+             "Error compiling " TS_RESP_REGEX ": %s (offset %d)",
+             error, erroroffset);
+
+    time_beresp_body_re = VRE_compile(TS_BERESP_BODY_REGEX, VRE_CASELESS,
+                                      &error, &erroroffset);
+    VMASSERT(time_beresp_body_re != NULL,
+             "Error compiling " TS_BERESP_BODY_REGEX ": %s (offset %d)",
+             error, erroroffset);
+
     return NULL;
 }
 
@@ -419,6 +431,45 @@ static const char
 }
 
 static const char
+*test_format_D(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_D_*()\n");
+
+    tx.magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
+    rec.magic = LOGLINE_MAGIC;
+    VSTAILQ_INIT(&rec.chunks);
+    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
+    chunk.magic = CHUNK_MAGIC;
+    chunk.data = (char *) calloc(1, config.chunk_size);
+    MAN(chunk.data);
+
+#define TS_RESP_PAYLOAD "Resp: 1427799478.166798 0.015963 0.000125"
+    rec.len = strlen(TS_RESP_PAYLOAD);
+    rec.tag = SLT_Timestamp;
+    strcpy(chunk.data, TS_RESP_PAYLOAD);
+    format_D_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "15963") == 0);
+    MASSERT(len == 5);
+
+#define TS_BERESP_PAYLOAD "BerespBody: 1427799478.166678 0.015703 0.000282"
+    rec.len = strlen(TS_BERESP_PAYLOAD);
+    strcpy(chunk.data, TS_BERESP_PAYLOAD);
+    format_D_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "15703") == 0);
+    MASSERT(len == 5);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -428,8 +479,9 @@ static const char
     mu_run_test(test_format_get_fld);
     mu_run_test(test_format_get_rec_fld);
     mu_run_test(test_format_get_tm);
-    mu_run_test(test_format_H);
     mu_run_test(test_format_b);
+    mu_run_test(test_format_D);
+    mu_run_test(test_format_H);
     return NULL;
 }
 
