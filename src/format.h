@@ -86,3 +86,5 @@ formatter_f format_r_backend;
 
 formatter_f format_s_client;
 formatter_f format_s_backend;
+
+formatter_f format_t;

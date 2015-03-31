@@ -40,6 +40,7 @@
 
 #include "varnishevent.h"
 #include "format.h"
+#include "strfTIM.h"
 
 typedef struct arg_t {
     char *name;
@@ -409,27 +410,27 @@ FORMAT_r(backend, Bereq)
 FORMAT(client, s, RespStatus)
 FORMAT(backend, s, BerespStatus)
 
-#if 0
-
 #define FORMAT_tim(ltr, fmt, extra)                                     \
-static void                                                             \
-format_##ltr(logline_t *ll, char *name, enum VSL_tag_e tag,             \
-    char **s, size_t *len)                                              \
+void                                                                    \
+format_##ltr(tx_t *tx, char *name, enum VSL_tag_e tag,                  \
+             char **s, size_t *len)                                     \
 {                                                                       \
-    struct tm t;                                                        \
+    double t;                                                           \
     (void) tag;                                                         \
-    extra;                                                              \
-    if (get_tm(ll, &t)) {                                               \
-        AN(scratch);                                                    \
-        size_t n = strftime(scratch, config.max_reclen, fmt, &t);       \
-        if (n == 0)                                                     \
-            *scratch = '\0';                                            \
-        *s = scratch;                                                   \
-        *len = strlen(scratch);                                         \
-    }                                                                   \
+    (extra);                                                            \
+                                                                        \
+    t = get_tm(tx);                                                     \
+    AN(scratch);                                                        \
+    size_t n = strfTIMlocal(scratch, config.max_reclen, fmt, t);        \
+    if (n == 0)                                                         \
+        *scratch = '\0';                                                \
+    *s = scratch;                                                       \
+    *len = strlen(scratch);                                             \
  }
 
 FORMAT_tim(t, "[%d/%b/%Y:%T %z]", (void) name)
+
+#if 0
 
 #define FORMAT_U(dir, dx)                                               \
 static void                                                             \

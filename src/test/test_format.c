@@ -795,6 +795,41 @@ static const char
 }
 
 static const char
+*test_format_t(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    const char *error;
+    size_t len;
+    vre_t *time_re;
+    int n;
+
+    printf("... testing format_t()\n");
+
+#define HTTP_DATA_REGEX \
+    "^\\[\\d\\d/Mar/2015:\\d\\d:\\d\\d:\\d\\d [+-]\\d{4}\\]$"
+
+    time_re = VRE_compile(HTTP_DATA_REGEX, 0, &error, &n);
+    VMASSERT(time_re != NULL,
+             "Error compiling '" HTTP_DATA_REGEX "': %s (offset %d)",
+             error, n);
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, T1, SLT_Timestamp);
+    format_t(&tx, NULL, SLT__Bogus, &str, &len);
+    n = VRE_exec(time_re, str, strlen(str), 0, 0, NULL, 0, NULL);
+    VMASSERT(n > 0, "'%s' does not match '" HTTP_DATA_REGEX "', "
+             "return code = %d", str, n);
+    MASSERT(len == 28);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -814,6 +849,7 @@ static const char
     mu_run_test(test_format_q);
     mu_run_test(test_format_r);
     mu_run_test(test_format_s);
+    mu_run_test(test_format_t);
     return NULL;
 }
 
