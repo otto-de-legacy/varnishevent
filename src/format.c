@@ -41,9 +41,6 @@
 #include "varnishevent.h"
 #include "format.h"
 
-typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
-                         char **s, size_t *len);
-
 typedef struct arg_t {
     char *name;
     enum VSL_tag_e tag;
@@ -197,7 +194,7 @@ get_tm(tx_t *tx)
 }
 
 #define FORMAT(dir, ltr, slt)                                           \
-void                                                             \
+void                                                                    \
 format_##ltr##_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, \
                      size_t *len)                                       \
 {                                                                       \
@@ -213,24 +210,23 @@ format_##ltr##_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, \
 FORMAT(client, H, ReqProtocol)
 FORMAT(backend, H, BereqProtocol)
 
-#if 0
-
-#define FORMAT_b(dir, hx) 					\
-static void							\
-format_b_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,	\
-    char **s, size_t *len)                                      \
-{								\
-    (void) name;						\
-    (void) tag;							\
-    record_t *rec;						\
-    if (TAG(ll,SLT_Length).len)                                 \
-        RETURN_REC(TAG(ll,SLT_Length), s, len);                 \
-    else if ((rec = GET_HDR(ll, hx, "content-length")) != NULL)	\
-        RETURN_HDR(rec, "content-length", s, len);		\
+#define FORMAT_b(dir, slt)                                              \
+void                                                                    \
+format_b_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
+               size_t *len)                                             \
+{                                                                       \
+    (void) name;                                                        \
+    (void) tag;                                                         \
+                                                                        \
+    logline_t *rec = get_tag(tx, SLT_##slt);                            \
+    *s = get_rec_fld(rec, 4);                                           \
+    *len = strlen(*s);                                                  \
 }
 
-FORMAT_b(client, tx)
-FORMAT_b(backend, rx)
+FORMAT_b(client, ReqAcct)
+FORMAT_b(backend, BereqAcct)
+
+#if 0
 
 static void
 format_h_client(logline_t *ll, char *name, enum VSL_tag_e tag,
