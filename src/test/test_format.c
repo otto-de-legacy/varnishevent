@@ -470,6 +470,46 @@ static const char
 }
 
 static const char
+*test_format_h(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_h_*()\n");
+
+    tx.magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
+    rec.magic = LOGLINE_MAGIC;
+    VSTAILQ_INIT(&rec.chunks);
+    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
+    chunk.magic = CHUNK_MAGIC;
+    chunk.data = (char *) calloc(1, config.chunk_size);
+    MAN(chunk.data);
+
+#define REQSTART_PAYLOAD "127.0.0.1 33544"
+    rec.len = strlen(REQSTART_PAYLOAD);
+    rec.tag = SLT_ReqStart;
+    strcpy(chunk.data, REQSTART_PAYLOAD);
+    format_h_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "127.0.0.1") == 0);
+    MASSERT(len == 9);
+
+#define BACKEND_PAYLOAD "14 default default(127.0.0.1,,80)"
+    rec.tag = SLT_Backend;
+    rec.len = strlen(BACKEND_PAYLOAD);
+    strcpy(chunk.data, BACKEND_PAYLOAD);
+    format_h_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "default(127.0.0.1,,80)") == 0);
+    MASSERT(len == 22);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -482,6 +522,7 @@ static const char
     mu_run_test(test_format_b);
     mu_run_test(test_format_D);
     mu_run_test(test_format_H);
+    mu_run_test(test_format_h);
     return NULL;
 }
 

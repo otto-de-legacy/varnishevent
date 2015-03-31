@@ -252,33 +252,23 @@ format_D_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 FORMAT_D(client, resp)
 FORMAT_D(backend, beresp_body)
 
+#define FORMAT_h(dir, slt, fld_nr)                                      \
+void                                                                    \
+format_h_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
+               size_t *len)                                             \
+{                                                                       \
+    (void) name;                                                        \
+    (void) tag;                                                         \
+                                                                        \
+    logline_t *rec = get_tag(tx, SLT_##slt);                            \
+    *s = get_rec_fld(rec, (fld_nr));                                    \
+    *len = strlen(*s);                                                  \
+}
+
+FORMAT_h(client, ReqStart, 0)
+FORMAT_h(backend, Backend, 2)
+
 #if 0
-
-static void
-format_h_client(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len)
-{
-    (void) name;
-    (void) tag;
-    
-    if (TAG(ll,SLT_ReqStart).len)
-        RETURN_FLD(TAG(ll,SLT_ReqStart), 0, s, len);
-}
-
-static void
-format_h_backend(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len)
-{
-    (void) name;
-    (void) tag;
-    
-    if (TAG(ll,SLT_BackendOpen).len)
-        RETURN_FLD(TAG(ll,SLT_BackendOpen), 0, s, len);
-    else if (TAG(ll,SLT_BackendReuse).len)
-        RETURN_REC(TAG(ll,SLT_BackendReuse), s, len);
-    else if (TAG(ll,SLT_BackendClose).len)
-        RETURN_REC(TAG(ll,SLT_BackendClose), s, len);
-}
 
 FORMAT(client, m, RxRequest)
 FORMAT(backend, m, TxRequest)
