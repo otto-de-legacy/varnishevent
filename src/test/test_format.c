@@ -56,6 +56,16 @@ init_tx_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
     chunk->data = (char *) calloc(1, config.chunk_size);
 }
 
+static void
+set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
+                enum VSL_tag_e tag)
+{
+    rec->len = strlen(data);
+    strcpy(chunk->data, data);
+    if (tag != SLT__Bogus)
+        rec->tag = tag;
+}
+
 /* N.B.: Always run the tests in this order */
 static const char
 *test_format_init(void)
@@ -384,17 +394,16 @@ static const char
     init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
-    rec.len = strlen("HTTP/1.1");
-    rec.tag = SLT_ReqProtocol;
-    strcpy(chunk.data, "HTTP/1.1");
+#define PROTOCOL_PAYLOAD "HTTP/1.1"
+    set_record_data(&rec, &chunk, PROTOCOL_PAYLOAD, SLT_ReqProtocol);
     format_H_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "HTTP/1.1") == 0);
-    MASSERT(len == strlen("HTTP/1.1"));
+    MASSERT(strcmp(str, PROTOCOL_PAYLOAD) == 0);
+    MASSERT(len == strlen(PROTOCOL_PAYLOAD));
 
     rec.tag = SLT_BereqProtocol;
     format_H_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "HTTP/1.1") == 0);
-    MASSERT(len == strlen("HTTP/1.1"));
+    MASSERT(strcmp(str, PROTOCOL_PAYLOAD) == 0);
+    MASSERT(len == strlen(PROTOCOL_PAYLOAD));
 
     return NULL;
 }
@@ -414,9 +423,7 @@ static const char
     MAN(chunk.data);
 
 #define REQACCT_PAYLOAD "60 0 60 178 105 283"
-    rec.len = strlen(REQACCT_PAYLOAD);
-    rec.tag = SLT_ReqAcct;
-    strcpy(chunk.data, REQACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
     format_b_client(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "105") == 0);
     MASSERT(len == 3);
@@ -444,16 +451,13 @@ static const char
     MAN(chunk.data);
 
 #define TS_RESP_PAYLOAD "Resp: 1427799478.166798 0.015963 0.000125"
-    rec.len = strlen(TS_RESP_PAYLOAD);
-    rec.tag = SLT_Timestamp;
-    strcpy(chunk.data, TS_RESP_PAYLOAD);
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
     format_D_client(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "15963") == 0);
     MASSERT(len == 5);
 
 #define TS_BERESP_PAYLOAD "BerespBody: 1427799478.166678 0.015703 0.000282"
-    rec.len = strlen(TS_BERESP_PAYLOAD);
-    strcpy(chunk.data, TS_BERESP_PAYLOAD);
+    set_record_data(&rec, &chunk, TS_BERESP_PAYLOAD, SLT_Timestamp);
     format_D_backend(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "15703") == 0);
     MASSERT(len == 5);
@@ -476,17 +480,13 @@ static const char
     MAN(chunk.data);
 
 #define REQSTART_PAYLOAD "127.0.0.1 33544"
-    rec.len = strlen(REQSTART_PAYLOAD);
-    rec.tag = SLT_ReqStart;
-    strcpy(chunk.data, REQSTART_PAYLOAD);
+    set_record_data(&rec, &chunk, REQSTART_PAYLOAD, SLT_ReqStart);
     format_h_client(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "127.0.0.1") == 0);
     MASSERT(len == 9);
 
 #define BACKEND_PAYLOAD "14 default default(127.0.0.1,,80)"
-    rec.tag = SLT_Backend;
-    rec.len = strlen(BACKEND_PAYLOAD);
-    strcpy(chunk.data, BACKEND_PAYLOAD);
+    set_record_data(&rec, &chunk, BACKEND_PAYLOAD, SLT_Backend);
     format_h_backend(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "default(127.0.0.1,,80)") == 0);
     MASSERT(len == 22);
@@ -508,16 +508,7 @@ static const char
     init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
-    rec.len = strlen(REQACCT_PAYLOAD);
-    rec.tag = SLT_ReqAcct;
-    strcpy(chunk.data, REQACCT_PAYLOAD);
-    format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "60") == 0);
-    MASSERT(len == 2);
-
-    rec.len = strlen(REQACCT_PAYLOAD);
-    rec.tag = SLT_ReqAcct;
-    strcpy(chunk.data, REQACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
     format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "60") == 0);
     MASSERT(len == 2);
@@ -528,9 +519,7 @@ static const char
     MASSERT(len == 3);
 
 #define PIPEACCT_PAYLOAD "60 60 178 105"
-    rec.tag = SLT_PipeAcct;
-    rec.len = strlen(PIPEACCT_PAYLOAD);
-    strcpy(chunk.data, PIPEACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, PIPEACCT_PAYLOAD, SLT_PipeAcct);
     format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "178") == 0);
     MASSERT(len == 3);
