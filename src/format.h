@@ -31,7 +31,7 @@
 
 /* including source must include varnishevent.h and vre.h */
 
-/* XXX: init as fixed size with length shm_reclen */
+/* XXX: init as fixed size with length max_reclen + 1 */
 struct vsb *payload;
 
 /* XXX: init time_start_re as VRE_compile(TS_START_REGEX) */

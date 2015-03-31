@@ -94,6 +94,7 @@ get_payload(logline_t *rec)
             chunk = VSTAILQ_NEXT(chunk, chunklist);
         }
     }
+    assert(VSB_len(payload) == rec->len);
     VSB_finish(payload);
 }
 

@@ -54,7 +54,7 @@ static const char
 
     CONF_Init();
 
-    payload = VSB_new(NULL, NULL, DEFAULT_MAX_RECLEN, VSB_FIXEDLEN);
+    payload = VSB_new(NULL, NULL, DEFAULT_MAX_RECLEN + 1, VSB_FIXEDLEN);
     MAN(payload);
 
     time_start_re = VRE_compile(TS_START_REGEX, VRE_CASELESS, &error,
@@ -106,7 +106,7 @@ static const char
     }
     char *str = (char *) malloc(config.max_reclen);
     MAN(str);
-    sprintf(str, "%0*d", config.max_reclen - 1, 0);
+    sprintf(str, "%0*d", config.max_reclen, 0);
     get_payload(&rec);
     MASSERT(strcmp(VSB_data(payload), str) == 0);
 
