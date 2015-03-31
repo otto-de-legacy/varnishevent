@@ -346,6 +346,44 @@ static const char
 }
 
 static const char
+*test_format_H(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_H_*()\n");
+
+    tx.magic = TX_MAGIC;
+    tx.t = TX_TIME;
+    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
+    rec.magic = LOGLINE_MAGIC;
+    VSTAILQ_INIT(&rec.chunks);
+    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
+    chunk.magic = CHUNK_MAGIC;
+    chunk.data = (char *) calloc(1, config.chunk_size);
+    MAN(chunk.data);
+
+    rec.len = strlen("HTTP/1.1");
+    rec.tag = SLT_ReqProtocol;
+    strcpy(chunk.data, "HTTP/1.1");
+    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
+    format_H_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "HTTP/1.1") == 0);
+    MASSERT(len == strlen("HTTP/1.1"));
+
+    rec.tag = SLT_BereqProtocol;
+    format_H_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "HTTP/1.1") == 0);
+    MASSERT(len == strlen("HTTP/1.1"));
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -355,6 +393,7 @@ static const char
     mu_run_test(test_format_get_fld);
     mu_run_test(test_format_get_rec_fld);
     mu_run_test(test_format_get_tm);
+    mu_run_test(test_format_H);
     return NULL;
 }
 

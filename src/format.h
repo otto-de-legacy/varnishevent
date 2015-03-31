@@ -38,9 +38,15 @@ struct vsb *payload;
 #define TS_START_REGEX "^\\s*Start\\s*:\\s*(.+)$"
 vre_t *time_start_re;
 
+typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
+                         char **s, size_t *len);
+
 void get_payload(logline_t *rec);
 logline_t *get_tag(tx_t *tx, enum VSL_tag_e tag);
 char *get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re);
 char *get_fld(const char *str, int n);
 char *get_rec_fld(logline_t *rec, int n);
 double get_tm(tx_t *tx);
+
+formatter_f format_H_client;
+formatter_f format_H_backend;

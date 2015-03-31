@@ -41,8 +41,8 @@
 #include "varnishevent.h"
 #include "format.h"
 
-typedef void formatter_f(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len);
+typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
+                         char **s, size_t *len);
 
 typedef struct arg_t {
     char *name;
@@ -196,18 +196,24 @@ get_tm(tx_t *tx)
     return epocht;
 }
 
-#if 0
-
-#define FORMAT(dir, ltr, slt) 						\
-static void								\
-format_##ltr##_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,	\
-                     char **s, size_t *len)                             \
-{									\
-    (void) name;							\
-    (void) tag;								\
-    if (TAG(ll,SLT_##slt).len)						\
-        RETURN_REC(TAG(ll,SLT_##slt), s, len);				\
+#define FORMAT(dir, ltr, slt)                                           \
+void                                                             \
+format_##ltr##_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, \
+                     size_t *len)                                       \
+{                                                                       \
+    (void) name;                                                        \
+    (void) tag;                                                         \
+                                                                        \
+    logline_t *rec = get_tag(tx, SLT_##slt);                            \
+    get_payload(rec);                                                   \
+    *s = VSB_data(payload);                                             \
+    *len = VSB_len(payload);                                            \
 }
+
+FORMAT(client, H, ReqProtocol)
+FORMAT(backend, H, BereqProtocol)
+
+#if 0
 
 #define FORMAT_b(dir, hx) 					\
 static void							\
@@ -225,9 +231,6 @@ format_b_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,	\
 
 FORMAT_b(client, tx)
 FORMAT_b(backend, rx)
-
-FORMAT(client, H, RxProtocol)
-FORMAT(backend, H, TxProtocol)
 
 static void
 format_h_client(logline_t *ll, char *name, enum VSL_tag_e tag,
