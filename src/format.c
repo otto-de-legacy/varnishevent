@@ -294,10 +294,10 @@ format_I_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
     *len = strlen(*s);
 }
 
-#if 0
+FORMAT(client, m, ReqMethod)
+FORMAT(backend, m, BereqMethod)
 
-FORMAT(client, m, RxRequest)
-FORMAT(backend, m, TxRequest)
+#if 0
 
 #define FORMAT_q(dir, xurl) 						\
 static void								\
