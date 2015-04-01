@@ -857,6 +857,43 @@ static const char
 }
 
 static const char
+*test_format_U(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_U_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_ReqURL);
+    format_U_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(len == 4);
+
+    rec.tag = SLT_BereqURL;
+    format_U_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(len == 4);
+
+    set_record_data(&rec, &chunk, URL_PAYLOAD, SLT_ReqURL);
+    format_U_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(len == 4);
+
+    rec.tag = SLT_BereqURL;
+    format_U_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(len == 4);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -878,6 +915,7 @@ static const char
     mu_run_test(test_format_s);
     mu_run_test(test_format_t);
     mu_run_test(test_format_T);
+    mu_run_test(test_format_U);
     return NULL;
 }
 

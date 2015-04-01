@@ -451,28 +451,31 @@ format_T_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 FORMAT_T(client, resp)
 FORMAT_T(backend, beresp_body)
 
-#if 0
-
-#define FORMAT_U(dir, dx)                                               \
-static void                                                             \
-format_U_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,           \
-    char **s, size_t *len)                                              \
-{                                                                       \
-    char *q = NULL;                                                     \
-    unsigned ulen;                                                      \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-    q = memchr(TAG(ll,SLT_##dx##URL).data, '?', TAG(ll,SLT_##dx##URL).len); \
-    if (q == NULL)                                                      \
-        ulen = TAG(ll,SLT_##dx##URL).len;                               \
-    else                                                                \
-        ulen = q - TAG(ll,SLT_##dx##URL).data;                          \
-    *s = TAG(ll,SLT_##dx##URL).data;                                    \
-    *len = ulen;                                                        \
+#define FORMAT_U(dir, xurl)                                     \
+void                                                            \
+format_U_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,        \
+               char **s, size_t *len)                           \
+{                                                               \
+    char *qs = NULL;                                            \
+    (void) name;                                                \
+    (void) tag;                                                 \
+                                                                \
+    logline_t *rec = get_tag(tx, SLT_##xurl);                   \
+    get_payload(rec);                                           \
+    *s = VSB_data(payload);                                     \
+    qs = memchr(VSB_data(payload), '?', rec->len);              \
+    if (qs == NULL)                                             \
+        *len = rec->len;                                        \
+    else {                                                      \
+        *qs = '\0';                                             \
+        *len = qs - *s;                                         \
+    }                                                           \
 }
 
-FORMAT_U(client, Rx)
-FORMAT_U(backend, Tx)
+FORMAT_U(client, ReqURL)
+FORMAT_U(backend, BereqURL)
+
+#if 0
 
 #define FORMAT_u(dir, hx)                                               \
 static void                                                             \
