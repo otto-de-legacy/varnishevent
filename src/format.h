@@ -34,6 +34,7 @@
 /* XXX: init as fixed size with length max_reclen + 1 */
 struct vsb *payload;
 
+#if 0
 /* XXX: init time_start_re as VRE_compile(TS_START_REGEX) */
 #define TS_START_REGEX "^\\s*Start\\s*:\\s*(.+)$"
 vre_t *time_start_re;
@@ -49,15 +50,17 @@ vre_t *host_re;
 
 #define AUTH_REGEX "^\\s*Authorization\\s*:\\s*(.+)$"
 vre_t *auth_re;
+#endif
 
 typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
                          char **s, size_t *len);
 
 void get_payload(logline_t *rec);
 logline_t *get_tag(tx_t *tx, enum VSL_tag_e tag);
-char *get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re);
+char *get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr);
 char *get_fld(const char *str, int n);
 char *get_rec_fld(logline_t *rec, int n);
+#if 0
 double get_tm(tx_t *tx);
 
 formatter_f format_b_client;
@@ -100,3 +103,4 @@ formatter_f format_U_backend;
 
 formatter_f format_u_client;
 formatter_f format_u_backend;
+#endif

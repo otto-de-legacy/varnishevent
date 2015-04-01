@@ -32,6 +32,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "vas.h"
 #include "miniobj.h"
@@ -55,10 +56,10 @@ typedef struct compiled_fmt_t {
     char tags[MAX_VSL_TAG];
 } compiled_fmt_t;
 
+#if 0
+
 /* XXX: When FMT_Init is implemented, malloc to config.max_reclen */
 static char scratch[DEFAULT_MAX_RECLEN];
-
-#if 0
 
 static compiled_fmt_t cformat, bformat, zformat;
 
@@ -121,21 +122,33 @@ get_tag(tx_t *tx, enum VSL_tag_e tag)
  * in tx that matches the tag and the regex.
  */
 char *
-get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re)
+get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr)
 {
     logline_t *rec;
-#define OV_SIZE (2 * 3)
-    int ov[OV_SIZE];
     char *hdr_payload = NULL;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
-        int s;
+        char *c;
 
         CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
         if (rec->tag != tag)
             continue;
         get_payload(rec);
+        c = VSB_data(payload);
+        while (isspace(*c))
+            c++;
+        if (strncasecmp(c, hdr, strlen(hdr)) != 0)
+            continue;
+        c += strlen(hdr);
+        while (isspace(*c))
+            c++;
+        if (*c++ != ':')
+            continue;
+        while (isspace(*c))
+            c++;
+        hdr_payload = c;
+#if 0
         s = VRE_exec(hdr_re, VSB_data(payload), rec->len, 0, 0, ov, OV_SIZE,
                      NULL);
         assert(s >= VRE_ERROR_NOMATCH && s != 0);
@@ -144,6 +157,7 @@ get_hdr(tx_t *tx, enum VSL_tag_e tag, vre_t *hdr_re)
         assert(ov[2] >= 0 && ov[3] >= ov[2]);
         hdr_payload = VSB_data(payload) + ov[2];
         hdr_payload[ov[3]] = '\0';
+#endif
     }
 
     return hdr_payload;
@@ -175,7 +189,7 @@ get_rec_fld(logline_t *rec, int n)
     get_payload(rec);
     return get_fld(VSB_data(payload), n);
 }
-
+#if 0
 double
 get_tm(tx_t *tx)
 {
@@ -504,7 +518,7 @@ format_u_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
 
 FORMAT_u(client, ReqHeader)
 FORMAT_u(backend, BereqHeader)
-
+#endif
 #if 0
 
 #define FORMAT_Xio(dir, io, hx)						\
