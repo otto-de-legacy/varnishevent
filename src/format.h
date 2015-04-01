@@ -47,6 +47,9 @@ vre_t *time_beresp_body_re;
 #define HOST_REGEX "^\\s*Host\\s*:\\s*(.+)$"
 vre_t *host_re;
 
+#define AUTH_REGEX "^\\s*Authorization\\s*:\\s*(.+)$"
+vre_t *auth_re;
+
 typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
                          char **s, size_t *len);
 
@@ -94,3 +97,6 @@ formatter_f format_T_backend;
 
 formatter_f format_U_client;
 formatter_f format_U_backend;
+
+formatter_f format_u_client;
+formatter_f format_u_backend;

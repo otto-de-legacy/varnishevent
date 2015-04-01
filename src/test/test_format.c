@@ -108,6 +108,10 @@ static const char
     VMASSERT(host_re != NULL, "Error compiling " HOST_REGEX ": %s (offset %d)",
              error, erroroffset);
 
+    auth_re = VRE_compile(AUTH_REGEX, VRE_CASELESS, &error, &erroroffset);
+    VMASSERT(auth_re != NULL, "Error compiling " AUTH_REGEX ": %s (offset %d)",
+             error, erroroffset);
+
     return NULL;
 }
 
@@ -894,6 +898,71 @@ static const char
 }
 
 static const char
+*test_format_u(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_u_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+#define BASIC_AUTH_PAYLOAD "Authorization: Basic dmFybmlzaDo0ZXZlcg=="
+    set_record_data(&rec, &chunk, BASIC_AUTH_PAYLOAD, SLT_ReqHeader);
+    format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "varnish") == 0);
+    MASSERT(len == 7);
+
+    rec.tag = SLT_BereqHeader;
+    format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "varnish") == 0);
+    MASSERT(len == 7);
+
+    /* No header record */
+    rec.tag = SLT__Bogus;
+    format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    /* No auth header */
+    rec.tag = SLT_ReqHeader;
+    rec.len = 0;
+    format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    rec.tag = SLT_BereqHeader;
+    format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    /* No basic auth header
+     * Not a real example of a digest auth header, but kept short, so
+     * that we can test with only one chunk.
+     */
+#define DIGEST_AUTH_PAYLOAD "Authorization: Digest username=\"Mufasa\", realm=\"realm@host.com\""
+    set_record_data(&rec, &chunk, DIGEST_AUTH_PAYLOAD, SLT_ReqHeader);
+    format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    rec.tag = SLT_BereqHeader;
+    format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -916,6 +985,7 @@ static const char
     mu_run_test(test_format_t);
     mu_run_test(test_format_T);
     mu_run_test(test_format_U);
+    mu_run_test(test_format_u);
     return NULL;
 }
 

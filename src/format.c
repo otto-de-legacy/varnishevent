@@ -475,23 +475,20 @@ format_U_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,        \
 FORMAT_U(client, ReqURL)
 FORMAT_U(backend, BereqURL)
 
-#if 0
-
 #define FORMAT_u(dir, hx)                                               \
-static void                                                             \
-format_u_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,           \
-    char **s, size_t *len)                                              \
+void                                                                    \
+format_u_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
+               char **s, size_t *len)                                   \
 {                                                                       \
     (void) name;                                                        \
     (void) tag;                                                         \
-    record_t *rec;                                                      \
+    char *hdr;                                                          \
                                                                         \
-    if ((rec = GET_HDR(ll, hx, "Authorization")) != NULL                \
-        && strncasecmp(rec->data + strlen("Authorization: "), "Basic",  \
-                       strlen("Basic")) == 0) {                         \
-        char *c, *auth = get_fld(rec, 3);                               \
+    if ((hdr = get_hdr(tx, SLT_##hx, auth_re)) != NULL                  \
+        && strcasecmp(get_fld(hdr, 0), "Basic") == 0) {                 \
+        char *c, *auth = get_fld(hdr, 1);                               \
         VB64_init();                                                    \
-        VB64_decode(scratch, config.max_reclen, auth);                  \
+        VB64_decode(scratch, config.max_reclen, auth, auth + strlen(auth)); \
         c = strchr(scratch, ':');                                       \
         if (c != NULL)                                                  \
             *c = '\0';                                                  \
@@ -505,8 +502,10 @@ format_u_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,           \
     }                                                                   \
 }
 
-FORMAT_u(client, rx)
-FORMAT_u(backend, tx)
+FORMAT_u(client, ReqHeader)
+FORMAT_u(backend, BereqHeader)
+
+#if 0
 
 #define FORMAT_Xio(dir, io, hx)						\
 static void								\
