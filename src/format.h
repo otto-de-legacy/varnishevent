@@ -89,3 +89,5 @@ formatter_f format_Xi_client;
 formatter_f format_Xi_backend;
 formatter_f format_Xo_client;
 formatter_f format_Xo_backend;
+
+formatter_f format_Xt;

@@ -425,15 +425,15 @@ format_##ltr(tx_t *tx, char *name, enum VSL_tag_e tag,                  \
 {                                                                       \
     double t;                                                           \
     (void) tag;                                                         \
-    (extra);                                                            \
+    extra;                                                              \
                                                                         \
     t = get_tm(tx);                                                     \
     AN(scratch);                                                        \
     size_t n = strfTIMlocal(scratch, config.max_reclen, fmt, t);        \
-    if (n == 0)                                                         \
-        *scratch = '\0';                                                \
-    *s = scratch;                                                       \
-    *len = strlen(scratch);                                             \
+    if (n != 0) {                                                       \
+        *s = scratch;                                                   \
+        *len = strlen(scratch);                                         \
+    }                                                                   \
  }
 
 FORMAT_tim(t, "[%d/%b/%Y:%T %z]", (void) name)
@@ -523,9 +523,9 @@ FORMAT_Xio(backend, i, BereqHeader)
 FORMAT_Xio(client, o, RespHeader)
 FORMAT_Xio(backend, o, BerespHeader)
 
-#if 0
-
 FORMAT_tim(Xt, name, )
+
+#if 0
 
 static void
 format_Xttfb_client(logline_t *ll, char *name, enum VSL_tag_e tag,

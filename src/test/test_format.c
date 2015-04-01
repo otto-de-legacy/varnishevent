@@ -31,6 +31,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #include "vre.h"
 #include "minunit.h"
@@ -991,6 +992,54 @@ static const char
 }
 
 static const char
+*test_format_Xt(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str = NULL, strftime_s[BUFSIZ];
+    size_t len;
+    char fmt[] =
+        "%a %A %b %B %c %C %d %D %e %F %g %G %h %H %I %j %m %M %n %p %r %R %S "\
+        "%t %T %u %U %V %w %W %x %X %y %Y %z %Z %%";
+    char afmt[] =
+        "%Ec %EC %Ex %EX %Ey %Ey %Od %Oe %OH %OI %Om %OM %OS %Ou %OU %OV %Ow "\
+        "%OW %Oy";
+    char subs[] = "%N";
+    struct tm *tm;
+    time_t t = 1427743146;
+
+    printf("... testing format_Xt()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, T1, SLT_Timestamp);
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, config.max_reclen, fmt, tm));
+    format_Xt(&tx, fmt, SLT__Bogus, &str, &len);
+    MAN(str);
+    VMASSERT(strcmp(str, strftime_s) == 0, "'%s' != '%s'", str, strftime_s);
+    MASSERT(len == strlen(strftime_s));
+
+    /* Alternative strftime formatters */
+    MAN(strftime(strftime_s, config.max_reclen, afmt, tm));
+    format_Xt(&tx, afmt, SLT__Bogus, &str, &len);
+    MAN(str);
+    VMASSERT(strcmp(str, strftime_s) == 0, "'%s' != '%s'", str, strftime_s);
+    MASSERT(len == strlen(strftime_s));
+
+    /* subsecond formatter */
+    format_Xt(&tx, subs, SLT__Bogus, &str, &len);
+    MAN(str);
+    /* ms accuracy ... */
+    VMASSERT(strncmp(str, "529306000", 3) == 0, "'%s' != '529306000'", str);
+    MASSERT(len == 9);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -1016,6 +1065,7 @@ static const char
     mu_run_test(test_format_u);
     mu_run_test(test_format_Xi);
     mu_run_test(test_format_Xo);
+    mu_run_test(test_format_Xt);
 
     return NULL;
 }
