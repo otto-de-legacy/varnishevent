@@ -225,26 +225,33 @@ format_b_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 FORMAT_b(client, ReqAcct)
 FORMAT_b(backend, BereqAcct)
 
+static void
+format_DT(tx_t *tx, vre_t *time_re, int m, char **s, size_t *len)
+{
+    char *t;
+    double d;
+
+    char *f = get_hdr(tx, SLT_Timestamp, time_re);
+    t = get_fld(f, 1);
+    errno = 0;
+    d = strtod(t, NULL);
+    if (errno != 0)
+        scratch[0] = '\0';
+    else
+        sprintf(scratch, "%d", (int) (d * m));
+    *s = scratch;
+    *len = strlen(scratch);
+}
+
 #define FORMAT_D(dir, ts)                                               \
 void                                                                    \
 format_D_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
                size_t *len)                                             \
 {                                                                       \
-    char *t;                                                            \
-    double d;                                                           \
     (void) name;                                                        \
     (void) tag;                                                         \
                                                                         \
-    char *f = get_hdr(tx, SLT_Timestamp, time_##ts##_re);               \
-    t = get_fld(f, 1);                                                  \
-    errno = 0;                                                          \
-    d = strtod(t, NULL);                                                \
-    if (errno != 0)                                                     \
-        scratch[0] = '\0';                                              \
-    else                                                                \
-        sprintf(scratch, "%d", (int) (d * 1e6));                        \
-    *s = scratch;                                                       \
-    *len = strlen(scratch);                                             \
+    format_DT(tx, time_##ts##_re, 1e6, s, len);                         \
 }
 
 FORMAT_D(client, resp)
@@ -429,6 +436,20 @@ format_##ltr(tx_t *tx, char *name, enum VSL_tag_e tag,                  \
  }
 
 FORMAT_tim(t, "[%d/%b/%Y:%T %z]", (void) name)
+
+#define FORMAT_T(dir, ts)                                               \
+void                                                                    \
+format_T_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
+               size_t *len)                                             \
+{                                                                       \
+    (void) name;                                                        \
+    (void) tag;                                                         \
+                                                                        \
+    format_DT(tx, time_##ts##_re, 1, s, len);                           \
+}
+
+FORMAT_T(client, resp)
+FORMAT_T(backend, beresp_body)
 
 #if 0
 

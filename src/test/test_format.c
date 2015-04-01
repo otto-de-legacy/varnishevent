@@ -830,6 +830,33 @@ static const char
 }
 
 static const char
+*test_format_T(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_T_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    format_T_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "0") == 0);
+    MASSERT(len == 1);
+
+    set_record_data(&rec, &chunk, TS_BERESP_PAYLOAD, SLT_Timestamp);
+    format_T_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "0") == 0);
+    MASSERT(len == 1);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -850,6 +877,7 @@ static const char
     mu_run_test(test_format_r);
     mu_run_test(test_format_s);
     mu_run_test(test_format_t);
+    mu_run_test(test_format_T);
     return NULL;
 }
 
