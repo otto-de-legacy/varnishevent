@@ -33,7 +33,6 @@
 #include <math.h>
 #include <time.h>
 
-#include "vre.h"
 #include "minunit.h"
 
 #include "../varnishevent.h"
@@ -779,31 +778,23 @@ static const char
     tx_t tx;
     logline_t rec;
     chunk_t chunk;
-    char *str;
-    const char *error;
+    char *str = NULL, strftime_s[BUFSIZ], fmt[] = "[%d/%b/%Y:%T %z]";
     size_t len;
-    vre_t *time_re;
-    int n;
+    struct tm *tm;
+    time_t t = 1427743146;
 
     printf("... testing format_t()\n");
-
-#define HTTP_DATA_REGEX \
-    "^\\[\\d\\d/Mar/2015:\\d\\d:\\d\\d:\\d\\d [+-]\\d{4}\\]$"
-
-    time_re = VRE_compile(HTTP_DATA_REGEX, 0, &error, &n);
-    VMASSERT(time_re != NULL,
-             "Error compiling '" HTTP_DATA_REGEX "': %s (offset %d)",
-             error, n);
 
     init_tx_rec_chunk(&tx, &rec, &chunk);
     MAN(chunk.data);
 
     set_record_data(&rec, &chunk, T1, SLT_Timestamp);
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, config.max_reclen, fmt, tm));
     format_t(&tx, NULL, SLT__Bogus, &str, &len);
-    n = VRE_exec(time_re, str, strlen(str), 0, 0, NULL, 0, NULL);
-    VMASSERT(n > 0, "'%s' does not match '" HTTP_DATA_REGEX "', "
-             "return code = %d", str, n);
-    MASSERT(len == 28);
+    MAN(str);
+    VMASSERT(strcmp(str, strftime_s) == 0, "'%s' != '%s'", str, strftime_s);
+    MASSERT(len == strlen(strftime_s));
 
     return NULL;
 }
