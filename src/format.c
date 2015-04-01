@@ -56,10 +56,10 @@ typedef struct compiled_fmt_t {
     char tags[MAX_VSL_TAG];
 } compiled_fmt_t;
 
-#if 0
-
 /* XXX: When FMT_Init is implemented, malloc to config.max_reclen */
 static char scratch[DEFAULT_MAX_RECLEN];
+
+#if 0
 
 static compiled_fmt_t cformat, bformat, zformat;
 
@@ -116,10 +116,8 @@ get_tag(tx_t *tx, enum VSL_tag_e tag)
 }
 
 /*
- * hdr_re is a pre-compiled regex of the form "^\s*%s\*s:\s*(.+)$",
- * formatted with the header name in place of %s.
- * Return the captured substring (the header payload) of the *last* record
- * in tx that matches the tag and the regex.
+ * Return the header payload of the *last* record in tx that matches the
+ * tag and the header name.
  */
 char *
 get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr)
@@ -148,18 +146,7 @@ get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr)
         while (isspace(*c))
             c++;
         hdr_payload = c;
-#if 0
-        s = VRE_exec(hdr_re, VSB_data(payload), rec->len, 0, 0, ov, OV_SIZE,
-                     NULL);
-        assert(s >= VRE_ERROR_NOMATCH && s != 0);
-        if (s == VRE_ERROR_NOMATCH)
-            continue;
-        assert(ov[2] >= 0 && ov[3] >= ov[2]);
-        hdr_payload = VSB_data(payload) + ov[2];
-        hdr_payload[ov[3]] = '\0';
-#endif
     }
-
     return hdr_payload;
 }
 
@@ -189,7 +176,7 @@ get_rec_fld(logline_t *rec, int n)
     get_payload(rec);
     return get_fld(VSB_data(payload), n);
 }
-#if 0
+
 double
 get_tm(tx_t *tx)
 {
@@ -198,7 +185,7 @@ get_tm(tx_t *tx)
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
 
-    ts = get_hdr(tx, SLT_Timestamp, time_start_re);
+    ts = get_hdr(tx, SLT_Timestamp, "Start");
     if (ts != NULL && (epochstr = get_fld(ts, 0)) != NULL) {
         char *p;
         epocht = strtod(epochstr, &p);
@@ -239,13 +226,13 @@ format_b_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 FORMAT_b(client, ReqAcct)
 FORMAT_b(backend, BereqAcct)
 
-static void
-format_DT(tx_t *tx, vre_t *time_re, int m, char **s, size_t *len)
+static inline void
+format_DT(tx_t *tx, const char *ts, int m, char **s, size_t *len)
 {
     char *t;
     double d;
 
-    char *f = get_hdr(tx, SLT_Timestamp, time_re);
+    char *f = get_hdr(tx, SLT_Timestamp, ts);
     t = get_fld(f, 1);
     errno = 0;
     d = strtod(t, NULL);
@@ -265,11 +252,11 @@ format_D_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
     (void) name;                                                        \
     (void) tag;                                                         \
                                                                         \
-    format_DT(tx, time_##ts##_re, 1e6, s, len);                         \
+    format_DT(tx, (ts), 1e6, s, len);                                   \
 }
 
-FORMAT_D(client, resp)
-FORMAT_D(backend, beresp_body)
+FORMAT_D(client, "Resp")
+FORMAT_D(backend, "BerespBody")
 
 FORMAT(client, H, ReqProtocol)
 FORMAT(backend, H, BereqProtocol)
@@ -390,13 +377,13 @@ format_r_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
     logline_t *rec = get_tag(tx, SLT_##dx##Method);                     \
     if (rec != NULL) {                                                  \
         get_payload(rec);                                               \
-        sprintf(scratch, VSB_data(payload));           \
+        sprintf(scratch, VSB_data(payload));                            \
     }                                                                   \
     else                                                                \
         strcpy(scratch, "-");                                           \
     strcat(scratch, " ");                                               \
                                                                         \
-    if ((str = get_hdr(tx, SLT_##dx##Header, host_re)) != NULL) {       \
+    if ((str = get_hdr(tx, SLT_##dx##Header, "Host")) != NULL) {        \
         if (strncmp(str, "http://", 7) != 0)                            \
             strcat(scratch, "http://");                                 \
         strcat(scratch, str);                                           \
@@ -459,11 +446,11 @@ format_T_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
     (void) name;                                                        \
     (void) tag;                                                         \
                                                                         \
-    format_DT(tx, time_##ts##_re, 1, s, len);                           \
+    format_DT(tx, ts, 1, s, len);                                       \
 }
 
-FORMAT_T(client, resp)
-FORMAT_T(backend, beresp_body)
+FORMAT_T(client, "Resp")
+FORMAT_T(backend, "BerespBody")
 
 #define FORMAT_U(dir, xurl)                                     \
 void                                                            \
@@ -498,7 +485,7 @@ format_u_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
     (void) tag;                                                         \
     char *hdr;                                                          \
                                                                         \
-    if ((hdr = get_hdr(tx, SLT_##hx, auth_re)) != NULL                  \
+    if ((hdr = get_hdr(tx, SLT_##hx, "Authorization")) != NULL          \
         && strcasecmp(get_fld(hdr, 0), "Basic") == 0) {                 \
         char *c, *auth = get_fld(hdr, 1);                               \
         VB64_init();                                                    \
@@ -518,7 +505,7 @@ format_u_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
 
 FORMAT_u(client, ReqHeader)
 FORMAT_u(backend, BereqHeader)
-#endif
+
 #if 0
 
 #define FORMAT_Xio(dir, io, hx)						\

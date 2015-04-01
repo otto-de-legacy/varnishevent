@@ -43,7 +43,6 @@
 
 int tests_run = 0;
 
-#if 0
 static void
 add_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
 {
@@ -72,7 +71,6 @@ set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
     if (tag != SLT__Bogus)
         rec->tag = tag;
 }
-#endif
 
 /* N.B.: Always run the tests in this order */
 static const char
@@ -84,34 +82,6 @@ static const char
 
     payload = VSB_new(NULL, NULL, DEFAULT_MAX_RECLEN + 1, VSB_FIXEDLEN);
     MAN(payload);
-
-#if 0
-    time_start_re = VRE_compile(TS_START_REGEX, VRE_CASELESS, &error,
-                                &erroroffset);
-    VMASSERT(time_start_re != NULL,
-             "Error compiling " TS_START_REGEX ": %s (offset %d)",
-             error, erroroffset);
-
-    time_resp_re = VRE_compile(TS_RESP_REGEX, VRE_CASELESS, &error,
-                               &erroroffset);
-    VMASSERT(time_resp_re != NULL,
-             "Error compiling " TS_RESP_REGEX ": %s (offset %d)",
-             error, erroroffset);
-
-    time_beresp_body_re = VRE_compile(TS_BERESP_BODY_REGEX, VRE_CASELESS,
-                                      &error, &erroroffset);
-    VMASSERT(time_beresp_body_re != NULL,
-             "Error compiling " TS_BERESP_BODY_REGEX ": %s (offset %d)",
-             error, erroroffset);
-
-    host_re = VRE_compile(HOST_REGEX, VRE_CASELESS, &error, &erroroffset);
-    VMASSERT(host_re != NULL, "Error compiling " HOST_REGEX ": %s (offset %d)",
-             error, erroroffset);
-
-    auth_re = VRE_compile(AUTH_REGEX, VRE_CASELESS, &error, &erroroffset);
-    VMASSERT(auth_re != NULL, "Error compiling " AUTH_REGEX ": %s (offset %d)",
-             error, erroroffset);
-#endif
 
     return NULL;
 }
@@ -348,7 +318,6 @@ static const char
     return NULL;
 }
 
-#if 0
 static const char
 *test_format_get_tm(void)
 {
@@ -966,7 +935,6 @@ static const char
 
     return NULL;
 }
-#endif
 
 static const char
 *all_tests(void)
@@ -977,7 +945,6 @@ static const char
     mu_run_test(test_format_get_hdr);
     mu_run_test(test_format_get_fld);
     mu_run_test(test_format_get_rec_fld);
-#if 0
     mu_run_test(test_format_get_tm);
     mu_run_test(test_format_b);
     mu_run_test(test_format_D);
@@ -993,7 +960,7 @@ static const char
     mu_run_test(test_format_T);
     mu_run_test(test_format_U);
     mu_run_test(test_format_u);
-#endif
+
     return NULL;
 }
 
