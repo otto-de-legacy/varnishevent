@@ -506,23 +506,24 @@ format_u_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
 FORMAT_u(client, ReqHeader)
 FORMAT_u(backend, BereqHeader)
 
-#if 0
-
-#define FORMAT_Xio(dir, io, hx)						\
-static void								\
-format_X##io##_##dir(logline_t *ll, char *name, enum VSL_tag_e tag,	\
-    char **s, size_t *len)						\
-{									\
-    (void) tag;								\
-    record_t *rec = GET_HDR(ll, hx, name);				\
-    if (rec)								\
-        RETURN_HDR(rec, name, s, len);					\
+#define FORMAT_Xio(dir, io, hx)                                 \
+void								\
+format_X##io##_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,	\
+                     char **s, size_t *len)                     \
+{                                                               \
+    (void) tag;                                                 \
+    								\
+    *s = get_hdr(tx, SLT_##hx, name);                           \
+    if (s)                                                      \
+        *len = strlen(*s);                                      \
 }
 
-FORMAT_Xio(client, i, rx)
-FORMAT_Xio(backend, i, tx)
-FORMAT_Xio(client, o, tx)
-FORMAT_Xio(backend, o, rx)
+FORMAT_Xio(client, i, ReqHeader)
+FORMAT_Xio(backend, i, BereqHeader)
+FORMAT_Xio(client, o, RespHeader)
+FORMAT_Xio(backend, o, BerespHeader)
+
+#if 0
 
 FORMAT_tim(Xt, name, )
 

@@ -937,6 +937,60 @@ static const char
 }
 
 static const char
+*test_format_Xi(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str, hdr[] = "Foo";
+    size_t len;
+
+    printf("... testing format_Xi_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, "Foo: bar", SLT_ReqHeader);
+    format_Xi_client(&tx, hdr, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "bar") == 0);
+    MASSERT(len == 3);
+
+    rec.tag = SLT_BereqHeader;
+    format_Xi_backend(&tx, hdr, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "bar") == 0);
+    MASSERT(len == 3);
+
+    return NULL;
+}
+
+static const char
+*test_format_Xo(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str, hdr[] = "Baz";
+    size_t len;
+
+    printf("... testing format_Xo_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, "Baz: quux", SLT_RespHeader);
+    format_Xo_client(&tx, hdr, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "quux") == 0);
+    MASSERT(len == 4);
+
+    rec.tag = SLT_BerespHeader;
+    format_Xo_backend(&tx, hdr, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "quux") == 0);
+    MASSERT(len == 4);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -960,6 +1014,8 @@ static const char
     mu_run_test(test_format_T);
     mu_run_test(test_format_U);
     mu_run_test(test_format_u);
+    mu_run_test(test_format_Xi);
+    mu_run_test(test_format_Xo);
 
     return NULL;
 }

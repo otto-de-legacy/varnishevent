@@ -84,3 +84,8 @@ formatter_f format_U_backend;
 
 formatter_f format_u_client;
 formatter_f format_u_backend;
+
+formatter_f format_Xi_client;
+formatter_f format_Xi_backend;
+formatter_f format_Xo_client;
+formatter_f format_Xo_backend;
