@@ -32,6 +32,7 @@
 #include <time.h>
 #include <stddef.h>
 
-size_t strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, long nsec);
+size_t strfTIM(char *s, size_t max, const char *fmt, struct tm *tm,
+               unsigned usec);
 size_t strfTIMlocal(char *s, size_t max, const char *fmt, double t);
 size_t strfTIMgm(char *s, size_t max, const char *fmt, double t);

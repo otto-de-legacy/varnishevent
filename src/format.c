@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2013 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2013 Otto Gmbh & Co KG
+ * Copyright (c) 2013-2015 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2013-2015 Otto Gmbh & Co KG
  * All rights reserved
  * Use only with permission
  *
@@ -418,25 +418,41 @@ FORMAT_r(backend, Bereq)
 FORMAT(client, s, RespStatus)
 FORMAT(backend, s, BerespStatus)
 
-#define FORMAT_tim(ltr, fmt, extra)                                     \
-void                                                                    \
-format_##ltr(tx_t *tx, char *name, enum VSL_tag_e tag,                  \
-             char **s, size_t *len)                                     \
-{                                                                       \
-    double t;                                                           \
-    (void) tag;                                                         \
-    extra;                                                              \
-                                                                        \
-    t = get_tm(tx);                                                     \
-    AN(scratch);                                                        \
-    size_t n = strfTIMlocal(scratch, config.max_reclen, fmt, t);        \
-    if (n != 0) {                                                       \
-        *s = scratch;                                                   \
-        *len = strlen(scratch);                                         \
-    }                                                                   \
- }
+static inline void
+format_tim(tx_t *tx, const char *fmt, char **s, size_t *len)
+{
+    unsigned secs, usecs;
+    char *data, *ts;
+    time_t t;
+    struct tm tm;
 
-FORMAT_tim(t, "[%d/%b/%Y:%T %z]", (void) name)
+    data = get_hdr(tx, SLT_Timestamp, "Start");
+    if (data == NULL)
+        return;
+    ts = get_fld(data, 0);
+    if (ts == NULL)
+        return;
+    if (sscanf(ts, "%d.%u", &secs, &usecs) != 2)
+        return;
+    assert(usecs < 1000000);
+    t = (time_t) secs;
+    AN(localtime_r(&t, &tm));
+    AN(scratch);
+    size_t n = strfTIM(scratch, config.max_reclen, fmt, &tm, usecs);
+    if (n != 0) {
+        *s = scratch;
+        *len = strlen(scratch);
+    }
+}
+
+void
+format_t(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+
+    format_tim(tx, "[%d/%b/%Y:%T %z]", s, len);
+}
 
 #define FORMAT_T(dir, ts)                                               \
 void                                                                    \
@@ -523,7 +539,13 @@ FORMAT_Xio(backend, i, BereqHeader)
 FORMAT_Xio(client, o, RespHeader)
 FORMAT_Xio(backend, o, BerespHeader)
 
-FORMAT_tim(Xt, name, )
+void
+format_Xt(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) tag;
+
+    format_tim(tx, (const char *) name, s, len);
+}
 
 #if 0
 

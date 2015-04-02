@@ -996,7 +996,7 @@ static const char
     char afmt[] =
         "%Ec %EC %Ex %EX %Ey %Ey %Od %Oe %OH %OI %Om %OM %OS %Ou %OU %OV %Ow "\
         "%OW %Oy";
-    char subs[] = "%N";
+    char subs[] = "%i";
     struct tm *tm;
     time_t t = 1427743146;
 
@@ -1024,8 +1024,8 @@ static const char
     format_Xt(&tx, subs, SLT__Bogus, &str, &len);
     MAN(str);
     /* ms accuracy ... */
-    VMASSERT(strncmp(str, "529306000", 3) == 0, "'%s' != '529306000'", str);
-    MASSERT(len == 9);
+    VMASSERT(strcmp(str, "529143") == 0, "'%s' != '529143'", str);
+    MASSERT(len == 6);
 
     return NULL;
 }

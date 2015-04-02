@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2013 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2013 Otto Gmbh & Co KG
+ * Copyright (c) 2013-2015 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2013-2015 Otto Gmbh & Co KG
  * All rights reserved
  * Use only with permission
  *
@@ -42,23 +42,24 @@
 /*
  * cf. vtim.c/VTIM:timespec in libvarnish
  */
-static struct timespec
-double2timespec(double t)
+static struct timeval
+double2timeval(double t)
 {
-    struct timespec tv;
+    struct timeval tv;
 
     tv.tv_sec = (time_t)trunc(t);
-    tv.tv_nsec = (int)(1e9 * (t - tv.tv_sec));
+    tv.tv_usec = (int)(1e6 * (t - tv.tv_sec));
     return (tv);
 }
 
 size_t
-strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, long nsec)
+strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, unsigned usec)
 {
         struct vsb *vsb = VSB_new(NULL, NULL, max, VSB_FIXEDLEN);
         const char *p;
         size_t n;
 
+        assert(usec < 1000000);
         for (p = fmt; *p; p++) {
                 if (*p != '%') {
                         VSB_putc(vsb, *p);
@@ -69,13 +70,13 @@ strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, long nsec)
                         VSB_cat(vsb, "%%");
                         continue;
                 }
-                if (*p != 'N') {
+                if (*p != 'i') {
                         VSB_putc(vsb, '%');
                         VSB_putc(vsb, *p);
                         continue;
                 }
 
-                VSB_printf(vsb, "%09ld", nsec);
+                VSB_printf(vsb, "%06u", usec);
         }
         VSB_finish(vsb);
 
@@ -93,11 +94,11 @@ strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, long nsec)
 size_t                                                          \
 strfTIM##tz(char *s, size_t max, const char *fmt, double t)     \
 {                                                               \
-        struct timespec tim = double2timespec(t);               \
+        struct timeval tim = double2timeval(t);                 \
         struct tm tm;                                           \
                                                                 \
         AN(tz##time_r((time_t *) &tim.tv_sec, &tm));            \
-        return(strfTIM(s, max, fmt, &tm, tim.tv_nsec));         \
+        return(strfTIM(s, max, fmt, &tm, tim.tv_usec));         \
 }
 
 strfTIM_tz(local)

@@ -39,7 +39,6 @@
 #include "../strfTIM.h"
 
 int tests_run = 0;
-static char errmsg[BUFSIZ];
 
 static char
 *test_strfTIM_strftime(void)
@@ -62,13 +61,11 @@ static char
     strftime_n = strftime(strftime_s, BUFSIZ, fmt, tm);
     strfTIM_n = strfTIM(strfTIM_s, BUFSIZ, fmt, tm, 0);
 
-    sprintf(errmsg, "strfTIM incorrect return value %zu (expected %zu)",
-        strfTIM_n, strftime_n);
-    mu_assert(errmsg, strfTIM_n == strftime_n);
+    VMASSERT(strfTIM_n == strftime_n, "strfTIM return value %zu (expected %zu)",
+             strfTIM_n, strftime_n);
 
-    sprintf(errmsg, "strfTIM incorrect result '%s' (expected '%s')", strfTIM_s,
-        strftime_s);
-    mu_assert(errmsg, strcmp(strfTIM_s, strftime_s) == 0);
+    VMASSERT(strcmp(strfTIM_s, strftime_s) == 0,
+             "strfTIM result '%s' (expected '%s')", strfTIM_s, strftime_s);
 
     return NULL;
 }
@@ -78,40 +75,36 @@ static char
 {
     size_t n;
     time_t t = 1382804827;
-    long nsec = 112625579;
-    const char *exp = "2013-10-26-18:27:07.112625579";
+    long usec = 112625;
+    const char *exp = "2013-10-26-18:27:07.112625";
     char s[BUFSIZ];
     struct tm *tm;
 
-    printf("... testing strfTIM %%N conversion specifier\n");
+    printf("... testing strfTIM %%i conversion specifier\n");
 
     tm = localtime(&t);
-    assert(tm != NULL);
+    MAN(tm);
     
-    n = strfTIM(s, BUFSIZ, "%F-%T.%N", tm, nsec);
-    sprintf(errmsg, "strfTIM incorrect return value %zu (expected %zu)", n,
-        strlen(exp));
-    mu_assert(errmsg, n == strlen(exp));
+    n = strfTIM(s, BUFSIZ, "%F-%T.%i", tm, usec);
+    VMASSERT(n == strlen(exp), "strfTIM return value %zu (expected %zu)", n,
+             strlen(exp));
 
-    sprintf(errmsg, "strfTIM incorrect result '%s' (expected '%s')", s, exp);
-    mu_assert(errmsg, strcmp(s, exp) == 0);
+    VMASSERT(strcmp(s, exp) == 0, "strfTIM result '%s' (expected '%s')", s,
+             exp);
 
-    n = strfTIM(s, BUFSIZ, "%%N", tm, nsec);
-    sprintf(errmsg, "strfTIM incorrect return value %zu (expected %zu)", n,
-        strlen("%N"));
-    mu_assert(errmsg, n == strlen("%N"));
+    n = strfTIM(s, BUFSIZ, "%%i", tm, usec);
+    VMASSERT(n == strlen("%i"), "strfTIM return value %zu (expected %zu)", n,
+             strlen("%i"));
 
-    sprintf(errmsg, "strfTIM incorrect result '%s' (expected '%s')", s, "%N");
-    mu_assert(errmsg, strcmp(s, "%N") == 0);
+    VMASSERT(strcmp(s, "%i") == 0, "strfTIM result '%s' (expected '%s')", s,
+             "%i");
 
-    n = strfTIM(s, BUFSIZ, "%%%N", tm, nsec);
-    sprintf(errmsg, "strfTIM incorrect return value %zu (expected %zu)", n,
-        strlen("%112625579"));
-    mu_assert(errmsg, n == strlen("%112625579"));
+    n = strfTIM(s, BUFSIZ, "%%%i", tm, usec);
+    VMASSERT(n == strlen("%112625"), "strfTIM return value %zu (expected %zu)",
+             n, strlen("%112625"));
 
-    sprintf(errmsg, "strfTIM incorrect result '%s' (expected '%s')", s,
-        "%112625579");
-    mu_assert(errmsg, strcmp(s, "%112625579") == 0);
+    VMASSERT(strcmp(s, "%112625") == 0, "strfTIM result '%s' (expected '%s')",
+             s, "%112625");
 
     return NULL;
 }
@@ -124,23 +117,16 @@ static char
 
     printf("... testing strfTIMlocal\n");
 
-    n = strfTIMlocal(s, BUFSIZ, "%F-%T.%N", 1382804820.112625579);
-    sprintf(exp, "2013-10-26-18:27:0%.9f", 0.112625579);
-    sprintf(errmsg, "strfTIMlocal incorrect return value %zu (expected %zu)",
-        n, strlen(exp));
-    mu_assert(errmsg, n == strlen(exp));
+    n = strfTIMlocal(s, BUFSIZ, "%F-%T.%i", 1382804820.112625);
+    sprintf(exp, "2013-10-26-18:27:0%.6f", 0.112625);
+    VMASSERT(n == strlen(exp), "strfTIMlocal return value %zu (expected %zu)",
+             n, strlen(exp));
 
-    /*
-     * Don't require equality into the nanosecond range, because that gets
-     * us into floating point precision issues. Just require equality in
-     * the µsec range, by terminating the result string after six decimal
-     * places.
-     */
-    s[strlen(s) - 3] = '\0';
-    exp[strlen(exp) - 3] = '\0';
-    sprintf(errmsg, "strfTIMlocal incorrect result '%s' (expected '%s')", s,
-        exp);
-    mu_assert(errmsg, strcmp(s, exp) == 0);
+    /* Not accurate at the last decimal place, due to floating point
+     * precision */
+    s[n - 1] = exp[n - 1] = '\0';
+    VMASSERT(strcmp(s, exp) == 0, "strfTIMlocal result '%s' (expected '%s')",
+             s, exp);
 
     return NULL;
 }
@@ -153,17 +139,15 @@ static char
 
     printf("... testing strfTIMgm\n");
 
-    n = strfTIMgm(s, BUFSIZ, "%F-%T.%N", 1382804820.112625579);
-    sprintf(exp, "2013-10-26-16:27:0%.9f", 0.112625579);
-    sprintf(errmsg, "strfTIMgm incorrect return value %zu (expected %zu)",
-        n, strlen(exp));
-    mu_assert(errmsg, n == strlen(exp));
+    n = strfTIMgm(s, BUFSIZ, "%F-%T.%i", 1382804820.112625);
+    sprintf(exp, "2013-10-26-16:27:0%.6f", 0.112625);
+    VMASSERT(n == strlen(exp), "strfTIMgm return value %zu (expected %zu)",
+             n, strlen(exp));
 
     /* As above */
-    s[strlen(s) - 3] = '\0';
-    exp[strlen(exp) - 3] = '\0';
-    sprintf(errmsg, "strfTIMgm incorrect result '%s' (expected '%s')", s, exp);
-    mu_assert(errmsg, strcmp(s, exp) == 0);
+    s[n - 1] = exp[n - 1] = '\0';
+    VMASSERT(strcmp(s, exp) == 0, "strfTIMgm result '%s' (expected '%s')",
+             s, exp);
 
     return NULL;
 }
