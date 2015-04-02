@@ -91,3 +91,6 @@ formatter_f format_Xo_client;
 formatter_f format_Xo_backend;
 
 formatter_f format_Xt;
+
+formatter_f format_Xttfb_client;
+formatter_f format_Xttfb_backend;

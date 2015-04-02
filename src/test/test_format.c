@@ -1031,6 +1031,35 @@ static const char
 }
 
 static const char
+*test_format_Xttfb(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_Xttfb_*()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+#define TS_PROCESS_PAYLOAD "Process: 1427979230.712416 0.000166 0.000166"
+    set_record_data(&rec, &chunk, TS_PROCESS_PAYLOAD, SLT_Timestamp);
+    format_Xttfb_client(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "0.000166") == 0);
+    MASSERT(len == 8);
+
+#define TS_BERESP_HDR_PAYLOAD "Beresp: 1427979243.588828 0.002837 0.002743"
+    set_record_data(&rec, &chunk, TS_BERESP_HDR_PAYLOAD, SLT_Timestamp);
+    format_Xttfb_backend(&tx, NULL, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "0.002837") == 0);
+    MASSERT(len == 8);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -1057,6 +1086,7 @@ static const char
     mu_run_test(test_format_Xi);
     mu_run_test(test_format_Xo);
     mu_run_test(test_format_Xt);
+    mu_run_test(test_format_Xttfb);
 
     return NULL;
 }

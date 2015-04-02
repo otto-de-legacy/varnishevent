@@ -277,7 +277,7 @@ format_h_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
 FORMAT_h(client, ReqStart, 0)
 FORMAT_h(backend, Backend, 2)
 
-static void
+static inline void
 format_IO_client(tx_t *tx, int req_fld, int pipe_fld, char **s, size_t *len)
 {
     int field;
@@ -547,41 +547,39 @@ format_Xt(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
     format_tim(tx, (const char *) name, s, len);
 }
 
+static inline void
+format_Xttfb(tx_t *tx, const char *tname, char **s, size_t *len)
+{
+    char *ts;
+
+    ts = get_hdr(tx, SLT_Timestamp, tname);
+    if (ts == NULL)
+        return;
+    *s = get_fld(ts, 1);
+    *len = strlen(*s);
+}
+
+void
+format_Xttfb_client(tx_t *tx, char *name, enum VSL_tag_e tag,
+                    char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+
+    format_Xttfb(tx, "Process", s, len);
+}
+
+void
+format_Xttfb_backend(tx_t *tx, char *name, enum VSL_tag_e tag,
+                     char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    
+    format_Xttfb(tx, "Beresp", s, len);
+}
+
 #if 0
-
-static void
-format_Xttfb_client(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len)
-{
-    (void) name;
-    (void) tag;
-    
-    if (TAG(ll,SLT_ReqEnd).len)
-        RETURN_FLD(TAG(ll,SLT_ReqEnd), 5, s, len);
-}
-
-#ifdef BESTATS
-static void
-format_Xttfb_backend(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len)
-{
-    (void) name;
-    (void) tag;
-    
-    if (TAG(ll,SLT_BackendReq).len && TAG(ll,SLT_Fetch_Hdr).len) {
-        double req_end, fetch_start;
-                        
-        errno = 0;
-        req_end = strtod(get_fld(&TAG(ll,SLT_BackendReq), 2), NULL);
-        AZ(errno);
-        fetch_start = strtod(get_fld(&TAG(ll,SLT_Fetch_Hdr), 2), NULL);
-        AZ(errno);
-        sprintf(scratch, "%.9f", fetch_start - req_end);
-        *s = scratch;
-        *len = strlen(scratch);
-    }
-}
-#endif
 
 static void
 format_VCL_disp(logline_t *ll, char *name, enum VSL_tag_e tag,
