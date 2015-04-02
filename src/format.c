@@ -59,6 +59,13 @@ typedef struct compiled_fmt_t {
 /* XXX: When FMT_Init is implemented, malloc to config.max_reclen */
 static char scratch[DEFAULT_MAX_RECLEN];
 
+static char hit[] = "hit";
+static char miss[] = "miss";
+static char pass[] = "pass";
+static char pipe[] = "pipe";
+static char error[] = "error";
+static char dash[] = "-";
+
 #if 0
 
 static compiled_fmt_t cformat, bformat, zformat;
@@ -67,11 +74,6 @@ static char i_arg[BUFSIZ] = "";
 
 static int read_rx_hdr = 0, read_tx_hdr = 0, read_vcl_log = 0,
     read_vcl_call = 0, ntags = 0;
-
-static char hit[4];
-static char miss[5];
-static char pass[5];
-static char dash[2];
 
 #endif
 
@@ -579,41 +581,50 @@ format_Xttfb_backend(tx_t *tx, char *name, enum VSL_tag_e tag,
     format_Xttfb(tx, "Beresp", s, len);
 }
 
-#if 0
-
-static void
-format_VCL_disp(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len)
+void
+format_VCL_disp(tx_t *tx, char *name, enum VSL_tag_e tag,
+                char **s, size_t *len)
 {
-    hdr_t *vcl_call = ll->vcl_call;
-    (void) tag;
+    logline_t *rec;
 
+    (void) tag;
     *s = dash;
 
-    for (int i = 0; i < vcl_call->nrec; i++) {
-        record_t *rec = &vcl_call->record[i];
-        if (strncmp(rec->data, "hit", rec->len) == 0) {
-            *s = hit;
-            break;
+    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
+        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        if (rec->tag != SLT_VCL_call && rec->tag != SLT_VCL_return)
+            continue;
+        get_payload(rec);
+        char *data = VSB_data(payload);
+        if (rec->tag == SLT_VCL_call) {
+            if (strcasecmp(data, "hit") == 0)
+                *s = hit;
+            else if (strcasecmp(data, "miss") == 0)
+                *s = miss;
+            else if (strcasecmp(data, "pass") == 0) {
+                if (*name == 'm')
+                    *s = miss;
+                else
+                    *s = pass;
+            }
+            else if (strcasecmp(data, "error") == 0) {
+                if (*name == 'm')
+                    *s = miss;
+                else
+                    *s = error;
+            }
         }
-        else if (strncmp(rec->data, "miss", rec->len) == 0) {
-            *s = miss;
-            break;
-        }
-        else if (strncmp(rec->data, "pass", rec->len) == 0) {
+        else if (strcasecmp(data, "pipe") == 0) {
             if (*name == 'm')
                 *s = miss;
             else
-                *s = pass;
-            break;
+                *s = pipe;
         }
-        else if (strncmp(rec->data, "pipe", rec->len) == 0)
-            break;
     }
-
     *len = strlen(*s);
 }
 
+#if 0
 
 static void
 format_VCL_Log(logline_t *ll, char *name, enum VSL_tag_e tag,

@@ -72,6 +72,14 @@ set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
         rec->tag = tag;
 }
 
+static void
+add_record_data(tx_t *tx, logline_t *rec, chunk_t *chunk, const char *data,
+                enum VSL_tag_e tag)
+{
+    add_rec_chunk(tx, rec, chunk);
+    set_record_data(rec, chunk, data, tag);
+}
+
 /* N.B.: Always run the tests in this order */
 static const char
 *test_format_init(void)
@@ -1060,6 +1068,115 @@ static const char
 }
 
 static const char
+*test_format_VCL_disp(void)
+{
+    tx_t tx;
+    logline_t *recs[NRECORDS];
+    chunk_t *c[NRECORDS];
+    char *str, hitmiss[] = "m", handling[] = "n";
+    size_t len;
+
+    printf("... testing format_VCL_disp_*()\n");
+
+    tx.magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx.lines);
+    for (int i = 0; i < NRECORDS; i++) {
+        recs[i] = (logline_t *) calloc(1, sizeof(logline_t));
+        MAN(recs[i]);
+        c[i] = (chunk_t *) calloc(1, sizeof(chunk_t));
+        MAN(c[i]);
+    }
+
+    /* %{Varnish:hitmiss} for a hit */
+    add_record_data(&tx, recs[0], c[0], "RECV", SLT_VCL_call);
+    add_record_data(&tx, recs[1], c[1], "hash", SLT_VCL_return);
+    add_record_data(&tx, recs[2], c[2], "HASH", SLT_VCL_call);
+    add_record_data(&tx, recs[3], c[3], "lookup", SLT_VCL_return);
+    add_record_data(&tx, recs[4], c[4], "HIT", SLT_VCL_call);
+    add_record_data(&tx, recs[5], c[5], "deliver", SLT_VCL_return);
+    add_record_data(&tx, recs[6], c[6], "DELIVER", SLT_VCL_call);
+    add_record_data(&tx, recs[7], c[7], "deliver", SLT_VCL_return);
+    for (int i = 8; i < NRECORDS; i++)
+        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "hit") == 0);
+    MASSERT(len == 3);
+
+    /* %{Varnish:handling} for a hit */
+    format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "hit") == 0);
+    MASSERT(len == 3);
+
+    /* %{Varnish:hitmiss} for a miss */
+    add_record_data(&tx, recs[4], c[4], "MISS", SLT_VCL_call);
+    add_record_data(&tx, recs[5], c[5], "fetch", SLT_VCL_return);
+    format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(len == 4);
+
+    /* %{Varnish:handling} for a miss */
+    format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(len == 4);
+
+    /* %{Varnish:hitmiss} for a pass */
+    add_record_data(&tx, recs[4], c[4], "PASS", SLT_VCL_call);
+    format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(len == 4);
+
+    /* %{Varnish:handling} for a pass */
+    format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "pass") == 0);
+    MASSERT(len == 4);
+
+    /* %{Varnish:hitmiss} for an error */
+    add_record_data(&tx, recs[4], c[4], "ERROR", SLT_VCL_call);
+    add_record_data(&tx, recs[5], c[5], "synth", SLT_VCL_return);
+    format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(len == 4);
+
+    /* %{Varnish:handling} for an error */
+    format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "error") == 0);
+    MASSERT(len == 5);
+
+    /* %{Varnish:hitmiss} for noe of the above */
+    add_record_data(&tx, recs[0], c[0], "RECV", SLT_VCL_call);
+    add_record_data(&tx, recs[1], c[1], "synth", SLT_VCL_return);
+    add_record_data(&tx, recs[2], c[2], "HASH", SLT_VCL_call);
+    add_record_data(&tx, recs[3], c[3], "lookup", SLT_VCL_return);
+    add_record_data(&tx, recs[4], c[4], "SYNTH", SLT_VCL_call);
+    add_record_data(&tx, recs[5], c[5], "deliver", SLT_VCL_return);
+    for (int i = 6; i < NRECORDS; i++)
+        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    /* %{Varnish:handling} for noe of the above */
+    format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(len == 1);
+
+    /* %{Varnish:hitmiss} for a pipe */
+    add_record_data(&tx, recs[1], c[1], "pipe", SLT_VCL_return);
+    for (int i = 2; i < NRECORDS; i++)
+        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(len == 4);
+
+    /* %{Varnish:handling} for an pipe */
+    format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "pipe") == 0);
+    MASSERT(len == 4);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -1087,6 +1204,7 @@ static const char
     mu_run_test(test_format_Xo);
     mu_run_test(test_format_Xt);
     mu_run_test(test_format_Xttfb);
+    mu_run_test(test_format_VCL_disp);
 
     return NULL;
 }
