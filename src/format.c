@@ -198,35 +198,41 @@ get_tm(tx_t *tx)
     return epocht;
 }
 
-#define FORMAT(dir, ltr, slt)                                           \
-void                                                                    \
-format_##ltr##_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, \
-                     size_t *len)                                       \
-{                                                                       \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-                                                                        \
-    logline_t *rec = get_tag(tx, SLT_##slt);                            \
-    get_payload(rec);                                                   \
-    *s = VSB_data(payload);                                             \
-    *len = VSB_len(payload);                                            \
+static inline void
+format(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    logline_t *rec = get_tag(tx, tag);
+    if (rec != NULL) {
+        get_payload(rec);
+        *s = VSB_data(payload);
+        *len = VSB_len(payload);
+    }
 }
 
-#define FORMAT_b(dir, slt)                                              \
-void                                                                    \
-format_b_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
-               size_t *len)                                             \
-{                                                                       \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-                                                                        \
-    logline_t *rec = get_tag(tx, SLT_##slt);                            \
-    *s = get_rec_fld(rec, 4);                                           \
-    *len = strlen(*s);                                                  \
+static inline void
+format_b(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    logline_t *rec = get_tag(tx, tag);
+    *s = get_rec_fld(rec, 4);
+    *len = strlen(*s);
 }
 
-FORMAT_b(client, ReqAcct)
-FORMAT_b(backend, BereqAcct)
+void
+format_b_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_b(tx, SLT_ReqAcct, s, len);
+}
+
+void
+format_b_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_b(tx, SLT_BereqAcct, s, len);
+}
 
 static inline void
 format_DT(tx_t *tx, const char *ts, int m, char **s, size_t *len)
@@ -246,38 +252,64 @@ format_DT(tx_t *tx, const char *ts, int m, char **s, size_t *len)
     *len = strlen(scratch);
 }
 
-#define FORMAT_D(dir, ts)                                               \
-void                                                                    \
-format_D_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
-               size_t *len)                                             \
-{                                                                       \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-                                                                        \
-    format_DT(tx, (ts), 1e6, s, len);                                   \
+void
+format_D_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_DT(tx, "Resp", 1e6, s, len);
 }
 
-FORMAT_D(client, "Resp")
-FORMAT_D(backend, "BerespBody")
-
-FORMAT(client, H, ReqProtocol)
-FORMAT(backend, H, BereqProtocol)
-
-#define FORMAT_h(dir, slt, fld_nr)                                      \
-void                                                                    \
-format_h_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
-               size_t *len)                                             \
-{                                                                       \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-                                                                        \
-    logline_t *rec = get_tag(tx, SLT_##slt);                            \
-    *s = get_rec_fld(rec, (fld_nr));                                    \
-    *len = strlen(*s);                                                  \
+void
+format_D_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_DT(tx, "BerespBody", 1e6, s, len);
 }
 
-FORMAT_h(client, ReqStart, 0)
-FORMAT_h(backend, Backend, 2)
+void
+format_H_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format(tx, SLT_ReqProtocol, s, len);
+}
+
+void
+format_H_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format(tx, SLT_BereqProtocol, s, len);
+}
+
+static inline void
+format_h(tx_t *tx, enum VSL_tag_e tag, int fld_nr, char **s, size_t *len)
+{
+    logline_t *rec = get_tag(tx, tag);
+    *s = get_rec_fld(rec, fld_nr);
+    *len = strlen(*s);
+}
+
+void
+format_h_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_h(tx, SLT_ReqStart, 0, s, len);
+}
+
+void
+format_h_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_h(tx, SLT_Backend, 2, s, len);
+}
 
 static inline void
 format_IO_client(tx_t *tx, int req_fld, int pipe_fld, char **s, size_t *len)
@@ -309,7 +341,6 @@ format_I_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 {
     (void) name;
     (void) tag;
-
     format_IO_client(tx, 2, 2, s, len);
 }
 
@@ -319,12 +350,25 @@ format_I_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 {
     (void) name;
     (void) tag;
-
     format_IO_backend(tx, 5, s, len);
 }
 
-FORMAT(client, m, ReqMethod)
-FORMAT(backend, m, BereqMethod)
+void
+format_m_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format(tx, SLT_ReqMethod, s, len);
+}
+
+void
+format_m_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format(tx, SLT_BereqMethod, s, len);
+}
 
 void
 format_O_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
@@ -332,7 +376,6 @@ format_O_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 {
     (void) name;
     (void) tag;
-
     format_IO_client(tx, 5, 3, s, len);
 }
 
@@ -342,83 +385,118 @@ format_O_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 {
     (void) name;
     (void) tag;
-
     format_IO_backend(tx, 2, s, len);
 }
 
-#define FORMAT_q(dir, xurl)                                     \
-void                                                            \
-format_q_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,        \
-               char **s, size_t *len)                           \
-{                                                               \
-    char *qs = NULL;                                            \
-    (void) name;                                                \
-    (void) tag;                                                 \
-                                                                \
-    logline_t *rec = get_tag(tx, SLT_##xurl);                   \
-    get_payload(rec);                                           \
-    qs = memchr(VSB_data(payload), '?', rec->len);              \
-    if (qs != NULL) {                                           \
-        *s = qs + 1;                                            \
-        *len = rec->len - (*s - VSB_data(payload));             \
-    }                                                           \
+static inline void
+format_q(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    char *qs = NULL;
+    logline_t *rec = get_tag(tx, tag);
+    get_payload(rec);
+    qs = memchr(VSB_data(payload), '?', rec->len);
+    if (qs != NULL) {
+        *s = qs + 1;
+        *len = rec->len - (*s - VSB_data(payload));
+    }
 }
 
-FORMAT_q(client, ReqURL)
-FORMAT_q(backend, BereqURL)
-
-#define FORMAT_r(dir, dx)                                               \
-void                                                                    \
-format_r_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
-               char **s, size_t *len)                                   \
-{                                                                       \
-    char *str;                                                          \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-                                                                        \
-    logline_t *rec = get_tag(tx, SLT_##dx##Method);                     \
-    if (rec != NULL) {                                                  \
-        get_payload(rec);                                               \
-        sprintf(scratch, VSB_data(payload));                            \
-    }                                                                   \
-    else                                                                \
-        strcpy(scratch, "-");                                           \
-    strcat(scratch, " ");                                               \
-                                                                        \
-    if ((str = get_hdr(tx, SLT_##dx##Header, "Host")) != NULL) {        \
-        if (strncmp(str, "http://", 7) != 0)                            \
-            strcat(scratch, "http://");                                 \
-        strcat(scratch, str);                                           \
-    }                                                                   \
-    else                                                                \
-        strcat(scratch, "http://localhost");                            \
-                                                                        \
-    rec = get_tag(tx, SLT_##dx##URL);                                   \
-    if (rec->len) {                                                     \
-        get_payload(rec);                                               \
-        strcat(scratch, VSB_data(payload));                             \
-    }                                                                   \
-    else                                                                \
-        strcat(scratch, "-");                                           \
-                                                                        \
-    strcat(scratch, " ");                                               \
-    rec = get_tag(tx, SLT_##dx##Protocol);                              \
-    if (rec->len) {                                                     \
-        get_payload(rec);                                               \
-        strcat(scratch, VSB_data(payload));                             \
-    }                                                                   \
-    else                                                                \
-        strcat(scratch, "HTTP/1.0");                                    \
-                                                                        \
-    *s = scratch;                                                       \
-    *len = strlen(scratch);                                             \
+void
+format_q_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_q(tx, SLT_ReqURL, s, len);
 }
 
-FORMAT_r(client, Req)
-FORMAT_r(backend, Bereq)
+void
+format_q_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_q(tx, SLT_BereqURL, s, len);
+}
 
-FORMAT(client, s, RespStatus)
-FORMAT(backend, s, BerespStatus)
+static inline void
+format_r(tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
+         enum VSL_tag_e utag, enum VSL_tag_e ptag, char **s, size_t *len) 
+{
+    char *str;
+
+    logline_t *rec = get_tag(tx, mtag);
+    if (rec != NULL) {
+        get_payload(rec);
+        sprintf(scratch, VSB_data(payload));
+    }
+    else
+        strcpy(scratch, "-");
+    strcat(scratch, " ");
+
+    if ((str = get_hdr(tx, htag, "Host")) != NULL) {
+        if (strncmp(str, "http://", 7) != 0)
+            strcat(scratch, "http://");
+        strcat(scratch, str);
+    }
+    else
+        strcat(scratch, "http://localhost");
+
+    rec = get_tag(tx, utag);
+    if (rec->len) {
+        get_payload(rec);
+        strcat(scratch, VSB_data(payload));
+    }
+    else
+        strcat(scratch, "-");
+
+    strcat(scratch, " ");
+    rec = get_tag(tx, ptag);
+    if (rec->len) {
+        get_payload(rec);
+        strcat(scratch, VSB_data(payload));
+    }
+    else
+        strcat(scratch, "HTTP/1.0");
+
+    *s = scratch;
+    *len = strlen(scratch);
+}
+
+void
+format_r_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_r(tx, SLT_ReqMethod, SLT_ReqHeader, SLT_ReqURL, SLT_ReqProtocol, s,
+             len);
+}
+
+void
+format_r_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_r(tx, SLT_BereqMethod, SLT_BereqHeader, SLT_BereqURL,
+             SLT_BereqProtocol, s, len);
+}
+
+void
+format_s_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format(tx, SLT_RespStatus, s, len);
+}
+
+void
+format_s_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format(tx, SLT_RespStatus, s, len);
+}
 
 static inline void
 format_tim(tx_t *tx, const char *fmt, char **s, size_t *len)
@@ -456,96 +534,141 @@ format_t(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
     format_tim(tx, "[%d/%b/%Y:%T %z]", s, len);
 }
 
-#define FORMAT_T(dir, ts)                                               \
-void                                                                    \
-format_T_##dir(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,      \
-               size_t *len)                                             \
-{                                                                       \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-                                                                        \
-    format_DT(tx, ts, 1, s, len);                                       \
+void
+format_T_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_DT(tx, "Resp", 1, s, len);
 }
 
-FORMAT_T(client, "Resp")
-FORMAT_T(backend, "BerespBody")
-
-#define FORMAT_U(dir, xurl)                                     \
-void                                                            \
-format_U_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,        \
-               char **s, size_t *len)                           \
-{                                                               \
-    char *qs = NULL;                                            \
-    (void) name;                                                \
-    (void) tag;                                                 \
-                                                                \
-    logline_t *rec = get_tag(tx, SLT_##xurl);                   \
-    get_payload(rec);                                           \
-    *s = VSB_data(payload);                                     \
-    qs = memchr(VSB_data(payload), '?', rec->len);              \
-    if (qs == NULL)                                             \
-        *len = rec->len;                                        \
-    else {                                                      \
-        *qs = '\0';                                             \
-        *len = qs - *s;                                         \
-    }                                                           \
+void
+format_T_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_DT(tx, "BerespBody", 1, s, len);
 }
 
-FORMAT_U(client, ReqURL)
-FORMAT_U(backend, BereqURL)
+static inline void
+format_U(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    char *qs = NULL;
 
-#define FORMAT_u(dir, hx)                                               \
-void                                                                    \
-format_u_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,                \
-               char **s, size_t *len)                                   \
-{                                                                       \
-    (void) name;                                                        \
-    (void) tag;                                                         \
-    char *hdr;                                                          \
-                                                                        \
-    if ((hdr = get_hdr(tx, SLT_##hx, "Authorization")) != NULL          \
-        && strcasecmp(get_fld(hdr, 0), "Basic") == 0) {                 \
-        char *c, *auth = get_fld(hdr, 1);                               \
-        VB64_init();                                                    \
-        VB64_decode(scratch, config.max_reclen, auth, auth + strlen(auth)); \
-        c = strchr(scratch, ':');                                       \
-        if (c != NULL)                                                  \
-            *c = '\0';                                                  \
-        *s = scratch;                                                   \
-        *len = strlen(scratch);                                         \
-    }                                                                   \
-    else {                                                              \
-        strcpy(scratch, "-");                                           \
-        *s = scratch;                                                   \
-        *len = 1;                                                       \
-    }                                                                   \
+    logline_t *rec = get_tag(tx, tag);
+    get_payload(rec);
+    *s = VSB_data(payload);
+    qs = memchr(VSB_data(payload), '?', rec->len);
+    if (qs == NULL)
+        *len = rec->len;
+    else {
+        *qs = '\0';
+        *len = qs - *s;
+    }
 }
 
-FORMAT_u(client, ReqHeader)
-FORMAT_u(backend, BereqHeader)
-
-#define FORMAT_Xio(dir, io, hx)                                 \
-void								\
-format_X##io##_##dir(tx_t *tx, char *name, enum VSL_tag_e tag,	\
-                     char **s, size_t *len)                     \
-{                                                               \
-    (void) tag;                                                 \
-    								\
-    *s = get_hdr(tx, SLT_##hx, name);                           \
-    if (s)                                                      \
-        *len = strlen(*s);                                      \
+void
+format_U_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_U(tx, SLT_ReqURL, s, len);
 }
 
-FORMAT_Xio(client, i, ReqHeader)
-FORMAT_Xio(backend, i, BereqHeader)
-FORMAT_Xio(client, o, RespHeader)
-FORMAT_Xio(backend, o, BerespHeader)
+void
+format_U_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_U(tx, SLT_BereqURL, s, len);
+}
+
+static inline void
+format_u(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    char *hdr;
+
+    if ((hdr = get_hdr(tx, tag, "Authorization")) != NULL
+        && strcasecmp(get_fld(hdr, 0), "Basic") == 0) {
+        char *c, *auth = get_fld(hdr, 1);
+        VB64_init();
+        VB64_decode(scratch, config.max_reclen, auth, auth + strlen(auth));
+        c = strchr(scratch, ':');
+        if (c != NULL)
+            *c = '\0';
+        *s = scratch;
+        *len = strlen(scratch);
+    }
+    else {
+        strcpy(scratch, "-");
+        *s = scratch;
+        *len = 1;
+    }
+}
+
+void
+format_u_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_u(tx, SLT_ReqHeader, s, len);
+}
+
+void
+format_u_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) name;
+    (void) tag;
+    format_u(tx, SLT_BereqHeader, s, len);
+}
+
+static inline void
+format_Xio(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+{
+    *s = get_hdr(tx, tag, name);
+    if (s)
+        *len = strlen(*s);
+}
+
+void
+format_Xi_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) tag;
+    format_Xio(tx, name, SLT_ReqHeader, s, len);
+}
+
+void
+format_Xi_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                  size_t *len)
+{
+    (void) tag;
+    format_Xio(tx, name, SLT_BereqHeader, s, len);
+}
+
+void
+format_Xo_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                 size_t *len)
+{
+    (void) tag;
+    format_Xio(tx, name, SLT_RespHeader, s, len);
+}
+
+void
+format_Xo_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                  size_t *len)
+{
+    (void) tag;
+    format_Xio(tx, name, SLT_BerespHeader, s, len);
+}
 
 void
 format_Xt(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 {
     (void) tag;
-
     format_tim(tx, (const char *) name, s, len);
 }
 
@@ -567,7 +690,6 @@ format_Xttfb_client(tx_t *tx, char *name, enum VSL_tag_e tag,
 {
     (void) name;
     (void) tag;
-
     format_Xttfb(tx, "Process", s, len);
 }
 
@@ -577,7 +699,6 @@ format_Xttfb_backend(tx_t *tx, char *name, enum VSL_tag_e tag,
 {
     (void) name;
     (void) tag;
-    
     format_Xttfb(tx, "Beresp", s, len);
 }
 
@@ -640,13 +761,7 @@ void
 format_SLT(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 {
     (void) name;
-
-    logline_t *rec = get_tag(tx, tag);
-    if (rec != NULL) {
-        get_payload(rec);
-        *s = VSB_data(payload);
-        *len = VSB_len(payload);
-    }
+    format(tx, tag, s, len);
 }
 
 #if 0
