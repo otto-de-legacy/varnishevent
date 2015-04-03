@@ -31,13 +31,13 @@
 
 /* including source must include varnishevent.h */
 
-/* XXX: init as fixed size with length max_reclen + 1 */
+/* XXX: should be static, init as fixed size with length max_reclen + 1 */
 struct vsb *payload;
 
 typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
                          char **s, size_t *len);
 
-void get_payload(logline_t *rec);
+char *get_payload(logline_t *rec);
 logline_t *get_tag(tx_t *tx, enum VSL_tag_e tag);
 char *get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr);
 char *get_fld(const char *str, int n);

@@ -99,6 +99,7 @@ static const char
 {
     logline_t rec;
     chunk_t chunk;
+    char *p;
 
     printf("... testing get_payload()\n");
 
@@ -112,8 +113,18 @@ static const char
     rec.len = strlen(SHORT_STRING);
     strcpy(chunk.data, SHORT_STRING);
     VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
-    get_payload(&rec);
-    MASSERT(strcmp(VSB_data(payload), SHORT_STRING) == 0);
+    p = get_payload(&rec);
+    MASSERT(strcmp(p, SHORT_STRING) == 0);
+
+    /* Record exactly at chunk_size */
+    rec.len = config.chunk_size;
+    sprintf(chunk.data, "%0*d", config.chunk_size - 1, 0);
+    p = get_payload(&rec);
+    char *str = (char *) malloc(config.chunk_size);
+    MAN(str);
+    sprintf(str, "%0*d", config.chunk_size - 1, 0);
+    MASSERT(strcmp(p, str) == 0);
+    free(str);
 
     /* Record with chunks that fill out shm_reclen */
     rec.len = config.max_reclen;
@@ -132,17 +143,18 @@ static const char
         VSTAILQ_INSERT_TAIL(&rec.chunks, c, chunklist);
         n -= cp;
     }
-    char *str = (char *) malloc(config.max_reclen);
+    str = (char *) malloc(config.max_reclen);
     MAN(str);
     sprintf(str, "%0*d", config.max_reclen, 0);
-    get_payload(&rec);
-    MASSERT(strcmp(VSB_data(payload), str) == 0);
+    p = get_payload(&rec);
+    MASSERT(strcmp(p, str) == 0);
+    free(str);
 
     /* Empty record */
     rec.len = 0;
     *chunk.data = '\0';
-    get_payload(&rec);
-    MASSERT(strlen(VSB_data(payload)) == 0);
+    p = get_payload(&rec);
+    MASSERT(strlen(p) == 0);
 
     return NULL;
 }
@@ -853,7 +865,7 @@ static const char
     MASSERT(strcmp(str, "/foo") == 0);
     MASSERT(len == 4);
 
-    rec.tag = SLT_BereqURL;
+    set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_BereqURL);
     format_U_backend(&tx, NULL, SLT__Bogus, &str, &len);
     MASSERT(strcmp(str, "/foo") == 0);
     MASSERT(len == 4);

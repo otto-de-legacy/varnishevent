@@ -59,6 +59,7 @@ typedef struct compiled_fmt_t {
 /* XXX: When FMT_Init is implemented, malloc to config.max_reclen */
 static char scratch[DEFAULT_MAX_RECLEN];
 
+static char empty[] = "";
 static char hit[] = "hit";
 static char miss[] = "miss";
 static char pass[] = "pass";
@@ -77,27 +78,33 @@ static int read_rx_hdr = 0, read_tx_hdr = 0, read_vcl_log = 0,
 
 #endif
 
-void
+char *
 get_payload(logline_t *rec)
 {
     CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
 
+    if (!rec->len)
+        return empty;
+
+    chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
+    CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
+    if (rec->len <= config.chunk_size)
+        return chunk->data;
+
     VSB_clear(payload);
-    if (rec->len) {
-        int n = rec->len;
-        chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
-        while (n > 0 && chunk != NULL) {
-            CHECK_OBJ(chunk, CHUNK_MAGIC);
-            int cp = n;
-            if (cp > config.chunk_size)
-                cp = config.chunk_size;
-            VSB_bcat(payload, chunk->data, cp);
-            n -= cp;
-            chunk = VSTAILQ_NEXT(chunk, chunklist);
-        }
+    int n = rec->len;
+    while (n > 0) {
+        CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
+        int cp = n;
+        if (cp > config.chunk_size)
+            cp = config.chunk_size;
+        VSB_bcat(payload, chunk->data, cp);
+        n -= cp;
+        chunk = VSTAILQ_NEXT(chunk, chunklist);
     }
     assert(VSB_len(payload) == rec->len);
     VSB_finish(payload);
+    return VSB_data(payload);
 }
 
 /*
@@ -134,8 +141,7 @@ get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr)
         CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
         if (rec->tag != tag)
             continue;
-        get_payload(rec);
-        c = VSB_data(payload);
+        c = get_payload(rec);
         while (isspace(*c))
             c++;
         if (strncasecmp(c, hdr, strlen(hdr)) != 0)
@@ -175,8 +181,7 @@ get_fld(const char *str, int n)
 char *
 get_rec_fld(logline_t *rec, int n)
 {
-    get_payload(rec);
-    return get_fld(VSB_data(payload), n);
+    return get_fld(get_payload(rec), n);
 }
 
 double
@@ -203,9 +208,8 @@ format(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
     if (rec != NULL) {
-        get_payload(rec);
-        *s = VSB_data(payload);
-        *len = VSB_len(payload);
+        *s = get_payload(rec);
+        *len = rec->len;
     }
 }
 
@@ -393,11 +397,11 @@ format_q(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *qs = NULL;
     logline_t *rec = get_tag(tx, tag);
-    get_payload(rec);
-    qs = memchr(VSB_data(payload), '?', rec->len);
+    char *p = get_payload(rec);
+    qs = memchr(p, '?', rec->len);
     if (qs != NULL) {
         *s = qs + 1;
-        *len = rec->len - (*s - VSB_data(payload));
+        *len = rec->len - (*s - p);
     }
 }
 
@@ -425,10 +429,8 @@ format_r(tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
     char *str;
 
     logline_t *rec = get_tag(tx, mtag);
-    if (rec != NULL) {
-        get_payload(rec);
-        sprintf(scratch, VSB_data(payload));
-    }
+    if (rec != NULL)
+        sprintf(scratch, get_payload(rec));
     else
         strcpy(scratch, "-");
     strcat(scratch, " ");
@@ -442,19 +444,15 @@ format_r(tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
         strcat(scratch, "http://localhost");
 
     rec = get_tag(tx, utag);
-    if (rec->len) {
-        get_payload(rec);
-        strcat(scratch, VSB_data(payload));
-    }
+    if (rec->len)
+        strcat(scratch, get_payload(rec));
     else
         strcat(scratch, "-");
 
     strcat(scratch, " ");
     rec = get_tag(tx, ptag);
-    if (rec->len) {
-        get_payload(rec);
-        strcat(scratch, VSB_data(payload));
-    }
+    if (rec->len)
+        strcat(scratch, get_payload(rec));
     else
         strcat(scratch, "HTTP/1.0");
 
@@ -557,9 +555,8 @@ format_U(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
     char *qs = NULL;
 
     logline_t *rec = get_tag(tx, tag);
-    get_payload(rec);
-    *s = VSB_data(payload);
-    qs = memchr(VSB_data(payload), '?', rec->len);
+    *s = get_payload(rec);
+    qs = memchr(*s, '?', rec->len);
     if (qs == NULL)
         *len = rec->len;
     else {
@@ -715,8 +712,7 @@ format_VCL_disp(tx_t *tx, char *name, enum VSL_tag_e tag,
         CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
         if (rec->tag != SLT_VCL_call && rec->tag != SLT_VCL_return)
             continue;
-        get_payload(rec);
-        char *data = VSB_data(payload);
+        char *data = get_payload(rec);
         if (rec->tag == SLT_VCL_call) {
             if (strcasecmp(data, "hit") == 0)
                 *s = hit;
@@ -1204,12 +1200,12 @@ FMT_Read_Hdr(enum VSL_tag_e tag)
 }
 
 void
-FMT_Format(logline_t *ll, struct vsb *os)
+FMT_Format(tx_t *ll, struct vsb *os)
 {
     compiled_fmt_t fmt;
 
-    CHECK_OBJ_NOTNULL(ll, LOGLINE_MAGIC);
-    assert(ll->state == DATA_DONE);
+    CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
+    assert(tx->state == DATA_DONE);
     
     if (C(ll->spec))
         fmt = cformat;
@@ -1225,8 +1221,10 @@ FMT_Format(logline_t *ll, struct vsb *os)
         if (fmt.str[i] != NULL)
             VSB_cat(os, fmt.str[i]);
         if (fmt.formatter[i] != NULL) {
-            (fmt.formatter[i])(ll, fmt.args[i].name, fmt.args[i].tag, &s, &len);
-            if (s != NULL && len > 0)
+            (fmt.formatter[i])(tx, fmt.args[i].name, fmt.args[i].tag, &s, &len);
+            if (s != NULL && len == 0)
+                VSB_cat(os, s);
+            else if (s != NULL)
                 VSB_bcat(os, s, len);
         }
     }
