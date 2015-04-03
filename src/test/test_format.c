@@ -1076,7 +1076,7 @@ static const char
     char *str, hitmiss[] = "m", handling[] = "n";
     size_t len;
 
-    printf("... testing format_VCL_disp_*()\n");
+    printf("... testing format_VCL_disp()\n");
 
     tx.magic = TX_MAGIC;
     VSTAILQ_INIT(&tx.lines);
@@ -1177,6 +1177,42 @@ static const char
 }
 
 static const char
+*test_format_VCL_Log(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str, hdr[] = "foo";
+    size_t len;
+
+    printf("... testing format_VCL_Log()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, "foo: bar", SLT_VCL_Log);
+    format_VCL_Log(&tx, hdr, SLT__Bogus, &str, &len);
+    MASSERT(strcmp(str, "bar") == 0);
+    MASSERT(len == 3);
+
+    /* No match */
+    str = NULL;
+    len = 0;
+    set_record_data(&rec, &chunk, "baz: quux", SLT_VCL_Log);
+    format_VCL_Log(&tx, hdr, SLT__Bogus, &str, &len);
+    MAZ(str);
+    MAZ(len);
+
+    /* No VCL_Log record */
+    set_record_data(&rec, &chunk, "foo: bar", SLT_BereqHeader);
+    format_VCL_Log(&tx, hdr, SLT__Bogus, &str, &len);
+    MAZ(str);
+    MAZ(len);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -1205,6 +1241,7 @@ static const char
     mu_run_test(test_format_Xt);
     mu_run_test(test_format_Xttfb);
     mu_run_test(test_format_VCL_disp);
+    mu_run_test(test_format_VCL_Log);
 
     return NULL;
 }

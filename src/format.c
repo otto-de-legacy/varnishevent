@@ -624,18 +624,19 @@ format_VCL_disp(tx_t *tx, char *name, enum VSL_tag_e tag,
     *len = strlen(*s);
 }
 
-#if 0
-
-static void
-format_VCL_Log(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len)
+void
+format_VCL_Log(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 {
     (void) tag;
     
-    record_t *rec = get_hdr(name, ll->vcl_log);
-    if (rec)
-        RETURN_HDR(rec, name, s, len);
+    char *l = get_hdr(tx, SLT_VCL_Log, name);
+    if (l == NULL)
+        return;
+    *s = l;
+    *len = strlen(l);
 }
+
+#if 0
 
 static void
 format_SLT(logline_t *ll, char *name, enum VSL_tag_e tag,
