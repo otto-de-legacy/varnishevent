@@ -636,17 +636,20 @@ format_VCL_Log(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
     *len = strlen(l);
 }
 
-#if 0
-
-static void
-format_SLT(logline_t *ll, char *name, enum VSL_tag_e tag,
-    char **s, size_t *len)
+void
+format_SLT(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 {
     (void) name;
-    
-    if (TAG(ll,tag).len)
-        RETURN_REC(TAG(ll,tag), s, len);
+
+    logline_t *rec = get_tag(tx, tag);
+    if (rec != NULL) {
+        get_payload(rec);
+        *s = VSB_data(payload);
+        *len = VSB_len(payload);
+    }
 }
+
+#if 0
 
 static void
 format_incomplete(logline_t *ll, char *name, enum VSL_tag_e tag,

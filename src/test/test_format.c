@@ -1213,6 +1213,44 @@ static const char
 }
 
 static const char
+*test_format_SLT(void)
+{
+    tx_t tx;
+    logline_t rec;
+    chunk_t chunk;
+    char *str;
+    size_t len;
+
+    printf("... testing format_SLT()\n");
+
+    init_tx_rec_chunk(&tx, &rec, &chunk);
+    MAN(chunk.data);
+
+    set_record_data(&rec, &chunk, "no backend connection", SLT_FetchError);
+    format_SLT(&tx, NULL, SLT_FetchError, &str, &len);
+    MASSERT(strcmp(str, "no backend connection") == 0);
+    MASSERT(len == 21);
+
+    /* record not found */
+    str = NULL;
+    len = 0;
+    rec.tag = SLT_BereqHeader;
+    format_SLT(&tx, NULL, SLT_FetchError, &str, &len);
+    MAZ(str);
+    MAZ(len);
+
+    /* Binary tag with non-printables in the payload */
+    memcpy(chunk.data, "foo\0\xFF bar", 9);
+    rec.len = 9;
+    rec.tag = SLT_Debug;
+    format_SLT(&tx, NULL, SLT_Debug, &str, &len);
+    MASSERT(strcmp(str, "foo\0\xFF bar") == 0);
+    MASSERT(len == 9);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -1242,6 +1280,7 @@ static const char
     mu_run_test(test_format_Xttfb);
     mu_run_test(test_format_VCL_disp);
     mu_run_test(test_format_VCL_Log);
+    mu_run_test(test_format_SLT);
 
     return NULL;
 }
