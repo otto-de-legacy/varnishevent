@@ -184,25 +184,6 @@ get_rec_fld(logline_t *rec, int n)
     return get_fld(get_payload(rec), n);
 }
 
-double
-get_tm(tx_t *tx)
-{
-    char *ts, *epochstr;
-    double epocht = 0;
-
-    CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-
-    ts = get_hdr(tx, SLT_Timestamp, "Start");
-    if (ts != NULL && (epochstr = get_fld(ts, 0)) != NULL) {
-        char *p;
-        epocht = strtod(epochstr, &p);
-    }
-    if (epocht == 0)
-        epocht = tx->t;
-
-    return epocht;
-}
-
 static inline void
 format(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {

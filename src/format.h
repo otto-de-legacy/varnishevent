@@ -42,7 +42,6 @@ logline_t *get_tag(tx_t *tx, enum VSL_tag_e tag);
 char *get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr);
 char *get_fld(const char *str, int n);
 char *get_rec_fld(logline_t *rec, int n);
-double get_tm(tx_t *tx);
 
 formatter_f format_b_client;
 formatter_f format_b_backend;
