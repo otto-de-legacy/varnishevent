@@ -189,7 +189,7 @@ get_rec_fld(const logline_t *rec, int n, size_t *len)
 }
 
 static inline void
-format(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+format(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
     if (rec != NULL) {
@@ -199,14 +199,15 @@ format(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 static inline void
-format_b(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+format_b(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
     *s = get_rec_fld(rec, 4, len);
 }
 
 void
-format_b_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_b_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -214,7 +215,7 @@ format_b_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_b_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_b_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -223,7 +224,7 @@ format_b_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_DT(tx_t *tx, const char *ts, int m, char **s, size_t *len)
+format_DT(const tx_t *tx, const char *ts, int m, char **s, size_t *len)
 {
     const char *t;
     double d;
@@ -241,7 +242,8 @@ format_DT(tx_t *tx, const char *ts, int m, char **s, size_t *len)
 }
 
 void
-format_D_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_D_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -249,7 +251,7 @@ format_D_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_D_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_D_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -258,7 +260,8 @@ format_D_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_H_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_H_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -266,7 +269,7 @@ format_H_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_H_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_H_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -275,14 +278,15 @@ format_H_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_h(tx_t *tx, enum VSL_tag_e tag, int fld_nr, char **s, size_t *len)
+format_h(const tx_t *tx, enum VSL_tag_e tag, int fld_nr, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
     *s = get_rec_fld(rec, fld_nr, len);
 }
 
 void
-format_h_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_h_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -290,7 +294,7 @@ format_h_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_h_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_h_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -299,7 +303,8 @@ format_h_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_IO_client(tx_t *tx, int req_fld, int pipe_fld, char **s, size_t *len)
+format_IO_client(const tx_t *tx, int req_fld, int pipe_fld, char **s,
+                 size_t *len)
 {
     int field;
 
@@ -314,14 +319,14 @@ format_IO_client(tx_t *tx, int req_fld, int pipe_fld, char **s, size_t *len)
 }
 
 static inline void
-format_IO_backend(tx_t *tx, int field, char **s, size_t *len)
+format_IO_backend(const tx_t *tx, int field, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, SLT_BereqAcct);
     *s = get_rec_fld(rec, field, len);
 }
 
 void
-format_I_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_I_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                 size_t *len)
 {
     (void) name;
@@ -330,7 +335,7 @@ format_I_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_I_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_I_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -339,7 +344,8 @@ format_I_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_m_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_m_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -347,7 +353,7 @@ format_m_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_m_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_m_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -356,7 +362,7 @@ format_m_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_O_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_O_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                 size_t *len)
 {
     (void) name;
@@ -365,7 +371,7 @@ format_O_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_O_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_O_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -374,7 +380,7 @@ format_O_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_q(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+format_q(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *qs = NULL;
     logline_t *rec = get_tag(tx, tag);
@@ -387,7 +393,8 @@ format_q(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_q_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_q_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -395,7 +402,7 @@ format_q_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_q_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_q_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -404,7 +411,7 @@ format_q_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_r(tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
+format_r(const tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
          enum VSL_tag_e utag, enum VSL_tag_e ptag, char **s, size_t *len) 
 {
     char *str;
@@ -442,7 +449,8 @@ format_r(tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
 }
 
 void
-format_r_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_r_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -451,7 +459,7 @@ format_r_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_r_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_r_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -461,7 +469,8 @@ format_r_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_s_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_s_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -469,7 +478,7 @@ format_s_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_s_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_s_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -478,7 +487,7 @@ format_s_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_tim(tx_t *tx, const char *fmt, char **s, size_t *len)
+format_tim(const tx_t *tx, const char *fmt, char **s, size_t *len)
 {
     unsigned secs, usecs;
     char *data, *ts;
@@ -505,7 +514,7 @@ format_tim(tx_t *tx, const char *fmt, char **s, size_t *len)
 }
 
 void
-format_t(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_t(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 {
     (void) name;
     (void) tag;
@@ -514,7 +523,8 @@ format_t(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_T_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_T_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -522,7 +532,7 @@ format_T_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_T_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_T_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                 size_t *len)
 {
     (void) name;
@@ -531,7 +541,7 @@ format_T_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_U(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+format_U(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *qs = NULL;
 
@@ -547,7 +557,8 @@ format_U(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_U_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_U_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -555,7 +566,7 @@ format_U_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_U_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_U_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -564,7 +575,7 @@ format_U_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_u(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+format_u(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *hdr;
 
@@ -586,7 +597,8 @@ format_u(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_u_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_u_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+                size_t *len)
 {
     (void) name;
     (void) tag;
@@ -594,7 +606,7 @@ format_u_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_u_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_u_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) name;
@@ -603,7 +615,8 @@ format_u_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 static inline void
-format_Xio(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_Xio(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+           size_t *len)
 {
     *s = get_hdr(tx, tag, name);
     if (s)
@@ -611,7 +624,7 @@ format_Xio(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_Xi_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_Xi_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) tag;
@@ -619,7 +632,7 @@ format_Xi_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_Xi_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_Xi_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                   size_t *len)
 {
     (void) tag;
@@ -627,7 +640,7 @@ format_Xi_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_Xo_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_Xo_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                  size_t *len)
 {
     (void) tag;
@@ -635,7 +648,7 @@ format_Xo_client(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_Xo_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+format_Xo_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
                   size_t *len)
 {
     (void) tag;
@@ -643,14 +656,14 @@ format_Xo_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_Xt(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_Xt(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 {
     (void) tag;
     format_tim(tx, (const char *) name, s, len);
 }
 
 static inline void
-format_Xttfb(tx_t *tx, const char *tname, char **s, size_t *len)
+format_Xttfb(const tx_t *tx, const char *tname, char **s, size_t *len)
 {
     char *ts;
 
@@ -661,7 +674,7 @@ format_Xttfb(tx_t *tx, const char *tname, char **s, size_t *len)
 }
 
 void
-format_Xttfb_client(tx_t *tx, char *name, enum VSL_tag_e tag,
+format_Xttfb_client(const tx_t *tx, char *name, enum VSL_tag_e tag,
                     char **s, size_t *len)
 {
     (void) name;
@@ -670,7 +683,7 @@ format_Xttfb_client(tx_t *tx, char *name, enum VSL_tag_e tag,
 }
 
 void
-format_Xttfb_backend(tx_t *tx, char *name, enum VSL_tag_e tag,
+format_Xttfb_backend(const tx_t *tx, char *name, enum VSL_tag_e tag,
                      char **s, size_t *len)
 {
     (void) name;
@@ -679,7 +692,7 @@ format_Xttfb_backend(tx_t *tx, char *name, enum VSL_tag_e tag,
 }
 
 void
-format_VCL_disp(tx_t *tx, char *name, enum VSL_tag_e tag,
+format_VCL_disp(const tx_t *tx, char *name, enum VSL_tag_e tag,
                 char **s, size_t *len)
 {
     logline_t *rec;
@@ -721,7 +734,8 @@ format_VCL_disp(tx_t *tx, char *name, enum VSL_tag_e tag,
 }
 
 void
-format_VCL_Log(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_VCL_Log(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+               size_t *len)
 {
     (void) tag;
     
@@ -733,7 +747,8 @@ format_VCL_Log(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_SLT(tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_SLT(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
+           size_t *len)
 {
     (void) name;
     format(tx, tag, s, len);
