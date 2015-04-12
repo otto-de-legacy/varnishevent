@@ -254,37 +254,41 @@ static const char
 *test_format_get_fld(void)
 {
     char *fld, str[sizeof(SHORT_STRING)];
+    size_t len;
 
     printf("... testing get_fld()\n");
 
     strcpy(str, SHORT_STRING);
-
-    fld = get_fld(str, 0);
+    fld = get_fld(str, 0, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "foo") == 0);
+    MASSERT(strncmp(fld, "foo", len) == 0);
 
-    fld = get_fld(str, 1);
+    strcpy(str, SHORT_STRING);
+    fld = get_fld(str, 1, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "bar") == 0);
+    MASSERT(strncmp(fld, "bar", len) == 0);
 
-    fld = get_fld(str, 2);
+    strcpy(str, SHORT_STRING);
+    fld = get_fld(str, 2, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "baz") == 0);
+    MASSERT(strncmp(fld, "baz", len) == 0);
 
-    fld = get_fld(str, 3);
+    strcpy(str, SHORT_STRING);
+    fld = get_fld(str, 3, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "quux") == 0);
+    MASSERT(strncmp(fld, "quux", len) == 0);
 
-    fld = get_fld(str, 4);
-    MAZ(fld);
+    strcpy(str, SHORT_STRING);
+    fld = get_fld(str, 4, &len);
+    MAZ(strlen(fld));
 
     strcpy(str, "   ");
-    fld = get_fld(str, 0);
-    MAZ(fld);
-    fld = get_fld(str, 1);
-    MAZ(fld);
-    fld = get_fld(str, 2);
-    MAZ(fld);
+    fld = get_fld(str, 0, &len);
+    MAZ(strlen(fld));
+    fld = get_fld(str, 1, &len);
+    MAZ(strlen(fld));
+    fld = get_fld(str, 2, &len);
+    MAZ(strlen(fld));
 
     return NULL;
 }
@@ -295,6 +299,7 @@ static const char
     logline_t rec;
     chunk_t chunk;
     char *fld;
+    size_t len;
 
     printf("... testing get_rec_fld()\n");
 
@@ -307,33 +312,37 @@ static const char
     strcpy(chunk.data, SHORT_STRING);
     VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
 
-    fld = get_rec_fld(&rec, 0);
+    fld = get_rec_fld(&rec, 0, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "foo") == 0);
+    MASSERT(strncmp(fld, "foo", len) == 0);
 
-    fld = get_rec_fld(&rec, 1);
+    strcpy(chunk.data, SHORT_STRING);
+    fld = get_rec_fld(&rec, 1, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "bar") == 0);
+    MASSERT(strncmp(fld, "bar", len) == 0);
 
-    fld = get_rec_fld(&rec, 2);
+    strcpy(chunk.data, SHORT_STRING);
+    fld = get_rec_fld(&rec, 2, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "baz") == 0);
+    MASSERT(strncmp(fld, "baz", len) == 0);
 
-    fld = get_rec_fld(&rec, 3);
+    strcpy(chunk.data, SHORT_STRING);
+    fld = get_rec_fld(&rec, 3, &len);
     MAN(fld);
-    MASSERT(strcmp(fld, "quux") == 0);
+    MASSERT(strncmp(fld, "quux", len) == 0);
 
-    fld = get_rec_fld(&rec, 4);
-    MAZ(fld);
+    strcpy(chunk.data, SHORT_STRING);
+    fld = get_rec_fld(&rec, 4, &len);
+    MAZ(strlen(fld));
 
     rec.len = strlen("     ");
     strcpy(chunk.data, "     ");
-    fld = get_rec_fld(&rec, 0);
-    MAZ(fld);
-    fld = get_rec_fld(&rec, 1);
-    MAZ(fld);
-    fld = get_rec_fld(&rec, 2);
-    MAZ(fld);
+    fld = get_rec_fld(&rec, 0, &len);
+    MAZ(strlen(fld));
+    fld = get_rec_fld(&rec, 1, &len);
+    MAZ(strlen(fld));
+    fld = get_rec_fld(&rec, 2, &len);
+    MAZ(strlen(fld));
 
     return NULL;
 }
@@ -345,7 +354,7 @@ static const char
     logline_t rec;
     chunk_t chunk;
     char *str;
-    size_t len;
+    size_t len, explen;
 
     printf("... testing format_H_*()\n");
 
@@ -355,13 +364,14 @@ static const char
 #define PROTOCOL_PAYLOAD "HTTP/1.1"
     set_record_data(&rec, &chunk, PROTOCOL_PAYLOAD, SLT_ReqProtocol);
     format_H_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, PROTOCOL_PAYLOAD) == 0);
-    MASSERT(len == strlen(PROTOCOL_PAYLOAD));
+    explen = strlen(PROTOCOL_PAYLOAD);
+    MASSERT(strncmp(str, PROTOCOL_PAYLOAD, explen) == 0);
+    MASSERT(len == explen);
 
     rec.tag = SLT_BereqProtocol;
     format_H_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, PROTOCOL_PAYLOAD) == 0);
-    MASSERT(len == strlen(PROTOCOL_PAYLOAD));
+    MASSERT(strncmp(str, PROTOCOL_PAYLOAD, explen) == 0);
+    MASSERT(len == explen);
 
     return NULL;
 }
@@ -383,12 +393,12 @@ static const char
 #define REQACCT_PAYLOAD "60 0 60 178 105 283"
     set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
     format_b_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "105") == 0);
+    MASSERT(strncmp(str, "105", 3) == 0);
     MASSERT(len == 3);
 
     rec.tag = SLT_BereqAcct;
     format_b_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "105") == 0);
+    MASSERT(strncmp(str, "105", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
@@ -411,13 +421,13 @@ static const char
 #define TS_RESP_PAYLOAD "Resp: 1427799478.166798 0.015963 0.000125"
     set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
     format_D_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "15963") == 0);
+    MASSERT(strncmp(str, "15963", 5) == 0);
     MASSERT(len == 5);
 
 #define TS_BERESP_PAYLOAD "BerespBody: 1427799478.166678 0.015703 0.000282"
     set_record_data(&rec, &chunk, TS_BERESP_PAYLOAD, SLT_Timestamp);
     format_D_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "15703") == 0);
+    MASSERT(strncmp(str, "15703", 5) == 0);
     MASSERT(len == 5);
 
     return NULL;
@@ -440,13 +450,13 @@ static const char
 #define REQSTART_PAYLOAD "127.0.0.1 33544"
     set_record_data(&rec, &chunk, REQSTART_PAYLOAD, SLT_ReqStart);
     format_h_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "127.0.0.1") == 0);
+    MASSERT(strncmp(str, "127.0.0.1", 9) == 0);
     MASSERT(len == 9);
 
 #define BACKEND_PAYLOAD "14 default default(127.0.0.1,,80)"
     set_record_data(&rec, &chunk, BACKEND_PAYLOAD, SLT_Backend);
     format_h_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "default(127.0.0.1,,80)") == 0);
+    MASSERT(strncmp(str, "default(127.0.0.1,,80)", 22) == 0);
     MASSERT(len == 22);
 
     return NULL;
@@ -468,18 +478,18 @@ static const char
 
     set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
     format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "60") == 0);
+    MASSERT(strncmp(str, "60", 2) == 0);
     MASSERT(len == 2);
 
-    rec.tag = SLT_BereqAcct;
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_BereqAcct);
     format_I_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "283") == 0);
+    MASSERT(strncmp(str, "283", 3) == 0);
     MASSERT(len == 3);
 
 #define PIPEACCT_PAYLOAD "60 60 178 105"
     set_record_data(&rec, &chunk, PIPEACCT_PAYLOAD, SLT_PipeAcct);
     format_I_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "178") == 0);
+    MASSERT(strncmp(str, "178", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
@@ -502,12 +512,12 @@ static const char
 #define REQMETHOD_PAYLOAD "GET"
     set_record_data(&rec, &chunk, REQMETHOD_PAYLOAD, SLT_ReqMethod);
     format_m_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET") == 0);
+    MASSERT(strncmp(str, "GET", 3) == 0);
     MASSERT(len == 3);
 
     rec.tag = SLT_BereqMethod;
     format_m_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET") == 0);
+    MASSERT(strncmp(str, "GET", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
@@ -529,17 +539,17 @@ static const char
 
     set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
     format_O_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "283") == 0);
+    MASSERT(strncmp(str, "283", 3) == 0);
     MASSERT(len == 3);
 
     rec.tag = SLT_BereqAcct;
     format_O_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "60") == 0);
+    MASSERT(strncmp(str, "60", 2) == 0);
     MASSERT(len == 2);
 
     set_record_data(&rec, &chunk, PIPEACCT_PAYLOAD, SLT_PipeAcct);
     format_O_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "105") == 0);
+    MASSERT(strncmp(str, "105", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
@@ -562,12 +572,12 @@ static const char
 #define URL_QUERY_PAYLOAD "/foo?bar=baz&quux=wilco"
     set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_ReqURL);
     format_q_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "bar=baz&quux=wilco") == 0);
+    MASSERT(strncmp(str, "bar=baz&quux=wilco", 18) == 0);
     MASSERT(len == 18);
 
     rec.tag = SLT_BereqURL;
     format_q_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "bar=baz&quux=wilco") == 0);
+    MASSERT(strncmp(str, "bar=baz&quux=wilco", 18) == 0);
     MASSERT(len == 18);
 
 #define URL_PAYLOAD "/foo"
@@ -613,7 +623,7 @@ static const char
     set_record_data(&rec_proto, &chunk_proto, PROTOCOL_PAYLOAD,
                     SLT_ReqProtocol);
     format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.1", 38) == 0);
     MASSERT(len == 38);
 
     rec_method.tag = SLT_BereqMethod;
@@ -621,7 +631,7 @@ static const char
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.1", 38) == 0);
     MASSERT(len == 38);
 
     /* No method record */
@@ -630,14 +640,14 @@ static const char
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
     format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "- http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "- http://www.foobar.com/foo HTTP/1.1", 36) == 0);
     MASSERT(len == 36);
 
     rec_host.tag = SLT_BereqHeader;
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "- http://www.foobar.com/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "- http://www.foobar.com/foo HTTP/1.1" ,36) == 0);
     MASSERT(len == 36);
 
     /* No host header */
@@ -646,7 +656,7 @@ static const char
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
     format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
     rec_method.tag = SLT_BereqMethod;
@@ -654,7 +664,7 @@ static const char
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
     /* No header record */
@@ -663,14 +673,14 @@ static const char
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
     format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
     rec_method.tag = SLT_BereqMethod;
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://localhost/foo HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
     /* URL record empty */
@@ -681,7 +691,7 @@ static const char
     rec_url.len = 0;
     rec_proto.tag = SLT_ReqProtocol;
     format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://www.foobar.com- HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://www.foobar.com- HTTP/1.1", 35) == 0);
     MASSERT(len == 35);
 
     rec_method.tag = SLT_BereqMethod;
@@ -689,7 +699,7 @@ static const char
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://www.foobar.com- HTTP/1.1") == 0);
+    MASSERT(strncmp(str, "GET http://www.foobar.com- HTTP/1.1", 35) == 0);
     MASSERT(len == 35);
 
     /* Proto record empty */
@@ -700,7 +710,7 @@ static const char
     rec_proto.tag = SLT_ReqProtocol;
     rec_proto.len = 0;
     format_r_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.0") == 0);
+    MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
     MASSERT(len == 38);
 
     rec_method.tag = SLT_BereqMethod;
@@ -708,7 +718,7 @@ static const char
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "GET http://www.foobar.com/foo HTTP/1.0") == 0);
+    MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
     MASSERT(len == 38);
 
     return NULL;
@@ -731,12 +741,12 @@ static const char
 #define STATUS_PAYLOAD "200"
     set_record_data(&rec, &chunk, STATUS_PAYLOAD, SLT_RespStatus);
     format_s_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, STATUS_PAYLOAD) == 0);
+    MASSERT(strncmp(str, STATUS_PAYLOAD, 3) == 0);
     MASSERT(len == 3);
 
     rec.tag = SLT_BerespStatus;
     format_s_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, STATUS_PAYLOAD) == 0);
+    MASSERT(strncmp(str, STATUS_PAYLOAD, 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
@@ -749,7 +759,7 @@ static const char
     logline_t rec;
     chunk_t chunk;
     char *str = NULL, strftime_s[BUFSIZ], fmt[] = "[%d/%b/%Y:%T %z]";
-    size_t len;
+    size_t len, explen;
     struct tm *tm;
     time_t t = 1427743146;
 
@@ -764,8 +774,10 @@ static const char
     MAN(strftime(strftime_s, config.max_reclen, fmt, tm));
     format_t(&tx, NULL, SLT__Bogus, &str, &len);
     MAN(str);
-    VMASSERT(strcmp(str, strftime_s) == 0, "'%s' != '%s'", str, strftime_s);
-    MASSERT(len == strlen(strftime_s));
+    explen = strlen(strftime_s);
+    VMASSERT(strncmp(str, strftime_s, explen) == 0, "'%s' != '%s'", str,
+             strftime_s);
+    MASSERT(len == explen);
 
     return NULL;
 }
@@ -786,12 +798,12 @@ static const char
 
     set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
     format_T_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "0") == 0);
+    MASSERT(strncmp(str, "0", 1) == 0);
     MASSERT(len == 1);
 
     set_record_data(&rec, &chunk, TS_BERESP_PAYLOAD, SLT_Timestamp);
     format_T_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "0") == 0);
+    MASSERT(strncmp(str, "0", 1) == 0);
     MASSERT(len == 1);
 
     return NULL;
@@ -813,22 +825,22 @@ static const char
 
     set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_ReqURL);
     format_U_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
     set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_BereqURL);
     format_U_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
     set_record_data(&rec, &chunk, URL_PAYLOAD, SLT_ReqURL);
     format_U_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
     rec.tag = SLT_BereqURL;
     format_U_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "/foo") == 0);
+    MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
     return NULL;
@@ -851,34 +863,34 @@ static const char
 #define BASIC_AUTH_PAYLOAD "Authorization: Basic dmFybmlzaDo0ZXZlcg=="
     set_record_data(&rec, &chunk, BASIC_AUTH_PAYLOAD, SLT_ReqHeader);
     format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "varnish") == 0);
+    MASSERT(strncmp(str, "varnish", 7) == 0);
     MASSERT(len == 7);
 
     rec.tag = SLT_BereqHeader;
     format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "varnish") == 0);
+    MASSERT(strncmp(str, "varnish", 7) == 0);
     MASSERT(len == 7);
 
     /* No header record */
     rec.tag = SLT__Bogus;
     format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     /* No auth header */
     rec.tag = SLT_ReqHeader;
     rec.len = 0;
     format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     rec.tag = SLT_BereqHeader;
     format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     /* No basic auth header
@@ -888,12 +900,12 @@ static const char
 #define DIGEST_AUTH_PAYLOAD "Authorization: Digest username=\"Mufasa\", realm=\"realm@host.com\""
     set_record_data(&rec, &chunk, DIGEST_AUTH_PAYLOAD, SLT_ReqHeader);
     format_u_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     rec.tag = SLT_BereqHeader;
     format_u_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     return NULL;
@@ -915,12 +927,12 @@ static const char
 
     set_record_data(&rec, &chunk, "Foo: bar", SLT_ReqHeader);
     format_Xi_client(&tx, hdr, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "bar") == 0);
+    MASSERT(strncmp(str, "bar", 3) == 0);
     MASSERT(len == 3);
 
     rec.tag = SLT_BereqHeader;
     format_Xi_backend(&tx, hdr, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "bar") == 0);
+    MASSERT(strncmp(str, "bar", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
@@ -942,12 +954,12 @@ static const char
 
     set_record_data(&rec, &chunk, "Baz: quux", SLT_RespHeader);
     format_Xo_client(&tx, hdr, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "quux") == 0);
+    MASSERT(strncmp(str, "quux", 4) == 0);
     MASSERT(len == 4);
 
     rec.tag = SLT_BerespHeader;
     format_Xo_backend(&tx, hdr, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "quux") == 0);
+    MASSERT(strncmp(str, "quux", 4) == 0);
     MASSERT(len == 4);
 
     return NULL;
@@ -960,7 +972,7 @@ static const char
     logline_t rec;
     chunk_t chunk;
     char *str = NULL, strftime_s[BUFSIZ];
-    size_t len;
+    size_t len, explen;
     char fmt[] =
         "%a %A %b %B %c %C %d %D %e %F %g %G %h %H %I %j %m %M %n %p %r %R %S "\
         "%t %T %u %U %V %w %W %x %X %y %Y %z %Z %%";
@@ -979,23 +991,27 @@ static const char
     set_record_data(&rec, &chunk, T1, SLT_Timestamp);
     tm = localtime(&t);
     MAN(strftime(strftime_s, config.max_reclen, fmt, tm));
+    explen = strlen(strftime_s);
     format_Xt(&tx, fmt, SLT__Bogus, &str, &len);
     MAN(str);
-    VMASSERT(strcmp(str, strftime_s) == 0, "'%s' != '%s'", str, strftime_s);
-    MASSERT(len == strlen(strftime_s));
+    VMASSERT(strncmp(str, strftime_s, explen) == 0, "'%s' != '%s'", str,
+             strftime_s);
+    MASSERT(len == explen);
 
     /* Alternative strftime formatters */
     MAN(strftime(strftime_s, config.max_reclen, afmt, tm));
+    explen = strlen(strftime_s);
     format_Xt(&tx, afmt, SLT__Bogus, &str, &len);
     MAN(str);
-    VMASSERT(strcmp(str, strftime_s) == 0, "'%s' != '%s'", str, strftime_s);
-    MASSERT(len == strlen(strftime_s));
+    VMASSERT(strncmp(str, strftime_s, explen) == 0, "'%s' != '%s'", str,
+             strftime_s);
+    MASSERT(len == explen);
 
     /* subsecond formatter */
     format_Xt(&tx, subs, SLT__Bogus, &str, &len);
     MAN(str);
     /* ms accuracy ... */
-    VMASSERT(strcmp(str, "529143") == 0, "'%s' != '529143'", str);
+    VMASSERT(strncmp(str, "529143", 6) == 0, "'%s' != '529143'", str);
     MASSERT(len == 6);
 
     return NULL;
@@ -1018,13 +1034,13 @@ static const char
 #define TS_PROCESS_PAYLOAD "Process: 1427979230.712416 0.000166 0.000166"
     set_record_data(&rec, &chunk, TS_PROCESS_PAYLOAD, SLT_Timestamp);
     format_Xttfb_client(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "0.000166") == 0);
+    MASSERT(strncmp(str, "0.000166", 8) == 0);
     MASSERT(len == 8);
 
 #define TS_BERESP_HDR_PAYLOAD "Beresp: 1427979243.588828 0.002837 0.002743"
     set_record_data(&rec, &chunk, TS_BERESP_HDR_PAYLOAD, SLT_Timestamp);
     format_Xttfb_backend(&tx, NULL, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "0.002837") == 0);
+    MASSERT(strncmp(str, "0.002837", 8) == 0);
     MASSERT(len == 8);
 
     return NULL;
@@ -1062,47 +1078,47 @@ static const char
     for (int i = 8; i < NRECORDS; i++)
         add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
     format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "hit") == 0);
+    MASSERT(strncmp(str, "hit", 3) == 0);
     MASSERT(len == 3);
 
     /* %{Varnish:handling} for a hit */
     format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "hit") == 0);
+    MASSERT(strncmp(str, "hit", 3) == 0);
     MASSERT(len == 3);
 
     /* %{Varnish:hitmiss} for a miss */
     add_record_data(&tx, recs[4], c[4], "MISS", SLT_VCL_call);
     add_record_data(&tx, recs[5], c[5], "fetch", SLT_VCL_return);
     format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(strncmp(str, "miss", 4) == 0);
     MASSERT(len == 4);
 
     /* %{Varnish:handling} for a miss */
     format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(strncmp(str, "miss", 4) == 0);
     MASSERT(len == 4);
 
     /* %{Varnish:hitmiss} for a pass */
     add_record_data(&tx, recs[4], c[4], "PASS", SLT_VCL_call);
     format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(strncmp(str, "miss", 4) == 0);
     MASSERT(len == 4);
 
     /* %{Varnish:handling} for a pass */
     format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "pass") == 0);
+    MASSERT(strncmp(str, "pass", 4) == 0);
     MASSERT(len == 4);
 
     /* %{Varnish:hitmiss} for an error */
     add_record_data(&tx, recs[4], c[4], "ERROR", SLT_VCL_call);
     add_record_data(&tx, recs[5], c[5], "synth", SLT_VCL_return);
     format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(strncmp(str, "miss", 4) == 0);
     MASSERT(len == 4);
 
     /* %{Varnish:handling} for an error */
     format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "error") == 0);
+    MASSERT(strncmp(str, "error", 5) == 0);
     MASSERT(len == 5);
 
     /* %{Varnish:hitmiss} for noe of the above */
@@ -1115,12 +1131,12 @@ static const char
     for (int i = 6; i < NRECORDS; i++)
         add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
     format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     /* %{Varnish:handling} for noe of the above */
     format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "-") == 0);
+    MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
     /* %{Varnish:hitmiss} for a pipe */
@@ -1128,12 +1144,12 @@ static const char
     for (int i = 2; i < NRECORDS; i++)
         add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
     format_VCL_disp(&tx, hitmiss, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "miss") == 0);
+    MASSERT(strncmp(str, "miss", 4) == 0);
     MASSERT(len == 4);
 
     /* %{Varnish:handling} for an pipe */
     format_VCL_disp(&tx, handling, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "pipe") == 0);
+    MASSERT(strncmp(str, "pipe", 4) == 0);
     MASSERT(len == 4);
 
     return NULL;
@@ -1155,7 +1171,7 @@ static const char
 
     set_record_data(&rec, &chunk, "foo: bar", SLT_VCL_Log);
     format_VCL_Log(&tx, hdr, SLT__Bogus, &str, &len);
-    MASSERT(strcmp(str, "bar") == 0);
+    MASSERT(strncmp(str, "bar", 3) == 0);
     MASSERT(len == 3);
 
     /* No match */
@@ -1191,7 +1207,7 @@ static const char
 
     set_record_data(&rec, &chunk, "no backend connection", SLT_FetchError);
     format_SLT(&tx, NULL, SLT_FetchError, &str, &len);
-    MASSERT(strcmp(str, "no backend connection") == 0);
+    MASSERT(strncmp(str, "no backend connection", 21) == 0);
     MASSERT(len == 21);
 
     /* record not found */
@@ -1207,7 +1223,7 @@ static const char
     rec.len = 9;
     rec.tag = SLT_Debug;
     format_SLT(&tx, NULL, SLT_Debug, &str, &len);
-    MASSERT(strcmp(str, "foo\0\xFF bar") == 0);
+    MASSERT(strncmp(str, "foo\0\xFF bar", 9) == 0);
     MASSERT(len == 9);
 
     return NULL;

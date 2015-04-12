@@ -162,26 +162,30 @@ get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr)
  * Get the nth whitespace-separated field from str, counting from 0.
  */
 char *
-get_fld(const char *str, int n)
+get_fld(char *str, int n, size_t *len)
 {
-    char *fld = NULL, *s, cp[BUFSIZ];
+    char *b, *e;
     int i = 0;
 
     AN(str);
-    strcpy(cp, str);
-    s = cp;
+    e = str;
     do {
-        fld = strtok(s, " \t");
-        s = NULL;
-    } while (i++ < n && fld != NULL);
+        b = e;
+        while (*b && isspace(*b))
+            b++;
+        e = b;
+        while (*e && !isspace(*e))
+            e++;
+    } while (i++ < n && *b);
+    *len = e - b;
     
-    return fld;
+    return b;
 }
 
 char *
-get_rec_fld(logline_t *rec, int n)
+get_rec_fld(logline_t *rec, int n, size_t *len)
 {
-    return get_fld(get_payload(rec), n);
+    return get_fld(get_payload(rec), n, len);
 }
 
 static inline void
@@ -198,8 +202,7 @@ static inline void
 format_b(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
-    *s = get_rec_fld(rec, 4);
-    *len = strlen(*s);
+    *s = get_rec_fld(rec, 4, len);
 }
 
 void
@@ -226,7 +229,7 @@ format_DT(tx_t *tx, const char *ts, int m, char **s, size_t *len)
     double d;
 
     char *f = get_hdr(tx, SLT_Timestamp, ts);
-    t = get_fld(f, 1);
+    t = get_fld(f, 1, len);
     errno = 0;
     d = strtod(t, NULL);
     if (errno != 0)
@@ -275,8 +278,7 @@ static inline void
 format_h(tx_t *tx, enum VSL_tag_e tag, int fld_nr, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
-    *s = get_rec_fld(rec, fld_nr);
-    *len = strlen(*s);
+    *s = get_rec_fld(rec, fld_nr, len);
 }
 
 void
@@ -308,16 +310,14 @@ format_IO_client(tx_t *tx, int req_fld, int pipe_fld, char **s, size_t *len)
         rec = get_tag(tx, SLT_PipeAcct);
         field = pipe_fld;
     }
-    *s = get_rec_fld(rec, field);
-    *len = strlen(*s);
+    *s = get_rec_fld(rec, field, len);
 }
 
 static inline void
 format_IO_backend(tx_t *tx, int field, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, SLT_BereqAcct);
-    *s = get_rec_fld(rec, field);
-    *len = strlen(*s);
+    *s = get_rec_fld(rec, field, len);
 }
 
 void
@@ -488,7 +488,7 @@ format_tim(tx_t *tx, const char *fmt, char **s, size_t *len)
     data = get_hdr(tx, SLT_Timestamp, "Start");
     if (data == NULL)
         return;
-    ts = get_fld(data, 0);
+    ts = get_fld(data, 0, len);
     if (ts == NULL)
         return;
     if (sscanf(ts, "%d.%u", &secs, &usecs) != 2)
@@ -569,10 +569,10 @@ format_u(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
     char *hdr;
 
     if ((hdr = get_hdr(tx, tag, "Authorization")) != NULL
-        && strcasecmp(get_fld(hdr, 0), "Basic") == 0) {
-        char *c, *auth = get_fld(hdr, 1);
+        && strncasecmp(get_fld(hdr, 0, len), "Basic", 5) == 0) {
+        char *c, *auth = get_fld(hdr, 1, len);
         VB64_init();
-        VB64_decode(scratch, config.max_reclen, auth, auth + strlen(auth));
+        VB64_decode(scratch, config.max_reclen, auth, auth + *len);
         c = strchr(scratch, ':');
         if (c != NULL)
             *c = '\0';
@@ -580,8 +580,7 @@ format_u(tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
         *len = strlen(scratch);
     }
     else {
-        strcpy(scratch, "-");
-        *s = scratch;
+        *s = dash;
         *len = 1;
     }
 }
@@ -658,8 +657,7 @@ format_Xttfb(tx_t *tx, const char *tname, char **s, size_t *len)
     ts = get_hdr(tx, SLT_Timestamp, tname);
     if (ts == NULL)
         return;
-    *s = get_fld(ts, 1);
-    *len = strlen(*s);
+    *s = get_fld(ts, 1, len);
 }
 
 void
