@@ -79,7 +79,7 @@ static int read_rx_hdr = 0, read_tx_hdr = 0, read_vcl_log = 0,
 #endif
 
 char *
-get_payload(logline_t *rec)
+get_payload(const logline_t *rec)
 {
     CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
 
@@ -111,7 +111,7 @@ get_payload(logline_t *rec)
  * Return the *last* record in tx that matches the tag
  */
 logline_t *
-get_tag(tx_t *tx, enum VSL_tag_e tag)
+get_tag(const tx_t *tx, enum VSL_tag_e tag)
 {
     logline_t *rec, *tagrec = NULL;
 
@@ -129,7 +129,7 @@ get_tag(tx_t *tx, enum VSL_tag_e tag)
  * tag and the header name.
  */
 char *
-get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr)
+get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr)
 {
     logline_t *rec;
     char *hdr_payload = NULL;
@@ -183,7 +183,7 @@ get_fld(char *str, int n, size_t *len)
 }
 
 char *
-get_rec_fld(logline_t *rec, int n, size_t *len)
+get_rec_fld(const logline_t *rec, int n, size_t *len)
 {
     return get_fld(get_payload(rec), n, len);
 }
@@ -225,7 +225,7 @@ format_b_backend(tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 static inline void
 format_DT(tx_t *tx, const char *ts, int m, char **s, size_t *len)
 {
-    char *t;
+    const char *t;
     double d;
 
     char *f = get_hdr(tx, SLT_Timestamp, ts);

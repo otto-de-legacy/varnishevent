@@ -37,11 +37,11 @@ struct vsb *payload;
 typedef void formatter_f(tx_t *tx, char *name, enum VSL_tag_e tag,
                          char **s, size_t *len);
 
-char *get_payload(logline_t *rec);
-logline_t *get_tag(tx_t *tx, enum VSL_tag_e tag);
-char *get_hdr(tx_t *tx, enum VSL_tag_e tag, const char *hdr);
+char *get_payload(const logline_t *rec);
+logline_t *get_tag(const tx_t *tx, enum VSL_tag_e tag);
+char *get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr);
 char *get_fld(char *str, int n, size_t *len);
-char *get_rec_fld(logline_t *rec, int n, size_t *len);
+char *get_rec_fld(const logline_t *rec, int n, size_t *len);
 
 formatter_f format_b_client;
 formatter_f format_b_backend;
