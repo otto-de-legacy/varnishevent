@@ -37,7 +37,6 @@
 #include "vas.h"
 #include "miniobj.h"
 #include "base64.h"
-#include "vre.h"
 
 #include "varnishevent.h"
 #include "format.h"
@@ -445,7 +444,8 @@ static inline void
 format_tim(const tx_t *tx, const char *fmt, char **s, size_t *len)
 {
     unsigned secs, usecs;
-    char *data, *ts;
+    char *data;
+    const char *ts;
     time_t t;
     struct tm tm;
 
@@ -526,14 +526,15 @@ format_u(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 
     if ((hdr = get_hdr(tx, tag, "Authorization")) != NULL
         && strncasecmp(get_fld(hdr, 0, len), "Basic", 5) == 0) {
-        char *c, *auth = get_fld(hdr, 1, len);
+        const char *c, *auth = get_fld(hdr, 1, len);
         VB64_init();
         VB64_decode(scratch, config.max_reclen, auth, auth + *len);
         c = strchr(scratch, ':');
-        if (c != NULL)
-            *c = '\0';
         *s = scratch;
-        *len = strlen(scratch);
+        if (c != NULL)
+            *len = c - scratch;
+        else
+            *len = strlen(scratch);
     }
     else {
         *s = dash;
