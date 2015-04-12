@@ -43,11 +43,6 @@
 #include "format.h"
 #include "strfTIM.h"
 
-typedef struct arg_t {
-    char *name;
-    enum VSL_tag_e tag;
-} arg_t;
-
 typedef struct compiled_fmt_t {
     unsigned n;
     char **str;
@@ -206,20 +201,16 @@ format_b(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_b_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_b_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_b(tx, SLT_ReqAcct, s, len);
 }
 
 void
-format_b_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_b_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_b(tx, SLT_BereqAcct, s, len);
 }
 
@@ -242,38 +233,30 @@ format_DT(const tx_t *tx, const char *ts, int m, char **s, size_t *len)
 }
 
 void
-format_D_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_D_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_DT(tx, "Resp", 1e6, s, len);
 }
 
 void
-format_D_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_D_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_DT(tx, "BerespBody", 1e6, s, len);
 }
 
 void
-format_H_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_H_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format(tx, SLT_ReqProtocol, s, len);
 }
 
 void
-format_H_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_H_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format(tx, SLT_BereqProtocol, s, len);
 }
 
@@ -285,20 +268,16 @@ format_h(const tx_t *tx, enum VSL_tag_e tag, int fld_nr, char **s, size_t *len)
 }
 
 void
-format_h_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_h_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_h(tx, SLT_ReqStart, 0, s, len);
 }
 
 void
-format_h_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_h_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_h(tx, SLT_Backend, 2, s, len);
 }
 
@@ -326,56 +305,44 @@ format_IO_backend(const tx_t *tx, int field, char **s, size_t *len)
 }
 
 void
-format_I_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_I_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_IO_client(tx, 2, 2, s, len);
 }
 
 void
-format_I_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_I_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_IO_backend(tx, 5, s, len);
 }
 
 void
-format_m_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_m_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format(tx, SLT_ReqMethod, s, len);
 }
 
 void
-format_m_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_m_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format(tx, SLT_BereqMethod, s, len);
 }
 
 void
-format_O_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_O_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_IO_client(tx, 5, 3, s, len);
 }
 
 void
-format_O_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_O_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_IO_backend(tx, 2, s, len);
 }
 
@@ -393,20 +360,16 @@ format_q(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_q_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_q_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_q(tx, SLT_ReqURL, s, len);
 }
 
 void
-format_q_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_q_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_q(tx, SLT_BereqURL, s, len);
 }
 
@@ -449,40 +412,32 @@ format_r(const tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
 }
 
 void
-format_r_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_r_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_r(tx, SLT_ReqMethod, SLT_ReqHeader, SLT_ReqURL, SLT_ReqProtocol, s,
              len);
 }
 
 void
-format_r_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_r_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_r(tx, SLT_BereqMethod, SLT_BereqHeader, SLT_BereqURL,
              SLT_BereqProtocol, s, len);
 }
 
 void
-format_s_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_s_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format(tx, SLT_RespStatus, s, len);
 }
 
 void
-format_s_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_s_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format(tx, SLT_RespStatus, s, len);
 }
 
@@ -514,29 +469,23 @@ format_tim(const tx_t *tx, const char *fmt, char **s, size_t *len)
 }
 
 void
-format_t(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_t(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
-
+    (void) args;
     format_tim(tx, "[%d/%b/%Y:%T %z]", s, len);
 }
 
 void
-format_T_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_T_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_DT(tx, "Resp", 1, s, len);
 }
 
 void
-format_T_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_T_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_DT(tx, "BerespBody", 1, s, len);
 }
 
@@ -557,20 +506,16 @@ format_U(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_U_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_U_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_U(tx, SLT_ReqURL, s, len);
 }
 
 void
-format_U_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_U_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_U(tx, SLT_BereqURL, s, len);
 }
 
@@ -597,20 +542,16 @@ format_u(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 }
 
 void
-format_u_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                size_t *len)
+format_u_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_u(tx, SLT_ReqHeader, s, len);
 }
 
 void
-format_u_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_u_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_u(tx, SLT_BereqHeader, s, len);
 }
 
@@ -624,42 +565,33 @@ format_Xio(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_Xi_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_Xi_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) tag;
-    format_Xio(tx, name, SLT_ReqHeader, s, len);
+    format_Xio(tx, args->name, SLT_ReqHeader, s, len);
 }
 
 void
-format_Xi_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                  size_t *len)
+format_Xi_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) tag;
-    format_Xio(tx, name, SLT_BereqHeader, s, len);
+    format_Xio(tx, args->name, SLT_BereqHeader, s, len);
 }
 
 void
-format_Xo_client(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                 size_t *len)
+format_Xo_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) tag;
-    format_Xio(tx, name, SLT_RespHeader, s, len);
+    format_Xio(tx, args->name, SLT_RespHeader, s, len);
 }
 
 void
-format_Xo_backend(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-                  size_t *len)
+format_Xo_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) tag;
-    format_Xio(tx, name, SLT_BerespHeader, s, len);
+    format_Xio(tx, args->name, SLT_BerespHeader, s, len);
 }
 
 void
-format_Xt(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s, size_t *len)
+format_Xt(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) tag;
-    format_tim(tx, (const char *) name, s, len);
+    format_tim(tx, (const char *) args->name, s, len);
 }
 
 static inline void
@@ -674,32 +606,25 @@ format_Xttfb(const tx_t *tx, const char *tname, char **s, size_t *len)
 }
 
 void
-format_Xttfb_client(const tx_t *tx, char *name, enum VSL_tag_e tag,
-                    char **s, size_t *len)
+format_Xttfb_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_Xttfb(tx, "Process", s, len);
 }
 
 void
-format_Xttfb_backend(const tx_t *tx, char *name, enum VSL_tag_e tag,
-                     char **s, size_t *len)
+format_Xttfb_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    (void) tag;
+    (void) args;
     format_Xttfb(tx, "Beresp", s, len);
 }
 
 void
-format_VCL_disp(const tx_t *tx, char *name, enum VSL_tag_e tag,
-                char **s, size_t *len)
+format_VCL_disp(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     logline_t *rec;
 
-    (void) tag;
     *s = dash;
-
     VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
         CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
         if (rec->tag != SLT_VCL_call && rec->tag != SLT_VCL_return)
@@ -711,20 +636,20 @@ format_VCL_disp(const tx_t *tx, char *name, enum VSL_tag_e tag,
             else if (strcasecmp(data, "miss") == 0)
                 *s = miss;
             else if (strcasecmp(data, "pass") == 0) {
-                if (*name == 'm')
+                if (*args->name == 'm')
                     *s = miss;
                 else
                     *s = pass;
             }
             else if (strcasecmp(data, "error") == 0) {
-                if (*name == 'm')
+                if (*args->name == 'm')
                     *s = miss;
                 else
                     *s = error;
             }
         }
         else if (strcasecmp(data, "pipe") == 0) {
-            if (*name == 'm')
+            if (*args->name == 'm')
                 *s = miss;
             else
                 *s = pipe;
@@ -734,12 +659,9 @@ format_VCL_disp(const tx_t *tx, char *name, enum VSL_tag_e tag,
 }
 
 void
-format_VCL_Log(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-               size_t *len)
+format_VCL_Log(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) tag;
-    
-    char *l = get_hdr(tx, SLT_VCL_Log, name);
+    char *l = get_hdr(tx, SLT_VCL_Log, args->name);
     if (l == NULL)
         return;
     *s = l;
@@ -747,17 +669,15 @@ format_VCL_Log(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
 }
 
 void
-format_SLT(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
-           size_t *len)
+format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    (void) name;
-    format(tx, tag, s, len);
+    format(tx, args->tag, s, len);
 }
 
 #if 0
 
 static void
-format_incomplete(logline_t *ll, char *name, enum VSL_tag_e tag,
+format_incomplete(logline_t *ll, const arg_t *args,
     char **s, size_t *len)
 {
     (void) tag;

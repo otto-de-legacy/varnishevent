@@ -34,8 +34,13 @@
 /* XXX: should be static, init as fixed size with length max_reclen + 1 */
 struct vsb *payload;
 
-typedef void formatter_f(const tx_t *tx, char *name, enum VSL_tag_e tag,
-                         char **s, size_t *len);
+typedef struct arg_t {
+    char *name;
+    enum VSL_tag_e tag;
+} arg_t;
+
+typedef void formatter_f(const tx_t *tx, const arg_t *args, char **s,
+                         size_t *len);
 
 char *get_payload(const logline_t *rec);
 logline_t *get_tag(const tx_t *tx, enum VSL_tag_e tag);
