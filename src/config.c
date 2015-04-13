@@ -114,7 +114,7 @@ CONF_Add(const char *lval, const char *rval)
     confString("varnish.bindump", varnish_bindump);
     confString("cformat", cformat);
     confString("bformat", bformat);
-    confString("zformat", zformat);
+    confString("rformat", rformat);
     confString("output.file", output_file);
     confString("syslog.ident", syslog_ident);
     
@@ -201,7 +201,7 @@ CONF_Init(void)
     strcpy(config.cformat, DEFAULT_CFORMAT);
     strcpy(config.syslog_ident, "varnishevent");
     config.bformat[0] = '\0';
-    config.zformat[0] = '\0';
+    config.rformat[0] = '\0';
     config.varnish_name[0] = '\0';
     config.log_file[0] = '\0';
     config.varnish_bindump[0] = '\0';
@@ -305,7 +305,7 @@ CONF_Dump(void)
         + (double) config.output_timeout.tv_usec / 1e-6);
     confdump("cformat = %s", config.cformat);
     confdump("bformat = %s", config.bformat);
-    confdump("zformat = %s", config.zformat);
+    confdump("rformat = %s", config.rformat);
     confdump("syslog.facility = %s", config.syslog_facility_name);
     confdump("syslog.ident = %s", config.syslog_ident);
     confdump("monitor.interval = %u", config.monitor_interval);

@@ -31,9 +31,6 @@
 
 /* including source must include varnishevent.h */
 
-/* XXX: should be static, init as fixed size with length max_reclen + 1 */
-struct vsb *payload;
-
 typedef struct arg_t {
     char *name;
     enum VSL_tag_e tag;

@@ -43,7 +43,7 @@
 
 #define C(txtype) ((txtype) == VSL_t_req)
 #define B(txtype) ((txtype) == VSL_t_bereq)
-#define Z(txtype) ((txtype) == VSL_t_raw)
+#define R(txtype) ((txtype) == VSL_t_raw)
 
 /* Defaults from Varnish 3.0.3 */
 #define DEFAULT_MAX_RECLEN 255	/* shm_reclen */
@@ -170,14 +170,14 @@ struct config {
     /* VSL 'r' argument */
     char        varnish_bindump[BUFSIZ];
 
-    /* zformat is for fd 0 (neither 'c' nor 'b') */
+    /* rformat is for raw transactions */
     /* XXX: better if these weren't limited to fixed buffer sizes, but the
      * length of a configurable string is limited by the length of lines
      * read by CONF_ReadFile(), currently BUFSIZ
      */
     char	cformat[BUFSIZ];
     char	bformat[BUFSIZ];
-    char	zformat[BUFSIZ];
+    char	rformat[BUFSIZ];
     
     int         syslog_facility;
     char        syslog_facility_name[BUFSIZ];
@@ -281,15 +281,13 @@ void MON_Shutdown(void);
 void MON_StatsUpdate(stats_update_t update);
 void MON_Output(void);
 
-#if 0
 /* format.c */
 int FMT_Init(char *err);
 char *FMT_Get_i_Arg(void);
-int FMT_Get_nTags(void);
-int FMT_Read_Hdr(enum VSL_tag_e tag);
-void FMT_Format(logline_t *ll, struct vsb *os);
-void FMT_Shutdown(void);
+void FMT_Format(tx_t *tx, struct vsb *os);
+void FMT_Fini(void);
 
+#if 0
 /* handler.c */
 void HNDL_Init(const char *a0);
 void HNDL_Abort(int sig);

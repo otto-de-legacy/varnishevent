@@ -86,12 +86,14 @@ add_record_data(tx_t *tx, logline_t *rec, chunk_t *chunk, const char *data,
 static const char
 *test_format_init(void)
 {
+    char err[BUFSIZ];
+    int status;
+
     printf("... initializing format tests\n");
 
     CONF_Init();
-
-    payload = VSB_new(NULL, NULL, DEFAULT_MAX_RECLEN + 1, VSB_FIXEDLEN);
-    MAN(payload);
+    status = FMT_Init(err);
+    VMASSERT(status == 0, "FMT_Init: %s", err);
 
     return NULL;
 }
@@ -1266,8 +1268,241 @@ static const char
     rec.tag = SLT_Debug;
     args.tag = SLT_Debug;
     format_SLT(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "foo\0\xFF bar", 9) == 0);
-    MASSERT(len == 9);
+    MASSERT(strncmp(str, "\"foo\\0\\377 bar\"", 15) == 0);
+    MASSERT(len == 15);
+
+    return NULL;
+}
+
+static const char
+*test_FMT_Fini(void)
+{
+    printf("... testing FMT_Fini()\n");
+
+    /* should not crash */
+    FMT_Fini();
+    return NULL;
+}
+
+static const char
+*test_FMT_Format_i_Arg(void)
+{
+#define NRECS 20
+    char err[BUFSIZ], *i_arg, strftime_s[BUFSIZ];
+    int status;
+    tx_t tx;
+    logline_t *recs[NRECS];
+    chunk_t *c[NRECS];
+    struct vsb *os;
+    struct tm *tm;
+    time_t t = 1427743146;
+
+    printf("... testing FMT_Format() and FMT_Get_i_Arg()\n");
+
+    status = FMT_Init(err);
+    VMASSERT(status == 0, "FMT_Init: %s", err);
+
+    os = VSB_new_auto();
+    MAN(os);
+
+    tx.magic = TX_MAGIC;
+    tx.state = TX_DONE;
+    VSTAILQ_INIT(&tx.lines);
+    for (int i = 0; i < NRECS; i++) {
+        recs[i] = (logline_t *) calloc(1, sizeof(logline_t));
+        MAN(recs[i]);
+        c[i] = (chunk_t *) calloc(1, sizeof(chunk_t));
+        MAN(c[i]);
+    }
+
+    /* Default client format */
+    i_arg = FMT_Get_i_Arg();
+#define DEFAULT_I_ARG "ReqMethod,ReqURL,ReqProtocol,ReqHeader,RespStatus," \
+        "ReqStart,Timestamp,ReqAcct,"
+    VMASSERT(strcmp(i_arg, DEFAULT_I_ARG) == 0, "'%s' != '%s'", i_arg,
+             DEFAULT_I_ARG);
+
+    tx.type = VSL_t_req;
+    add_record_data(&tx, recs[0], c[0], T1, SLT_Timestamp);
+    add_record_data(&tx, recs[1], c[1], REQSTART_PAYLOAD, SLT_ReqStart);
+    add_record_data(&tx, recs[2], c[2], "GET", SLT_ReqMethod);
+    add_record_data(&tx, recs[3], c[3], URL_PAYLOAD, SLT_ReqURL);
+    add_record_data(&tx, recs[4], c[4], PROTOCOL_PAYLOAD, SLT_ReqProtocol);
+    add_record_data(&tx, recs[5], c[5], BASIC_AUTH_PAYLOAD, SLT_ReqHeader);
+    add_record_data(&tx, recs[6], c[6], "Referer: http://foobar.com/",
+                    SLT_ReqHeader);
+    add_record_data(&tx, recs[7], c[7], "User-Agent: Mozilla", SLT_ReqHeader);
+    add_record_data(&tx, recs[8], c[8], "Host: bazquux.com", SLT_ReqHeader);
+    add_record_data(&tx, recs[9], c[9], "200", SLT_RespStatus);
+    add_record_data(&tx, recs[10], c[10], REQACCT_PAYLOAD, SLT_ReqAcct);
+    for (int i = 11; i < NRECS; i++)
+        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    FMT_Format(&tx, os);
+    VSB_finish(os);
+#define EXP_DEFAULT_OUTPUT "127.0.0.1 - varnish [%d/%b/%Y:%T %z] "\
+        "\"GET http://bazquux.com/foo HTTP/1.1\" 200 105 "\
+        "\"http://foobar.com/\" \"Mozilla\"\n"
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, BUFSIZ, EXP_DEFAULT_OUTPUT, tm));
+    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
+             VSB_data(os), strftime_s);
+
+    /* Client format with all formatters */
+    FMT_Fini();
+    VSB_clear(os);
+
+#define FULL_CLIENT_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
+        "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x "\
+        "%{Varnish:hitmiss}x %{Varnish:handling}x %{VCL_Log:baz}x "\
+        "%{tag:VCL_acl}x %{tag:Debug}x"
+    strcpy(config.cformat, FULL_CLIENT_FMT);
+    status = FMT_Init(err);
+    VMASSERT(status == 0, "FMT_Init: %s", err);
+
+    i_arg = FMT_Get_i_Arg();
+#define FULL_CLIENT_I_ARG "Debug,ReqMethod,ReqURL,ReqProtocol,ReqHeader,"\
+        "RespStatus,RespHeader,VCL_acl,VCL_call,VCL_return,ReqStart,VCL_Log,"\
+        "Timestamp,ReqAcct,PipeAcct,"
+    VMASSERT(strcmp(i_arg, FULL_CLIENT_I_ARG) == 0, "'%s' != '%s'", i_arg,
+             FULL_CLIENT_I_ARG);
+
+    set_record_data(recs[3], c[3], URL_QUERY_PAYLOAD, SLT_ReqURL);
+    set_record_data(recs[6], c[6], "Host: foobar.com", SLT_ReqHeader);
+    set_record_data(recs[7], c[7], "Foo: foohdr", SLT_ReqHeader);
+    set_record_data(recs[8], c[8], "Host: bazquux.com", SLT_ReqHeader);
+    set_record_data(recs[11], c[11], TS_RESP_PAYLOAD, SLT_Timestamp);
+    set_record_data(recs[12], c[12], "Bar: barhdr", SLT_RespHeader);
+    set_record_data(recs[13], c[13], TS_PROCESS_PAYLOAD, SLT_Timestamp);
+    set_record_data(recs[14], c[14], "HIT", SLT_VCL_call);
+    set_record_data(recs[15], c[15], "baz: logload", SLT_VCL_Log);
+    set_record_data(recs[16], c[16], "MATCH ACL \"10.0.0.0\"/8", SLT_VCL_acl);
+    set_record_data(recs[17], c[17], "", SLT_Debug);
+    recs[17]->len = 9;
+    memcpy(c[17]->data, "foo\0\xFF bar", 9);
+    FMT_Format(&tx, os);
+    VSB_finish(os);
+#define EXP_FULL_CLIENT_OUTPUT "105 c 15963 HTTP/1.1 127.0.0.1 60 foohdr "\
+        "barhdr - GET 283 bar=baz&quux=wilco GET "\
+        "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
+        "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.000166 hit hit "\
+        "logload MATCH ACL \"10.0.0.0\"/8 \"foo\\0\\377 bar\"\n"
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
+    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
+             VSB_data(os), strftime_s);
+
+    /* Backend format with all formatters */
+    FMT_Fini();
+    VSB_clear(os);
+
+#define FULL_BACKEND_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
+        "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x %{VCL_Log:baz}x "\
+        "%{tag:Fetch_Body}x %{tag:Debug}x"
+    strcpy(config.bformat, FULL_BACKEND_FMT);
+    config.cformat[0] = '\0';
+    status = FMT_Init(err);
+    VMASSERT(status == 0, "FMT_Init: %s", err);
+
+    i_arg = FMT_Get_i_Arg();
+#define FULL_BACKEND_I_ARG "Debug,Backend,BereqMethod,BereqURL,BereqProtocol,"\
+        "BereqHeader,BerespStatus,BerespHeader,Fetch_Body,VCL_Log,Timestamp,"\
+        "BereqAcct,"
+    VMASSERT(strcmp(i_arg, FULL_BACKEND_I_ARG) == 0, "'%s' != '%s'", i_arg,
+             FULL_BACKEND_I_ARG);
+
+    tx.type = VSL_t_bereq;
+    set_record_data(recs[1], c[1], BACKEND_PAYLOAD, SLT_Backend);
+    recs[2]->tag = SLT_BereqMethod;
+    recs[3]->tag = SLT_BereqURL;
+    recs[4]->tag = SLT_BereqProtocol;
+    recs[5]->tag = SLT_BereqHeader;
+    recs[6]->tag = SLT_BereqHeader;
+    recs[7]->tag = SLT_BereqHeader;
+    recs[8]->tag = SLT_BereqHeader;
+    recs[9]->tag = SLT_BerespStatus;
+    recs[10]->tag = SLT_BereqAcct;
+    set_record_data(recs[11], c[11], TS_BERESP_PAYLOAD, SLT_Timestamp);
+    recs[12]->tag = SLT_BerespHeader;
+    set_record_data(recs[13], c[13], TS_BERESP_HDR_PAYLOAD, SLT_Timestamp);
+    set_record_data(recs[14], c[14], "", SLT__Bogus);
+    set_record_data(recs[16], c[16], "2 chunked stream", SLT_Fetch_Body);
+    set_record_data(recs[17], c[17], "", SLT_Debug);
+    recs[17]->len = 9;
+    memcpy(c[17]->data, "foo\0\xFF bar", 9);
+    FMT_Format(&tx, os);
+    VSB_finish(os);
+#define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
+        "283 foohdr barhdr - GET 60 bar=baz&quux=wilco GET "\
+        "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
+        "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
+        "2 chunked stream \"foo\\0\\377 bar\"\n"
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
+    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
+             VSB_data(os), strftime_s);
+
+    /* Backend format with all formatters */
+    FMT_Fini();
+    VSB_clear(os);
+
+#define FULL_RAW_FMT "%t %{%F-%T.%i}t %{tag:Backend_health}x"
+    strcpy(config.rformat, FULL_RAW_FMT);
+    config.bformat[0] = '\0';
+    status = FMT_Init(err);
+    VMASSERT(status == 0, "FMT_Init: %s", err);
+
+    i_arg = FMT_Get_i_Arg();
+#define FULL_RAW_I_ARG "Backend_health,Timestamp,"
+    VMASSERT(strcmp(i_arg, FULL_RAW_I_ARG) == 0, "'%s' != '%s'", i_arg,
+             FULL_RAW_I_ARG);
+
+    tx.type = VSL_t_raw;
+    tx.t = 1427743146.529143;
+    #define HEALTH_PAYLOAD "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 "\
+            "HTTP/1.1 200 OK"
+    set_record_data(recs[1], c[1], HEALTH_PAYLOAD, SLT_Backend_health);
+    for (int i = 2; i < NRECS; i++)
+        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    FMT_Format(&tx, os);
+    VSB_finish(os);
+#define EXP_FULL_RAW_OUTPUT "[%d/%b/%Y:%T %z] %F-%T.529143 "\
+        "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 HTTP/1.1 200 OK\n"
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_RAW_OUTPUT, tm));
+    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
+             VSB_data(os), strftime_s);
+
+    /* Illegal backend formats */
+    FMT_Fini();
+    strcpy(config.bformat, "%{Varnish:hitmiss}x");
+    config.rformat[0] = '\0';
+    status = FMT_Init(err);
+    MAN(status);
+    MASSERT(strcmp(err,
+                   "Varnish:hitmiss only permitted for client formats") == 0);
+
+    FMT_Fini();
+    strcpy(config.bformat, "%{Varnish:handling}x");
+    status = FMT_Init(err);
+    MAN(status);
+    MASSERT(strcmp(err,
+                   "Varnish:handling only permitted for client formats") == 0);
+
+    /* Illegal raw formats */
+    FMT_Fini();
+    strcpy(config.rformat, "%r");
+    config.bformat[0] = '\0';
+    status = FMT_Init(err);
+    MAN(status);
+    MASSERT(strcmp(err, "Unknown format starting at: %r") == 0);
+
+    /* Unknown formatters */
+    FMT_Fini();
+    strcpy(config.cformat, "%a");
+    config.rformat[0] = '\0';
+    status = FMT_Init(err);
+    MAN(status);
+    MASSERT(strcmp(err, "Unknown format starting at: %a") == 0);
 
     return NULL;
 }
@@ -1302,6 +1537,8 @@ static const char
     mu_run_test(test_format_VCL_disp);
     mu_run_test(test_format_VCL_Log);
     mu_run_test(test_format_SLT);
+    mu_run_test(test_FMT_Fini);
+    mu_run_test(test_FMT_Format_i_Arg);
 
     return NULL;
 }

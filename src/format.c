@@ -33,7 +33,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
+#include <stdint.h>
 
+#include "vapi/vsl.h"
 #include "vas.h"
 #include "miniobj.h"
 #include "base64.h"
@@ -43,15 +45,15 @@
 #include "strfTIM.h"
 
 typedef struct compiled_fmt_t {
-    unsigned n;
     char **str;
     formatter_f **formatter;
     arg_t *args;
-    char tags[MAX_VSL_TAG];
+    unsigned n;
 } compiled_fmt_t;
 
-/* XXX: When FMT_Init is implemented, malloc to config.max_reclen */
-static char scratch[DEFAULT_MAX_RECLEN];
+static struct vsb *payload;
+static struct vsb *bintag;
+static char *scratch;
 
 static char empty[] = "";
 static char hit[] = "hit";
@@ -61,16 +63,10 @@ static char pipe[] = "pipe";
 static char error[] = "error";
 static char dash[] = "-";
 
-#if 0
+static struct vsb *i_arg;
 
-static compiled_fmt_t cformat, bformat, zformat;
-
-static char i_arg[BUFSIZ] = "";
-
-static int read_rx_hdr = 0, read_tx_hdr = 0, read_vcl_log = 0,
-    read_vcl_call = 0, ntags = 0;
-
-#endif
+static compiled_fmt_t cformat, bformat, rformat;
+static char ctags[MAX_VSL_TAG], btags[MAX_VSL_TAG], rtags[MAX_VSL_TAG];
 
 char *
 get_payload(const logline_t *rec)
@@ -183,7 +179,7 @@ get_rec_fld(const logline_t *rec, int n, size_t *len)
 }
 
 static inline void
-format(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+format_slt(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
     if (rec != NULL) {
@@ -196,7 +192,8 @@ static inline void
 format_b(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
-    *s = get_rec_fld(rec, 4, len);
+    if (rec != NULL)
+        *s = get_rec_fld(rec, 4, len);
 }
 
 void
@@ -220,6 +217,8 @@ format_DT(const tx_t *tx, const char *ts, int m, char **s, size_t *len)
     double d;
 
     char *f = get_hdr(tx, SLT_Timestamp, ts);
+    if (f == NULL)
+        return;
     t = get_fld(f, 1, len);
     errno = 0;
     d = strtod(t, NULL);
@@ -249,21 +248,22 @@ void
 format_H_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format(tx, SLT_ReqProtocol, s, len);
+    format_slt(tx, SLT_ReqProtocol, s, len);
 }
 
 void
 format_H_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format(tx, SLT_BereqProtocol, s, len);
+    format_slt(tx, SLT_BereqProtocol, s, len);
 }
 
 static inline void
 format_h(const tx_t *tx, enum VSL_tag_e tag, int fld_nr, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, tag);
-    *s = get_rec_fld(rec, fld_nr, len);
+    if (rec != NULL)
+        *s = get_rec_fld(rec, fld_nr, len);
 }
 
 void
@@ -293,14 +293,16 @@ format_IO_client(const tx_t *tx, int req_fld, int pipe_fld, char **s,
         rec = get_tag(tx, SLT_PipeAcct);
         field = pipe_fld;
     }
-    *s = get_rec_fld(rec, field, len);
+    if (rec != NULL)
+        *s = get_rec_fld(rec, field, len);
 }
 
 static inline void
 format_IO_backend(const tx_t *tx, int field, char **s, size_t *len)
 {
     logline_t *rec = get_tag(tx, SLT_BereqAcct);
-    *s = get_rec_fld(rec, field, len);
+    if (rec != NULL)
+        *s = get_rec_fld(rec, field, len);
 }
 
 void
@@ -321,14 +323,14 @@ void
 format_m_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format(tx, SLT_ReqMethod, s, len);
+    format_slt(tx, SLT_ReqMethod, s, len);
 }
 
 void
 format_m_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format(tx, SLT_BereqMethod, s, len);
+    format_slt(tx, SLT_BereqMethod, s, len);
 }
 
 void
@@ -350,7 +352,11 @@ format_q(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *qs = NULL;
     logline_t *rec = get_tag(tx, tag);
+    if (rec == NULL)
+        return;
     char *p = get_payload(rec);
+    if (p == NULL)
+        return;
     qs = memchr(p, '?', rec->len);
     if (qs != NULL) {
         *s = qs + 1;
@@ -394,14 +400,14 @@ format_r(const tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
         strcat(scratch, "http://localhost");
 
     rec = get_tag(tx, utag);
-    if (rec->len)
+    if (rec != NULL && rec->len > 0)
         strcat(scratch, get_payload(rec));
     else
         strcat(scratch, "-");
 
     strcat(scratch, " ");
     rec = get_tag(tx, ptag);
-    if (rec->len)
+    if (rec != NULL && rec->len > 0)
         strcat(scratch, get_payload(rec));
     else
         strcat(scratch, "HTTP/1.0");
@@ -430,14 +436,14 @@ void
 format_s_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format(tx, SLT_RespStatus, s, len);
+    format_slt(tx, SLT_RespStatus, s, len);
 }
 
 void
 format_s_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format(tx, SLT_RespStatus, s, len);
+    format_slt(tx, SLT_BerespStatus, s, len);
 }
 
 static inline void
@@ -449,16 +455,22 @@ format_tim(const tx_t *tx, const char *fmt, char **s, size_t *len)
     time_t t;
     struct tm tm;
 
-    data = get_hdr(tx, SLT_Timestamp, "Start");
-    if (data == NULL)
-        return;
-    ts = get_fld(data, 0, len);
-    if (ts == NULL)
-        return;
-    if (sscanf(ts, "%d.%u", &secs, &usecs) != 2)
-        return;
-    assert(usecs < 1000000);
-    t = (time_t) secs;
+    if (tx->type != VSL_t_raw) {
+        data = get_hdr(tx, SLT_Timestamp, "Start");
+        if (data == NULL)
+            return;
+        ts = get_fld(data, 0, len);
+        if (ts == NULL)
+            return;
+        if (sscanf(ts, "%d.%u", &secs, &usecs) != 2)
+            return;
+        assert(usecs < 1000000);
+        t = (time_t) secs;
+    }
+    else {
+        t = (time_t) tx->t;
+        usecs = (tx->t - (double)t) * 1e6;
+    }
     AN(localtime_r(&t, &tm));
     AN(scratch);
     size_t n = strfTIM(scratch, config.max_reclen, fmt, &tm, usecs);
@@ -495,14 +507,16 @@ format_U(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
     char *qs = NULL;
 
     logline_t *rec = get_tag(tx, tag);
+    if (rec == NULL)
+        return;
     *s = get_payload(rec);
+    if (s == NULL)
+        return;
     qs = memchr(*s, '?', rec->len);
     if (qs == NULL)
         *len = rec->len;
-    else {
-        *qs = '\0';
+    else
         *len = qs - *s;
-    }
 }
 
 void
@@ -561,7 +575,7 @@ format_Xio(const tx_t *tx, char *name, enum VSL_tag_e tag, char **s,
            size_t *len)
 {
     *s = get_hdr(tx, tag, name);
-    if (s)
+    if (*s)
         *len = strlen(*s);
 }
 
@@ -672,41 +686,27 @@ format_VCL_Log(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 void
 format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    format(tx, args->tag, s, len);
+    format_slt(tx, args->tag, s, len);
+    if (VSL_tagflags[args->tag] & SLT_F_BINARY) {
+        VSB_clear(bintag);
+        VSB_quote(bintag, *s, (int) *len, 0);
+        VSB_finish(bintag);
+        *s = VSB_data(bintag);
+        *len = VSB_len(bintag);
+    }
 }
-
-#if 0
 
 static void
-format_incomplete(logline_t *ll, const arg_t *args,
-    char **s, size_t *len)
-{
-    (void) tag;
-
-    char *colon = strchr(name, ':');
-    AN(colon);
-    if (ll->incomplete)
-        strncpy(scratch, name, colon - name);
-    else
-        strcpy(scratch, colon + 1);
-
-    *s = scratch;
-    *len = strlen(scratch);
-}
-
-static int
-add_fmt(compiled_fmt_t *fmt, struct vsb *os, unsigned n, formatter_f formatter,
-    const char *name, enum VSL_tag_e tag)
+add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
+        formatter_f formatter, const char *name, enum VSL_tag_e tag)
 {
     fmt->str[n] = (char *) malloc(VSB_len(os) + 1);
-    if (fmt->str[n] == NULL)
-        return errno;
+    AN(fmt->str[n]);
     if (name == NULL)
         fmt->args[n].name = NULL;
     else {
         fmt->args[n].name = (char *) malloc(strlen(name) + 1);
-        if (fmt->args[n].name == NULL)
-            return errno;
+        AN(fmt->args[n].name);
         strcpy(fmt->args[n].name, name);
     }
     VSB_finish(os);
@@ -714,28 +714,61 @@ add_fmt(compiled_fmt_t *fmt, struct vsb *os, unsigned n, formatter_f formatter,
     VSB_clear(os);
     fmt->formatter[n] = formatter;
     fmt->args[n].tag = tag;
-    return 0;
 }
 
-#define ADD_FMT(spec, fmt, os, n, format_ltr, name, tag) do {		\
-    if (C(spec))							\
-        add_fmt((fmt), (os), (n), format_ltr##_client, (name), (tag));	\
-    else if (B(spec))							\
-        add_fmt((fmt), (os), (n), format_ltr##_backend, (name), (tag));	\
-    } while(0)
+#define FMT(type, format_ltr)                           \
+    (C(type) ? format_ltr##_client : format_ltr##_backend)
 
-#define ADD_TAG(tags, tag) (tags[SLT_##tag]) = 1
+static void
+add_tag(enum VSL_transaction_e type, enum VSL_tag_e tag)
+{
+    switch(type) {
+    case VSL_t_req:
+        ctags[tag] = 1;
+        break;
+    case VSL_t_bereq:
+        btags[tag] = 1;
+        break;
+    case VSL_t_raw:
+        rtags[tag] = 1;
+        break;
+    default:
+        WRONG("Illegal transaction type");
+    }
+}
 
-#define ADD_CB_TAG(spec, tags, ctag, btag) do {                 \
-    if (C(spec)) ADD_TAG(tags, ctag); else ADD_TAG(tags, btag);	\
-    } while(0)
+static void
+add_cb_tag(enum VSL_transaction_e type, enum VSL_tag_e ctag,
+           enum VSL_tag_e btag)
+{
+    enum VSL_tag_e tag;
+    char *tags;
+
+    switch(type) {
+    case VSL_t_req:
+        tag = ctag;
+        tags = ctags;
+        break;
+    case VSL_t_bereq:
+        tag = btag;
+        tags = btags;
+        break;
+    default:
+        WRONG("Illegal transaction type");
+    }
+
+    tags[tag] = 1;
+}
 
 static int
-compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
+compile_fmt(char * const format, compiled_fmt_t * const fmt,
+            enum VSL_transaction_e type, char *err)
 {
     const char *p;
     unsigned n = 1;
     struct vsb *os;
+
+    assert(type == VSL_t_req || type == VSL_t_bereq || type == VSL_t_raw);
 
     for (p = format; *p != '\0'; p++)
         if (*p == '%')
@@ -757,24 +790,7 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
         strcpy(err, strerror(errno));
         return 0;
     }
-    memset(fmt->tags, 0, MAX_VSL_TAG);
 
-    /* starting tags */
-    if (C(spec)) {
-        ADD_TAG(fmt->tags, SessionOpen);
-        ADD_TAG(fmt->tags, ReqStart);
-    }
-    if (B(spec)) {
-        ADD_TAG(fmt->tags, BackendOpen);
-        ADD_TAG(fmt->tags, BackendXID);
-    }
-    /* always read the closing tags for clients and backends */
-    if (C(spec) || B(spec)) {
-        ADD_TAG(fmt->tags, ReqEnd);
-        ADD_TAG(fmt->tags, BackendReuse);
-        ADD_TAG(fmt->tags, BackendClose);
-    }
-    
     n = 0;
     os = VSB_new_auto();
     
@@ -797,7 +813,7 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
 
         /* Only the SLT or time formatters permitted for the "zero" format
            (neither client nor backend) */
-        if (Z(spec)
+        if (R(type)
             && sscanf(p, "{tag:%s}x", scratch) != 1
             && *p != 't'
             && sscanf(p, "{%s}t", scratch) != 1) {
@@ -807,32 +823,42 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
         
         switch (*p) {
 
-        case 'd':
-            VSB_putc(os, C(spec) ? 'c' : 'b');
-            break;
-            
         case 'b':
-            ADD_FMT(spec, fmt, os, n, format_b, NULL, 0);
-            ADD_TAG(fmt->tags, Length);
-            ADD_CB_TAG(spec, fmt->tags, TxHeader, RxHeader);
+            add_fmt(fmt, os, n, FMT(type, format_b), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqAcct, SLT_BereqAcct);
             n++;
             break;
 
+        case 'd':
+            VSB_putc(os, C(type) ? 'c' : 'b');
+            break;
+            
+        case 'D':
+            add_fmt(fmt, os, n, FMT(type, format_D), NULL, SLT__Bogus);
+            add_tag(type, SLT_Timestamp);
+            n++;
+            break;
+            
         case 'H':
-            ADD_FMT(spec, fmt, os, n, format_H, NULL, 0);
-            ADD_CB_TAG(spec, fmt->tags, RxProtocol, TxProtocol);
+            add_fmt(fmt, os, n, FMT(type, format_H), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqProtocol, SLT_BereqProtocol);
             n++;
             break;
             
         case 'h':
-            ADD_FMT(spec, fmt, os, n, format_h, NULL, 0);
-            if (C(spec))
-                ADD_TAG(fmt->tags, ReqStart);
-            else {
-                ADD_TAG(fmt->tags, BackendOpen);
-                ADD_TAG(fmt->tags, BackendReuse);
-                ADD_TAG(fmt->tags, BackendClose);
+            add_fmt(fmt, os, n, FMT(type, format_h), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqStart, SLT_Backend);
+            n++;
+            break;
+            
+        case 'I':
+            add_fmt(fmt, os, n, FMT(type, format_I), NULL, SLT__Bogus);
+            if (C(type)) {
+                ctags[SLT_ReqAcct] = 1;
+                ctags[SLT_PipeAcct] = 1;
             }
+            else
+                btags[SLT_BereqAcct] = 1;
             n++;
             break;
             
@@ -841,119 +867,111 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
             break;
 
         case 'm':
-            ADD_FMT(spec, fmt, os, n, format_m, NULL, 0);
-            ADD_CB_TAG(spec, fmt->tags, RxRequest, TxRequest);
+            add_fmt(fmt, os, n, FMT(type, format_m), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod);
             n++;
             break;
 
+        case 'O':
+            add_fmt(fmt, os, n, FMT(type, format_O), NULL, SLT__Bogus);
+            if (C(type)) {
+                ctags[SLT_ReqAcct] = 1;
+                ctags[SLT_PipeAcct] = 1;
+            }
+            else
+                btags[SLT_BereqAcct] = 1;
+            n++;
+            break;
+            
         case 'q':
-            ADD_FMT(spec, fmt, os, n, format_q, NULL, 0);
-            ADD_CB_TAG(spec, fmt->tags, RxURL, TxURL);
+            add_fmt(fmt, os, n, FMT(type, format_q), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL);
             n++;
             break;
 
         case 'r':
-            ADD_FMT(spec, fmt, os, n, format_r, NULL, 0);
-            ADD_CB_TAG(spec, fmt->tags, RxRequest, TxRequest);
-            ADD_CB_TAG(spec, fmt->tags, RxHeader, TxHeader);
-            ADD_CB_TAG(spec, fmt->tags, RxURL, TxURL);
-            ADD_CB_TAG(spec, fmt->tags, RxProtocol, TxProtocol);
+            add_fmt(fmt, os, n, FMT(type, format_r), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod);
+            add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader);
+            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL);
+            add_cb_tag(type, SLT_ReqProtocol, SLT_BereqProtocol);
             n++;
             break;
 
         case 's':
-            ADD_FMT(spec, fmt, os, n, format_s, NULL, 0);
-            ADD_CB_TAG(spec, fmt->tags, TxStatus, RxStatus);
+            add_fmt(fmt, os, n, FMT(type, format_s), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_RespStatus, SLT_BerespStatus);
             n++;
             break;
 
         case 't':
-            add_fmt(fmt, os, n, format_t, NULL, 0);
-            if (C(spec)) {
-                ADD_TAG(fmt->tags, ReqEnd);
-                ADD_TAG(fmt->tags, TxHeader);
-            }
-            else if (B(spec))
-                ADD_TAG(fmt->tags, RxHeader);
+            add_fmt(fmt, os, n, format_t, NULL, SLT__Bogus);
+            add_tag(type, SLT_Timestamp);
             n++;
             break;
 
+        case 'T':
+            add_fmt(fmt, os, n, FMT(type, format_T), NULL, SLT__Bogus);
+            add_tag(type, SLT_Timestamp);
+            n++;
+            break;
+            
         case 'U':
-            ADD_FMT(spec, fmt, os, n, format_U, NULL, 0);
-            ADD_CB_TAG(spec, fmt->tags, RxURL, TxURL);
+            add_fmt(fmt, os, n, FMT(type, format_U), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL);
             n++;
             break;
 
         case 'u':
-            ADD_FMT(spec, fmt, os, n, format_u, NULL, 0);
-            ADD_CB_TAG(spec, fmt->tags, RxHeader, TxHeader);
+            add_fmt(fmt, os, n, FMT(type, format_u), NULL, SLT__Bogus);
+            add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader);
             n++;
             break;
 
         case '{': {
             const char *tmp;
-            char fname[100], type;
+            char fname[100], ltr;
             tmp = p;
-            type = 0;
+            ltr = '\0';
             while (*tmp != '\0' && *tmp != '}')
                 tmp++;
             if (*tmp == '}') {
                 tmp++;
-                type = *tmp;
+                ltr = *tmp;
                 memcpy(fname, p+1, tmp-p-2);
                 fname[tmp-p-2] = 0;
             }
 
-            switch (type) {
+            switch (ltr) {
             case 'i':
-                ADD_FMT(spec, fmt, os, n, format_Xi, fname, 0);
-                ADD_CB_TAG(spec, fmt->tags, RxHeader, TxHeader);
+                add_fmt(fmt, os, n, FMT(type, format_Xi), fname, SLT__Bogus);
+                add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader);
                 n++;
                 p = tmp;
                 break;
             case 'o':
-                ADD_FMT(spec, fmt, os, n, format_Xo, fname, 0);
-                ADD_CB_TAG(spec, fmt->tags, TxHeader, RxHeader);
+                add_fmt(fmt, os, n, FMT(type, format_Xo), fname, SLT__Bogus);
+                add_cb_tag(type, SLT_RespHeader, SLT_BerespHeader);
                 n++;
                 p = tmp;
-
                 break;
             case 't':
-                add_fmt(fmt, os, n, format_Xt, fname, 0);
-                if (C(spec)) {
-                    ADD_TAG(fmt->tags, ReqEnd);
-                    ADD_TAG(fmt->tags, RxHeader);
-                }
-                else if (B(spec)) {
-                    ADD_TAG(fmt->tags, TxHeader);
-                }
+                add_fmt(fmt, os, n, format_Xt, fname, SLT__Bogus);
+                add_tag(type, SLT_Timestamp);
                 n++;
                 p = tmp;
                 break;
             case 'x':
                 if (strcmp(fname, "Varnish:time_firstbyte") == 0) {
-                    if (C(spec))
-                        ADD_TAG(fmt->tags, ReqEnd);
-#ifdef BESTATS
-                    else {
-                        ADD_TAG(fmt->tags, BackendReq);
-                        ADD_TAG(fmt->tags, Fetch_Hdr);
-                    }
-                    ADD_FMT(spec, fmt, os, n, format_Xttfb, NULL, 0);
-#else
-                    else {
-                        sprintf(err,
-                            "Varnish:time_firstbyte only permitted "
-                            "for client formats");
-                        return 1;
-                    }
-                    add_fmt(fmt, os, n, format_Xttfb_client, NULL, 0);
-#endif
+                    add_fmt(fmt, os, n, FMT(type, format_Xttfb), NULL,
+                            SLT__Bogus);
+                    add_tag(type, SLT_Timestamp);
                 }
                 else if (strcmp(fname, "Varnish:hitmiss") == 0) {
-                    if (C(spec)) {
-                        add_fmt(fmt, os, n, format_VCL_disp, "m", 0);
-                        ADD_TAG(fmt->tags, VCL_call);
+                    if (C(type)) {
+                        add_fmt(fmt, os, n, format_VCL_disp, "m", SLT__Bogus);
+                        ctags[SLT_VCL_call] = 1;
+                        ctags[SLT_VCL_return] = 1;
                     }
                     else {
                         sprintf(err,
@@ -962,9 +980,10 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
                     }
                 }
                 else if (strcmp(fname, "Varnish:handling") == 0) {
-                    if (C(spec)) {
-                        add_fmt(fmt, os, n, format_VCL_disp, "n", 0);
-                        ADD_TAG(fmt->tags, VCL_call);
+                    if (C(type)) {
+                        add_fmt(fmt, os, n, format_VCL_disp, "n", SLT__Bogus);
+                        ctags[SLT_VCL_call] = 1;
+                        ctags[SLT_VCL_return] = 1;
                     }
                     else {
                         sprintf(err,
@@ -977,8 +996,8 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
                     // output.
                     // Format: %{VCL_Log:keyname}x
                     // Logging: std.log("keyname:value")
-                    add_fmt(fmt, os, n, format_VCL_Log, fname+8, 0);
-                    ADD_TAG(fmt->tags, VCL_Log);
+                    add_fmt(fmt, os, n, format_VCL_Log, fname+8, SLT__Bogus);
+                    add_tag(type, SLT_VCL_Log);
                 }
                 else if (strncmp(fname, "tag:", 4) == 0) {
                     int t = 0;
@@ -989,15 +1008,11 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
                         return 1;
                     }
                     add_fmt(fmt, os, n, format_SLT, NULL, t);
-                    fmt->tags[t] = 1;
+                    add_tag(type, t);
                 }
-                else if (strncmp(fname, "incomplete:", 11) == 0) {
-                    if (strchr(fname+11, ':') == NULL) {
-                        sprintf(err, "':' not found in incomplete formatter %s",
-                            fname+11);
-                        return 1;
-                    }
-                    add_fmt(fmt, os, n, format_incomplete, fname+11, 0);
+                else {
+                    sprintf(err, "Unknown format starting at: %s", fname);
+                    return 1;
                 }
                 n++;
                 p = tmp;
@@ -1022,7 +1037,7 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
      * and the terminating newline
      */
     VSB_putc(os, '\n');
-    add_fmt(fmt, os, n, NULL, NULL, 0);
+    add_fmt(fmt, os, n, NULL, NULL, SLT__Bogus);
     VSB_delete(os);
     return 0;
 }
@@ -1030,54 +1045,46 @@ compile_fmt(char *format, compiled_fmt_t *fmt, unsigned spec, char *err)
 int
 FMT_Init(char *err)
 {
-    scratch = (char *) malloc(config.max_reclen);
+    scratch = (char *) malloc(config.max_reclen + 1);
     if (scratch == NULL)
         return errno;
 
+    payload = VSB_new(NULL, NULL, config.max_reclen + 1, VSB_FIXEDLEN);
+    if (payload == NULL)
+        return ENOMEM;
+
+    bintag = VSB_new(NULL, NULL, config.max_reclen + 1, VSB_FIXEDLEN);
+    if (bintag == NULL)
+        return ENOMEM;
+
+    i_arg = VSB_new_auto();
+    if (i_arg == NULL)
+        return ENOMEM;
+
+    memset(ctags, 0, MAX_VSL_TAG);
+    memset(btags, 0, MAX_VSL_TAG);
+    memset(rtags, 0, MAX_VSL_TAG);
+
     if (!EMPTY(config.cformat))
-        if (compile_fmt(config.cformat, &cformat, VSL_S_CLIENT, err) != 0)
+        if (compile_fmt(config.cformat, &cformat, VSL_t_req, err) != 0)
             return EINVAL;
 
     if (!EMPTY(config.bformat))
-        if (compile_fmt(config.bformat, &bformat, VSL_S_BACKEND, err) != 0)
+        if (compile_fmt(config.bformat, &bformat, VSL_t_bereq, err) != 0)
             return EINVAL;
 
-    if (!EMPTY(config.zformat))
-        if (compile_fmt(config.zformat, &zformat, 0, err) != 0)
+    if (!EMPTY(config.rformat))
+        if (compile_fmt(config.rformat, &rformat, VSL_t_raw, err) != 0)
             return EINVAL;
 
-    strcpy(hit, "hit");
-    strcpy(miss, "miss");
-    strcpy(pass, "pass");
-    strcpy(dash, "-");
-    
     for (int i = 0; i < MAX_VSL_TAG; i++) {
-        char tag = cformat.tags[i] | bformat.tags[i] | zformat.tags[i];
+        char tag = ctags[i] | btags[i] | rtags[i];
         if (tag) {
-            strcat(i_arg, VSL_tags[i]);
-            strcat(i_arg, ",");
-            
-            switch(i) {
-            case SLT_RxHeader:
-                read_rx_hdr = 1;
-                break;
-            case SLT_TxHeader:
-                read_tx_hdr = 1;
-                break;
-            case SLT_VCL_Log:
-                read_vcl_log = 1;
-                break;
-            case SLT_VCL_call:
-                read_vcl_call = 1;
-                break;
-            default:
-                idx2tag[ntags] = i;
-                tag2idx[i] = ntags++;
-            }
+            VSB_cat(i_arg, VSL_tags[i]);
+            VSB_cat(i_arg, ",");
         }
-        else
-            tag2idx[i] = idx2tag[i] = -1;
     }
+    VSB_finish(i_arg);
 
     return 0;
 }
@@ -1085,49 +1092,31 @@ FMT_Init(char *err)
 char *
 FMT_Get_i_Arg(void)
 {
-    return i_arg;
-}
-
-int
-FMT_Get_nTags(void)
-{
-    return ntags;
-}
-
-int
-FMT_Read_Hdr(enum VSL_tag_e tag)
-{
-    switch(tag) {
-    case SLT_RxHeader:
-        return read_rx_hdr;
-    case SLT_TxHeader:
-        return read_tx_hdr;
-    case SLT_VCL_Log:
-        return read_vcl_log;
-    case SLT_VCL_call:
-        return read_vcl_call;
-    default:
-        /* Not allowed */
-        AN(0);
-    }
-    /* Unreachable */
-    return -1;
+    AN(i_arg);
+    return VSB_data(i_arg);
 }
 
 void
-FMT_Format(tx_t *ll, struct vsb *os)
+FMT_Format(tx_t *tx, struct vsb *os)
 {
     compiled_fmt_t fmt;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    assert(tx->state == DATA_DONE);
-    
-    if (C(ll->spec))
+    assert(tx->state == TX_DONE);
+
+    switch(tx->type) {
+    case VSL_t_req:
         fmt = cformat;
-    else if (B(ll->spec))
+        break;
+    case VSL_t_bereq:
         fmt = bformat;
-    else
-        fmt = zformat;
+        break;
+    case VSL_t_raw:
+        fmt = rformat;
+        break;
+    default:
+        WRONG("Illegal transaction type");
+    }
 
     for (int i = 0; i < fmt.n; i++) {
         char *s = NULL;
@@ -1136,10 +1125,8 @@ FMT_Format(tx_t *ll, struct vsb *os)
         if (fmt.str[i] != NULL)
             VSB_cat(os, fmt.str[i]);
         if (fmt.formatter[i] != NULL) {
-            (fmt.formatter[i])(tx, fmt.args[i].name, fmt.args[i].tag, &s, &len);
-            if (s != NULL && len == 0)
-                VSB_cat(os, s);
-            else if (s != NULL)
+            (fmt.formatter[i])(tx, &fmt.args[i], &s, &len);
+            if (s != NULL && len != 0)
                 VSB_bcat(os, s, len);
         }
     }
@@ -1159,16 +1146,16 @@ free_format(compiled_fmt_t *fmt)
 }
 
 void
-FMT_Shutdown(void)
+FMT_Fini(void)
 {
     free(scratch);
+    VSB_delete(payload);
+    VSB_delete(i_arg);
 
     if (!EMPTY(config.cformat))
         free_format(&cformat);
     if (!EMPTY(config.bformat))
         free_format(&bformat);
-    if (!EMPTY(config.zformat))
-        free_format(&zformat);
+    if (!EMPTY(config.rformat))
+        free_format(&rformat);
 }
-
-#endif
