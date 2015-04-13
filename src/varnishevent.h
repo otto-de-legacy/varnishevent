@@ -49,6 +49,10 @@
 #define DEFAULT_MAX_RECLEN 255	/* shm_reclen */
 #define DEFAULT_MAX_HEADERS 64	/* http_max_hdr */
 
+#define DEFAULT_MAX_VCL_CALL 10
+#define DEFAULT_MAX_VCL_LOG 10
+#define DEFAULT_MAX_TIMESTAMP 8
+
 #define DEFAULT_CHUNK_SIZE 64
 #define DEFAULT_MAX_FD 1024
 #define DEFAULT_MAX_DATA 4096

@@ -1119,6 +1119,9 @@ FMT_Estimate_RecsPerTx(void)
             case SLT_VCL_return:
                 recs_per_ctx += config.max_vcl_call;
                 break;
+            case SLT_VCL_Log:
+                recs_per_ctx += config.max_vcl_log;
+                break;
             case SLT_Timestamp:
                 recs_per_ctx += config.max_timestamp;
                 break;
@@ -1137,11 +1140,14 @@ FMT_Estimate_RecsPerTx(void)
             case SLT_BerespHeader:
                 recs_per_btx += config.max_headers;
                 break;
+            case SLT_VCL_Log:
+                recs_per_btx += config.max_vcl_log;
+                break;
             case SLT_Timestamp:
-                recs_per_ctx += config.max_timestamp;
+                recs_per_btx += config.max_timestamp;
                 break;
             default:
-                recs_per_ctx++;
+                recs_per_btx++;
             }
         }
     }

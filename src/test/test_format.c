@@ -1285,11 +1285,11 @@ static const char
 }
 
 static const char
-*test_FMT_Format_i_Arg(void)
+*test_FMT_interface(void)
 {
 #define NRECS 20
     char err[BUFSIZ], *i_arg, strftime_s[BUFSIZ];
-    int status;
+    int status, recs_per_tx;
     tx_t tx;
     logline_t *recs[NRECS];
     chunk_t *c[NRECS];
@@ -1297,7 +1297,8 @@ static const char
     struct tm *tm;
     time_t t = 1427743146;
 
-    printf("... testing FMT_Format() and FMT_Get_i_Arg()\n");
+    printf("... testing FMT_Format(), FMT_Get_i_Arg() and "\
+           "FMT_Estimate_RecsPerTx()\n");
 
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
@@ -1321,6 +1322,9 @@ static const char
         "ReqStart,Timestamp,ReqAcct,"
     VMASSERT(strcmp(i_arg, DEFAULT_I_ARG) == 0, "'%s' != '%s'", i_arg,
              DEFAULT_I_ARG);
+
+    recs_per_tx = FMT_Estimate_RecsPerTx();
+    MASSERT(recs_per_tx == 78);
 
     tx.type = VSL_t_req;
     add_record_data(&tx, recs[0], c[0], T1, SLT_Timestamp);
@@ -1366,6 +1370,9 @@ static const char
     VMASSERT(strcmp(i_arg, FULL_CLIENT_I_ARG) == 0, "'%s' != '%s'", i_arg,
              FULL_CLIENT_I_ARG);
 
+    recs_per_tx = FMT_Estimate_RecsPerTx();
+    MASSERT(recs_per_tx == 175);
+
     set_record_data(recs[3], c[3], URL_QUERY_PAYLOAD, SLT_ReqURL);
     set_record_data(recs[6], c[6], "Host: foobar.com", SLT_ReqHeader);
     set_record_data(recs[7], c[7], "Foo: foohdr", SLT_ReqHeader);
@@ -1410,6 +1417,9 @@ static const char
     VMASSERT(strcmp(i_arg, FULL_BACKEND_I_ARG) == 0, "'%s' != '%s'", i_arg,
              FULL_BACKEND_I_ARG);
 
+    recs_per_tx = FMT_Estimate_RecsPerTx();
+    MASSERT(recs_per_tx == 154);
+
     tx.type = VSL_t_bereq;
     set_record_data(recs[1], c[1], BACKEND_PAYLOAD, SLT_Backend);
     recs[2]->tag = SLT_BereqMethod;
@@ -1441,7 +1451,7 @@ static const char
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
              VSB_data(os), strftime_s);
 
-    /* Backend format with all formatters */
+    /* Raw format */
     FMT_Fini();
     VSB_clear(os);
 
@@ -1455,6 +1465,9 @@ static const char
 #define FULL_RAW_I_ARG "Backend_health,Timestamp,"
     VMASSERT(strcmp(i_arg, FULL_RAW_I_ARG) == 0, "'%s' != '%s'", i_arg,
              FULL_RAW_I_ARG);
+
+    recs_per_tx = FMT_Estimate_RecsPerTx();
+    MASSERT(recs_per_tx == 1);
 
     tx.type = VSL_t_raw;
     tx.t = 1427743146.529143;
@@ -1538,7 +1551,7 @@ static const char
     mu_run_test(test_format_VCL_Log);
     mu_run_test(test_format_SLT);
     mu_run_test(test_FMT_Fini);
-    mu_run_test(test_FMT_Format_i_Arg);
+    mu_run_test(test_FMT_interface);
 
     return NULL;
 }
