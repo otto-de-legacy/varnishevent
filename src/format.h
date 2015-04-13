@@ -29,7 +29,7 @@
  *
  */
 
-/* including source must include varnishevent.h */
+#include "varnishevent.h"
 
 typedef struct arg_t {
     char *name;

@@ -29,6 +29,9 @@
  *
  */
 
+#ifndef VARNISHEVENT_H_INCLUDED
+#define VARNISHEVENT_H_INCLUDED
+
 #include <stdint.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -263,7 +266,7 @@ int WRT_Running(void);
 int WRT_Waiting(void);
 void WRT_Reopen(void);
 void WRT_Halt(void);
-void WRT_Shutdown(void);
+void WRT_Fini(void);
 
 /* spscq.c */
 void SPSCQ_Enq(tx_t *ptr);
@@ -296,4 +299,6 @@ void FMT_Fini(void);
 /* handler.c */
 void HNDL_Init(const char *a0);
 void HNDL_Abort(int sig);
+#endif
+
 #endif

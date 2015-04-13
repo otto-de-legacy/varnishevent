@@ -660,6 +660,7 @@ main(int argc, char *argv[])
         LOG_Log0(LOG_WARNING, "Varnish log closed");
     
     WRT_Halt();
+    WRT_Fini();
     SPSCQ_Shutdown();
     MON_Shutdown();
     FMT_Fini();

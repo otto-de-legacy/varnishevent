@@ -1,8 +1,8 @@
 AM_CPPFLAGS = @VARNISH_CFLAGS@ -I ${ac_varnish_pkgdataincludedir}
 
-TESTS = test_data test_strfTIM test_format # test_writer regress.sh ncsa.sh vslarg.sh
+TESTS = test_data test_strfTIM test_format test_writer # regress.sh ncsa.sh vslarg.sh
 
-check_PROGRAMS = test_data test_strfTIM test_format # test_writer
+check_PROGRAMS = test_data test_strfTIM test_format test_writer
 
 test_data_SOURCES = \
 	minunit.h \
@@ -30,18 +30,19 @@ test_format_LDADD = \
 
 test_writer_SOURCES = \
 	minunit.h \
-	../writer.c
+	test_writer.c
 
 test_writer_LDADD = \
+	../config.$(OBJEXT) \
 	../format.$(OBJEXT) \
 	../log.$(OBJEXT) \
 	../data.$(OBJEXT) \
 	../monitor.$(OBJEXT) \
 	../base64.$(OBJEXT) \
 	../spscq.$(OBJEXT) \
-	@VARNISH_LIBS@ -lvarnish
-
-test_writer_CFLAGS = -DTEST_DRIVER
+	../strfTIM.$(OBJEXT) \
+	../writer.$(OBJEXT) \
+	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ -lvarnish
 
 test_strfTIM_SOURCES = \
 	minunit.h \

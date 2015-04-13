@@ -49,8 +49,8 @@
 	else if (!VSTAILQ_EMPTY((head2))) {                     \
 		(head2)->vstqh_last = &(head1)->vstqh_first;    \
 		(head1)->vstqh_first = (head2)->vstqh_first;    \
-		VSTAILQ_INIT((head2));                          \
 	}                                                       \
+        VSTAILQ_INIT((head2));                                  \
 } while (0)
 
 static const char *statename[3] = { "EMPTY", "DONE" };
