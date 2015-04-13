@@ -53,8 +53,6 @@
 	}                                                       \
 } while (0)
 
-#define FAKE_DEFAULT_LINES_PER_TX 10
-
 static const char *statename[3] = { "EMPTY", "DONE" };
 
 static pthread_mutex_t freetx_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -64,8 +62,6 @@ static char *bufptr;
 static txhead_t freetxhead;
 static linehead_t freelinehead;
 static chunkhead_t freechunkhead;
-
-static int lines_per_tx = FAKE_DEFAULT_LINES_PER_TX;
 
 static void
 data_Cleanup(void)
@@ -109,13 +105,8 @@ DATA_Clear_Tx(tx_t *tx)
 int
 DATA_Init(void)
 {
-        int bufidx = 0, chunks_per_rec;
-
-#if 0
-    lines_per_tx = FMT_Get_LinesPerTx();
-#endif
+    int bufidx = 0, chunks_per_rec, lines_per_tx = FMT_Estimate_RecsPerTx();
     
-    /* XXX: set up tables of txen, lines & chunks, set/estimate sizes */
     nrecords = config.max_data * lines_per_tx;
     AN(config.chunk_size);
     chunks_per_rec

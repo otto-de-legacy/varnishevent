@@ -13,6 +13,8 @@ test_data_LDADD = \
 	../config.$(OBJEXT) \
 	../log.$(OBJEXT) \
 	../data.$(OBJEXT) \
+	../format.$(OBJEXT) \
+	../strfTIM.$(OBJEXT) \
 	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ -lm -lvarnish
 
 test_format_SOURCES = \

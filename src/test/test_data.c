@@ -46,14 +46,14 @@ static char
 *test_data_init(void)
 {
     int err;
+    char fmterr[BUFSIZ];
 
     printf("... testing data table initialization\n");
 
     MAZ(LOG_Open("test_data"));
     CONF_Init();
-#if 0
     MAZ(FMT_Init(fmterr));
-#endif
+
     VMASSERT((err = DATA_Init()) == 0, "DATA_Init: %s", strerror(err));
     MAN(txn);
 

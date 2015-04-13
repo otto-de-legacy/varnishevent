@@ -1096,6 +1096,61 @@ FMT_Get_i_Arg(void)
     return VSB_data(i_arg);
 }
 
+int
+FMT_Estimate_RecsPerTx(void)
+{
+    int recs_per_tx = 0, recs_per_ctx = 0, recs_per_btx = 0;
+
+    for (int i = 0; i < MAX_VSL_TAG; i++) {
+        if (rtags[i]) {
+            recs_per_tx = 1;
+            break;
+        }
+    }
+
+    for (int i = 0; i < MAX_VSL_TAG; i++) {
+        if (ctags[i]) {
+            switch(i) {
+            case SLT_ReqHeader:
+            case SLT_RespHeader:
+                recs_per_ctx += config.max_headers;
+                break;
+            case SLT_VCL_call:
+            case SLT_VCL_return:
+                recs_per_ctx += config.max_vcl_call;
+                break;
+            case SLT_Timestamp:
+                recs_per_ctx += config.max_timestamp;
+                break;
+            default:
+                recs_per_ctx++;
+            }
+        }
+    }
+    if (recs_per_ctx > recs_per_tx)
+        recs_per_tx = recs_per_ctx;
+
+    for (int i = 0; i < MAX_VSL_TAG; i++) {
+        if (btags[i]) {
+            switch(i) {
+            case SLT_BereqHeader:
+            case SLT_BerespHeader:
+                recs_per_btx += config.max_headers;
+                break;
+            case SLT_Timestamp:
+                recs_per_ctx += config.max_timestamp;
+                break;
+            default:
+                recs_per_ctx++;
+            }
+        }
+    }
+    if (recs_per_btx > recs_per_tx)
+        recs_per_tx = recs_per_btx;
+
+    return recs_per_tx;
+}
+
 void
 FMT_Format(tx_t *tx, struct vsb *os)
 {

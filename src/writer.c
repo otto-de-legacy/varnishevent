@@ -177,9 +177,7 @@ wrt_write(tx_t *tx)
     AZ(pthread_mutex_unlock(&reopen_lock));
         
     VSB_clear(os);
-#if 0
     FMT_Format(tx, os);
-#endif
     VSB_finish(os);
 
     if (timeout != NULL)

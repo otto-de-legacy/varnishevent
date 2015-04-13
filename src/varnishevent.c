@@ -561,12 +561,10 @@ main(int argc, char *argv[])
 
     VAS_Fail = assert_fail;
 
-#if 0
     if (FMT_Init(scratch) != 0) {
         LOG_Log(LOG_ALERT, "Error in output formats: %s", scratch);
         exit(EXIT_FAILURE);
     }
-#endif
 
     if (!EMPTY(config.varnish_bindump))
         LOG_Log(LOG_INFO, "Reading from file: %s", config.varnish_bindump);
@@ -578,9 +576,7 @@ main(int argc, char *argv[])
             LOG_Log(LOG_INFO, "Reading varnish instance %s", scratch);
     }
 
-#if 0
     strcpy(scratch, FMT_Get_i_Arg());
-#endif
     if (EMPTY(scratch)) {
         LOG_Log0(LOG_ALERT, "Not configured to read any log data, exiting");
         exit(EXIT_FAILURE);
@@ -666,9 +662,7 @@ main(int argc, char *argv[])
     WRT_Halt();
     SPSCQ_Shutdown();
     MON_Shutdown();
-#if 0
-    FMT_Shutdown();
-#endif
+    FMT_Fini();
     AZ(pthread_cond_destroy(&data_ready_cond));
     AZ(pthread_mutex_destroy(&data_ready_lock));
     AZ(pthread_cond_destroy(&spscq_ready_cond));
