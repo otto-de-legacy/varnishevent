@@ -32,7 +32,7 @@
 #include "varnishevent.h"
 
 /* local freelist - return space in chunks */
-struct txhead_s wrt_freelist;
+struct txhead_s wrt_freetx;
 
 /*
  * Set to the write timeout, and indicates the time elapsed after the

@@ -240,6 +240,80 @@ static const char
 }
 
 static const char
+*test_data_clear_tx(void)
+{
+#define NRECS 10
+#define CHUNKS_PER_REC 3
+    tx_t tx;
+    logline_t r[NRECS], *rec;
+    chunk_t c[NRECS * CHUNKS_PER_REC], *chunk;
+    int n = 0;
+    unsigned nfree_tx = 4711, nfree_recs = 815, nfree_chunks = 1147;
+
+    printf("... testing transaction clear\n");
+
+    VSTAILQ_INIT(&local_freetx);
+    VSTAILQ_INIT(&local_freeline);
+    VSTAILQ_INIT(&local_freechunk);
+
+    tx.magic = TX_MAGIC;
+    VSTAILQ_INIT(&tx.lines);
+    for (int i = 0; i < NRECS; i++) {
+        VSTAILQ_INSERT_TAIL(&tx.lines, &r[i], linelist);
+        r[i].magic = LOGLINE_MAGIC;
+        VSTAILQ_INIT(&r[i].chunks);
+        for (int j = 0; j < CHUNKS_PER_REC; j++) {
+            chunk = &c[i*CHUNKS_PER_REC + j];
+            VSTAILQ_INSERT_TAIL(&r[i].chunks, chunk, chunklist);
+            chunk->magic = CHUNK_MAGIC;
+            chunk->data = (char *) calloc(1, config.chunk_size);
+        }
+    }
+
+    DATA_Clear_Tx(&tx, &local_freetx, &local_freeline, &local_freechunk,
+                  &nfree_tx, &nfree_recs, &nfree_chunks);
+
+    MASSERT(nfree_tx == 4712);
+    MASSERT(nfree_recs == 815 + NRECS);
+    MASSERT(nfree_chunks == 1147 + NRECS*CHUNKS_PER_REC);
+
+    MCHECK_OBJ(&tx, TX_MAGIC);
+    MASSERT(tx.state == TX_EMPTY);
+    MASSERT(tx.vxid == -1);
+    MASSERT(tx.type == VSL_t_unknown);
+    MAZ(tx.t);
+    MASSERT(VSTAILQ_EMPTY(&tx.lines));
+
+    MASSERT(!VSTAILQ_EMPTY(&local_freetx));
+    MASSERT(VSTAILQ_FIRST(&local_freetx) == &tx);
+    MAZ(VSTAILQ_NEXT(&tx, freelist));
+
+    MASSERT(!VSTAILQ_EMPTY(&local_freeline));
+    VSTAILQ_FOREACH(rec, &local_freeline, freelist) {
+        MCHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        MASSERT(rec->state == DATA_EMPTY);
+        MASSERT(rec->tag == SLT__Bogus);
+        MAZ(rec->len);
+        MASSERT(VSTAILQ_EMPTY(&tx.lines));
+        n++;
+    }
+    MASSERT(n == NRECS);
+
+    MASSERT(!VSTAILQ_EMPTY(&local_freechunk));
+    n = 0;
+    VSTAILQ_FOREACH(chunk, &local_freechunk, freelist) {
+        MCHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
+        MASSERT(chunk->state == DATA_EMPTY);
+        MAZ(chunk->data[0]);
+        n++;
+        free(chunk->data);
+    }
+    MASSERT(n == NRECS * CHUNKS_PER_REC);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_data_init);
@@ -250,6 +324,7 @@ static const char
     mu_run_test(test_data_return_rec);
     mu_run_test(test_data_return_chunk);
     mu_run_test(test_data_prepend);
+    mu_run_test(test_data_clear_tx);
     return NULL;
 }
 

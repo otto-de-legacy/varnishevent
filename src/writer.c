@@ -67,7 +67,10 @@ static const char* statename[WRT_STATE_E_LIMIT] = {
 /* Single writer thread, consumer for the SPSC queue. */
 static pthread_t writer;
 
-static unsigned	wrt_nfree;
+linehead_t wrt_freerecs;
+chunkhead_t wrt_freechunks;
+
+static unsigned	wrt_nfree_tx, wrt_nfree_recs, wrt_nfree_chunks;
 
 static struct vsb *os;
 
@@ -136,10 +139,10 @@ open_log(void)
 static inline void
 wrt_return_freelist(void)
 {
-    DATA_Return_Freetx(&wrt_freelist, wrt_nfree);
-    LOG_Log(LOG_DEBUG, "Writer: returned %u to free list", wrt_nfree);
-    wrt_nfree = 0;
-    assert(VSTAILQ_EMPTY(&wrt_freelist));
+    DATA_Return_Freetx(&wrt_freetx, wrt_nfree_tx);
+    LOG_Log(LOG_DEBUG, "Writer: returned %u to free list", wrt_nfree_tx);
+    wrt_nfree_tx = 0;
+    assert(VSTAILQ_EMPTY(&wrt_freetx));
     if (RDR_Waiting()) {
         AZ(pthread_mutex_lock(&data_ready_lock));
         AZ(pthread_cond_signal(&data_ready_cond));
@@ -219,9 +222,8 @@ wrt_write(tx_t *tx)
     MON_StatsUpdate(STATS_WRITTEN);
 
     /* clean up */
-    DATA_Clear_Tx(tx);
-    VSTAILQ_INSERT_TAIL(&wrt_freelist, tx, freelist);
-    wrt_nfree++;
+    DATA_Clear_Tx(tx, &wrt_freetx, &wrt_freerecs, &wrt_freechunks,
+                  &wrt_nfree_tx, &wrt_nfree_recs, &wrt_nfree_chunks);
 
     if (global_nfree_tx < (config.max_data >> 1) || RDR_Waiting())
         wrt_return_freelist();
@@ -237,8 +239,8 @@ static void
     CHECK_OBJ_NOTNULL(wrt, WRITER_DATA_MAGIC);
     wrt->state = WRT_INITIALIZING;
 
-    VSTAILQ_INIT(&wrt_freelist);
-    wrt_nfree = 0;
+    VSTAILQ_INIT(&wrt_freetx);
+    wrt_nfree_tx = 0;
 
     wrt->state = WRT_RUNNING;
     
@@ -260,7 +262,7 @@ static void
                 errno, strerror(errno));
             errors++;
         }
-	if (wrt_nfree > 0)
+	if (wrt_nfree_tx > 0)
             wrt_return_freelist();
         
         wrt->state = WRT_WAITING;
@@ -334,8 +336,8 @@ WRT_Stats(void)
     LOG_Log(LOG_INFO,
         "Writer (%s): seen=%lu writes=%lu bytes=%lu errors=%lu timeouts=%lu"
         " waits=%lu free=%u",
-        statename[wrt_data.state], deqs, writes, bytes, errors, timeouts, waits,
-        wrt_nfree);
+            statename[wrt_data.state], deqs, writes, bytes, errors, timeouts,
+            waits, wrt_nfree_tx);
 }
 
 int

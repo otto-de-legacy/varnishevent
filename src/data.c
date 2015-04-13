@@ -76,7 +76,11 @@ data_Cleanup(void)
 }
 
 void
-DATA_Clear_Tx(tx_t *tx)
+DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
+              linehead_t * const freerec, chunkhead_t * const freechunk,
+              unsigned * restrict const nfree_tx,
+              unsigned * restrict const nfree_rec,
+              unsigned * restrict const nfree_chunk)
 {
     logline_t *rec;
     chunk_t *chunk;
@@ -86,20 +90,29 @@ DATA_Clear_Tx(tx_t *tx)
     tx->state = TX_EMPTY;
     tx->vxid = -1;
     tx->type = VSL_t_unknown;
+    tx->t = 0.;
 
-    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
-        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+    while ((rec = VSTAILQ_FIRST(&tx->lines)) != NULL) {
+        CHECK_OBJ(rec, LOGLINE_MAGIC);
         rec->state = DATA_EMPTY;
         rec->tag = SLT__Bogus;
         rec->len = 0;
-        VSTAILQ_FOREACH(chunk, &rec->chunks, chunklist) {
-            CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
+        while ((chunk = VSTAILQ_FIRST(&rec->chunks)) != NULL) {
+            CHECK_OBJ(chunk, CHUNK_MAGIC);
             chunk->state = DATA_EMPTY;
             *chunk->data = '\0';
+            VSTAILQ_REMOVE_HEAD(&rec->chunks, chunklist);
+            VSTAILQ_INSERT_HEAD(freechunk, chunk, freelist);
+            *nfree_chunk += 1;
         }
-        VSTAILQ_INIT(&rec->chunks);
+        assert(VSTAILQ_EMPTY(&rec->chunks));
+        VSTAILQ_REMOVE_HEAD(&tx->lines, linelist);
+        VSTAILQ_INSERT_HEAD(freerec, rec, freelist);
+        *nfree_rec += 1;
     }
-    VSTAILQ_INIT(&tx->lines);
+    assert(VSTAILQ_EMPTY(&tx->lines));
+    VSTAILQ_INSERT_HEAD(freetx, tx, freelist);
+    *nfree_tx += 1;
 }
 
 int

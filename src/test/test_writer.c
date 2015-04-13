@@ -69,8 +69,8 @@ static char
 
     MAZ(WRT_Init());
 
-    VSTAILQ_INIT(&wrt_freelist);
-    MASSERT(VSTAILQ_EMPTY(&wrt_freelist));
+    VSTAILQ_INIT(&wrt_freetx);
+    MASSERT(VSTAILQ_EMPTY(&wrt_freetx));
 
     /* XXX: common helper functions with test_format */
     tx.magic = TX_MAGIC;
