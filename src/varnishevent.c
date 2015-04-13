@@ -78,7 +78,7 @@
 #define DISPATCH_CONTINUE 0
 #define DISPATCH_TERMINATE 7
 
-static unsigned open = 0, occ_hi = 0, len_hi = 0;
+static unsigned occ_hi = 0, len_hi = 0;
 
 static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
     no_free_rec = 0, no_free_chunk = 0;
@@ -119,25 +119,17 @@ static unsigned rdr_rec_free = 0;
 static txhead_t rdr_tx_freelist = VSTAILQ_HEAD_INITIALIZER(rdr_tx_freelist);
 static unsigned rdr_tx_free = 0;
 
-static int waiting = 0;
-
 static char cli_config_filename[BUFSIZ] = "";
 
 static char tx_type_name[VSL_t__MAX];
 
-int
-RDR_Waiting(void)
-{
-    return waiting;
-}
-
 void
 RDR_Stats(void)
 {
-    LOG_Log(LOG_INFO, "Reader (%s): seen=%lu submitted=%lu occ_hi=%u "
-        "free_tx=%u free_rec=%u free_chunk=%u len_hi=%u len_overflows=%lu",
-        waiting ? "waiting" : "running", seen, open, submitted, occ_hi,
-        rdr_tx_free, rdr_rec_free, rdr_chunk_free, len_hi, len_overflows);
+    LOG_Log(LOG_INFO, "Reader: seen=%lu submitted=%lu occ_hi=%u "
+            "free_tx=%u free_rec=%u free_chunk=%u len_hi=%u len_overflows=%lu",
+            seen, submitted, occ_hi, rdr_tx_free, rdr_rec_free, rdr_chunk_free,
+            len_hi, len_overflows);
 }
 
 static inline void

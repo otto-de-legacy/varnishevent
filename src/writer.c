@@ -140,14 +140,19 @@ static inline void
 wrt_return_freelist(void)
 {
     DATA_Return_Freetx(&wrt_freetx, wrt_nfree_tx);
-    LOG_Log(LOG_DEBUG, "Writer: returned %u to free list", wrt_nfree_tx);
+    LOG_Log(LOG_DEBUG, "Writer: returned %u tx to free list", wrt_nfree_tx);
     wrt_nfree_tx = 0;
     assert(VSTAILQ_EMPTY(&wrt_freetx));
-    if (RDR_Waiting()) {
-        AZ(pthread_mutex_lock(&data_ready_lock));
-        AZ(pthread_cond_signal(&data_ready_cond));
-        AZ(pthread_mutex_unlock(&data_ready_lock));
-    }
+    DATA_Return_Freeline(&wrt_freerecs, wrt_nfree_recs);
+    LOG_Log(LOG_DEBUG, "Writer: returned %u records to free list",
+            wrt_nfree_recs);
+    wrt_nfree_recs = 0;
+    assert(VSTAILQ_EMPTY(&wrt_freerecs));
+    DATA_Return_Freechunk(&wrt_freechunks, wrt_nfree_chunks);
+    LOG_Log(LOG_DEBUG, "Writer: returned %u chunks to free list",
+            wrt_nfree_chunks);
+    wrt_nfree_chunks = 0;
+    assert(VSTAILQ_EMPTY(&wrt_freechunks));
 }
 
 void
@@ -225,7 +230,8 @@ wrt_write(tx_t *tx)
     DATA_Clear_Tx(tx, &wrt_freetx, &wrt_freerecs, &wrt_freechunks,
                   &wrt_nfree_tx, &wrt_nfree_recs, &wrt_nfree_chunks);
 
-    if (global_nfree_tx < (config.max_data >> 1) || RDR_Waiting())
+    /* XXX: also if the reader is running low */
+    if (global_nfree_tx < (config.max_data >> 1))
         wrt_return_freelist();
 }
 
@@ -270,7 +276,7 @@ static void
         /*
 	 * run is guaranteed to be fresh after the lock
 	 */
-        if (run && !RDR_Waiting()) {
+        if (run) {
             waits++;
             AZ(pthread_cond_wait(&spscq_ready_cond, &spscq_ready_lock));
         }

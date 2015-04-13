@@ -38,12 +38,6 @@ static char errmsg[BUFSIZ];
 
 #define THRESHOLD 1000
 
-int
-RDR_Waiting(void)
-{
-    return 0;
-}
-
 void
 RDR_Stats(void)
 {}

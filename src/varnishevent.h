@@ -216,7 +216,6 @@ struct config {
 } config;
 
 /* varnishevent.c */
-int RDR_Waiting(void);
 void RDR_Stats(void);
 
 /* config.c */
