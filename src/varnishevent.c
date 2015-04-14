@@ -239,7 +239,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         if (tx == NULL) {
             no_free_tx++;
             LOG_Log(LOG_DEBUG, "Freelist exhausted, tx DISCARDED: [%u %c]",
-                    t->vxid, tx_type_name[tx->type]);
+                    t->vxid, tx_type_name[t->type]);
             continue;
         }
         CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
