@@ -534,6 +534,11 @@ main(int argc, char *argv[])
         unsigned options = VSL_COPT_BATCH;
         vsm = VSM_New();
         AN(vsm);
+        if (VSM_Open(vsm) < 0) {
+            LOG_Log(LOG_CRIT, "Cannot attach to shared memory for instance %s: "
+                    "%s", VSM_Name(vsm), VSM_Error(vsm));
+            exit(EXIT_FAILURE);
+        }
         if (!d_flag)
             options |= VSL_COPT_TAIL;
         cursor = VSL_CursorVSM(vsl, vsm, options);
