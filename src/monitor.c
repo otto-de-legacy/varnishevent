@@ -34,6 +34,7 @@
 #include <errno.h>
 
 #include "varnishevent.h"
+#include "vtim.h"
 
 #include "vas.h"
 
@@ -76,9 +77,7 @@ monitor_main(void *arg)
     pthread_cleanup_push(monitor_cleanup, arg);
 
     while (run) {
-#if 0
-        TIM_sleep(config.monitor_interval);
-#endif
+        VTIM_sleep(config.monitor_interval);
         log_output();
     }
 
