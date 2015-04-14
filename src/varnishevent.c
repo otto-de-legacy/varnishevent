@@ -622,8 +622,6 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    AZ(pthread_cond_init(&data_ready_cond, NULL));
-    AZ(pthread_mutex_init(&data_ready_lock, NULL));
     AZ(pthread_cond_init(&spscq_ready_cond, NULL));
     AZ(pthread_mutex_init(&spscq_ready_lock, NULL));
 
@@ -725,8 +723,6 @@ main(int argc, char *argv[])
     SPSCQ_Shutdown();
     MON_Shutdown();
     FMT_Fini();
-    AZ(pthread_cond_destroy(&data_ready_cond));
-    AZ(pthread_mutex_destroy(&data_ready_lock));
     AZ(pthread_cond_destroy(&spscq_ready_cond));
     AZ(pthread_mutex_destroy(&spscq_ready_lock));
     LOG_Log0(LOG_INFO, "Exiting");

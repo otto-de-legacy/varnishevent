@@ -152,11 +152,6 @@ VSTAILQ_HEAD(freehead_s, logline_t);
 
 unsigned global_nfree_tx, global_nfree_line, global_nfree_chunk;
 
-/* Reader waits for this condition when the freelist is exhausted.
-   Writer signals the condition after returning space to the freelist. */
-pthread_cond_t  data_ready_cond;
-pthread_mutex_t data_ready_lock;
-
 /* Writer (consumer) waits for this condition when the SPSC queue is empty.
    Reader (producer) signals the condition after enqueue. */
 pthread_cond_t  spscq_ready_cond;
