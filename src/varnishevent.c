@@ -681,9 +681,7 @@ main(int argc, char *argv[])
             continue;
         case DISPATCH_EOL:
             take_free();
-#if 0
-            TIM_sleep(config.idle_pause);
-#endif
+            VTIM_sleep(config.idle_pause);
             continue;
         case DISPATCH_TERMINATE:
             assert(term == 1);

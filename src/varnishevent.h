@@ -61,6 +61,8 @@
 #define DEFAULT_MAX_DATA 4096
 #define DEFAULT_PID_FILE "/var/run/varnishevent.pid"
 
+#define DEFAULT_IDLE_PAUSE 0.01
+
 #define DEFAULT_HOUSEKEEP_INTERVAL 10
 #define DEFAULT_TTL 120
 
@@ -171,7 +173,9 @@ struct config {
     char	output_file[PATH_MAX];
     unsigned	append;
     struct timeval output_timeout;
-    
+
+    double	idle_pause;
+
     /* VSL 'r' argument */
     char        varnish_bindump[BUFSIZ];
 

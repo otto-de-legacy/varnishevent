@@ -86,6 +86,20 @@ conf_getUnsignedInt(const char *rval, unsigned *i)
     return(0);
 }
 
+static int
+conf_getDouble(const char *rval, double *d)
+{
+    char *p;
+    errno = 0;
+    double x = strtod(rval, &p);
+    if (errno == ERANGE)
+        return errno;
+    if (p[0] != '\0' || x < 0 || isnan(x) || !finite(x))
+        return EINVAL;
+    *d = x;
+    return 0;
+}
+
 #define confString(name,fld)         \
     if (strcmp(lval, (name)) == 0) { \
         strcpy((config.fld), rval);  \
@@ -155,14 +169,20 @@ CONF_Add(const char *lval, const char *rval)
     }
 
     if (strcmp(lval, "output.timeout") == 0) {
-        char *p;
-        errno = 0;
-        double to = strtod(rval, &p);
-        if (errno == ERANGE)
-            return errno;
-        if (p[0] != '\0' || to < 0 || isnan(to) || !finite(to))
-            return EINVAL;
+        double to;
+        int err = conf_getDouble(rval, &to);
+        if (err != 0)
+            return err;
         config.output_timeout = VTIM_timeval(to);
+        return(0);
+    }
+
+    if (strcmp(lval, "idle.pause") == 0) {
+        double pause;
+        int err = conf_getDouble(rval, &pause);
+        if (err != 0)
+            return err;
+        config.idle_pause = pause;
         return(0);
     }
 
@@ -221,6 +241,7 @@ CONF_Init(void)
     config.chunk_size = DEFAULT_CHUNK_SIZE;
     config.housekeep_interval = DEFAULT_HOUSEKEEP_INTERVAL;
     config.ttl = DEFAULT_TTL;
+    config.idle_pause = DEFAULT_IDLE_PAUSE;
 
     /* Default is stdout */
     config.output_file[0] = '\0';
@@ -320,6 +341,7 @@ CONF_Dump(void)
     confdump("max.data = %u", config.max_data);
     confdump("housekeep.interval = %u", config.housekeep_interval);
     confdump("ttl = %u", config.ttl);
+    confdump("idle.pause = %d", config.idle_pause);
     confdump("output.bufsiz = %u", config.output_bufsiz);
     confdump("user = %s", config.user_name);
 }
