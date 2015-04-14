@@ -22,9 +22,8 @@ varnishevent_SOURCES = \
 	monitor.c \
 	strfTIM.h \
 	strfTIM.c \
-	format.c
-
-#	handler.c
+	format.c \
+	handler.c
 
 varnishevent_LDADD = \
 	${PTHREAD_LIBS} ${RT_LIBS} ${LIBM} @VARNISH_LIBS@ \

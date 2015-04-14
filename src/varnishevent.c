@@ -562,16 +562,12 @@ main(int argc, char *argv[])
     AZ(sigemptyset(&reopen_action.sa_mask));
     reopen_action.sa_flags |= SA_RESTART;
 
-#if 0
     stacktrace_action.sa_handler = HNDL_Abort;
-#endif
 
     ignore_action.sa_handler = SIG_IGN;
     default_action.sa_handler = SIG_DFL;
 
-#if 0
     HNDL_Init(argv[0]);
-#endif
 
     /* Install signal handlers */
 #include "signals.h"

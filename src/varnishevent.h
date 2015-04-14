@@ -296,10 +296,8 @@ int FMT_Estimate_RecsPerTx(void);
 void FMT_Format(tx_t *tx, struct vsb *os);
 void FMT_Fini(void);
 
-#if 0
 /* handler.c */
 void HNDL_Init(const char *a0);
 void HNDL_Abort(int sig);
-#endif
 
 #endif
