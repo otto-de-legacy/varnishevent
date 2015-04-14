@@ -121,6 +121,7 @@ static unsigned rdr_tx_free = 0;
 
 static char cli_config_filename[BUFSIZ] = "";
 
+static int tx_type_log[VSL_t__MAX];
 static char tx_type_name[VSL_t__MAX];
 
 void
@@ -227,14 +228,8 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
     for (struct VSL_transaction *t = pt[0]; t != NULL; t = *++pt) {
         struct tx_t *tx;
 
-        switch(t->type) {
-        case VSL_t_req:
-        case VSL_t_bereq:
-        case VSL_t_raw:
-            break;
-        default:
+        if (!tx_type_log[t->type])
             continue;
-        }
             
         tx = take_tx();
         if (tx == NULL) {
@@ -661,8 +656,16 @@ main(int argc, char *argv[])
         VTIM_sleep(1);
     }
 
-    for (int i = 0; i < VSL_t__MAX; i++)
+    for (int i = 0; i < VSL_t__MAX; i++) {
+        tx_type_log[i] = 0;
         tx_type_name[i] = 'X';
+    }
+    if (!EMPTY(config.cformat))
+        tx_type_log[VSL_t_req] = 1;
+    if (!EMPTY(config.bformat))
+        tx_type_log[VSL_t_bereq] = 1;
+    if (!EMPTY(config.rformat))
+        tx_type_log[VSL_t_raw] = 1;
     tx_type_name[VSL_t_req] = 'c';
     tx_type_name[VSL_t_bereq] = 'b';
     tx_type_name[VSL_t_raw] = '-';
