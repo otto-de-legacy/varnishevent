@@ -16,6 +16,7 @@ varnishevent_SOURCES = \
 	base64.h \
 	data.c \
 	spscq.c \
+	writer.h \
 	writer.c \
 	config.c \
 	log.c \
@@ -23,7 +24,9 @@ varnishevent_SOURCES = \
 	strfTIM.h \
 	strfTIM.c \
 	format.c \
-	handler.c
+	handler.c \
+	vtim.h \
+	vtim.c
 
 varnishevent_LDADD = \
 	${PTHREAD_LIBS} ${RT_LIBS} ${LIBM} @VARNISH_LIBS@ \

@@ -42,6 +42,7 @@
 #include <pwd.h>
 
 #include "varnishevent.h"
+#include "vtim.h"
 
 #include "vas.h"
 
@@ -161,8 +162,7 @@ CONF_Add(const char *lval, const char *rval)
             return errno;
         if (p[0] != '\0' || to < 0 || isnan(to) || !finite(to))
             return EINVAL;
-        config.output_timeout.tv_sec = trunc(to);
-        config.output_timeout.tv_usec = (int)(1e6 * (to - trunc(to)));
+        config.output_timeout = VTIM_timeval(to);
         return(0);
     }
 

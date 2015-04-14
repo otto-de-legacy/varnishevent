@@ -72,6 +72,7 @@
 #include "vcs.h"
 
 #include "varnishevent.h"
+#include "vtim.h"
 
 #define DEFAULT_CONFIG "/etc/varnishevent.conf"
 
@@ -247,10 +248,8 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         assert(VSTAILQ_EMPTY(&tx->lines));
         tx->type = t->type;
         tx->vxid = t->vxid;
-        if (tx->type == VSL_t_raw) {
-            /* XXX: set tx->t */
-            ;
-        }
+        if (tx->type == VSL_t_raw)
+            tx->t = VTIM_real();
 
         if (logconf.level == LOG_DEBUG)
             LOG_Log(LOG_DEBUG, "Tx: [%u %c]", tx->vxid, tx_type_name[tx->type]);
@@ -658,9 +657,7 @@ main(int argc, char *argv[])
             LOG_Log0(LOG_ALERT, "Writer thread not running, giving up");
             exit(EXIT_FAILURE);
         }
-#if 0
-        TIM_sleep(1);
-#endif
+        VTIM_sleep(1);
     }
 
     for (int i = 0; i < VSL_t__MAX; i++)
