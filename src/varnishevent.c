@@ -107,14 +107,6 @@ static struct sigaction dump_action, terminate_action, reopen_action,
 
 static volatile sig_atomic_t reopen = 0, term = 0;
 
-struct VSL_data *vsl;
-
-static int m_flag = 0;
-#if 0
-static int cb_flag = 0;
-static int z_flag = 0;
-#endif
-
 /* Local freelists */
 static chunkhead_t rdr_chunk_freelist
     = VSTAILQ_HEAD_INITIALIZER(rdr_chunk_freelist);
@@ -223,7 +215,7 @@ submit(tx_t *tx)
 }
 
 static int
-event(struct VSL_data *_vsl, struct VSL_transaction * const pt[], void *priv)
+event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 {
     int status = DISPATCH_RETURN_OK;
     (void) priv;
@@ -264,10 +256,12 @@ event(struct VSL_data *_vsl, struct VSL_transaction * const pt[], void *priv)
             LOG_Log(LOG_DEBUG, "Tx: [%u %c]", tx->vxid, tx_type_name[tx->type]);
 
         while ((status = VSL_Next(t->c)) > 0) {
-            int len;
+            int len, n, nchunk;
             logline_t *rec;
+            chunk_t *chunk;
+            const char *p;
 
-            if (!VSL_Match(_vsl, t->c))
+            if (!VSL_Match(vsl, t->c))
                 continue;
 
             len = VSL_LEN(t->c->rec.ptr);
@@ -275,11 +269,13 @@ event(struct VSL_data *_vsl, struct VSL_transaction * const pt[], void *priv)
                 LOG_Log(LOG_DEBUG, "Line: [%u %s %.*s]", VSL_ID(t->c->rec.ptr),
                         VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
                         VSL_CDATA(t->c->rec.ptr));
+            if (len <= 0)
+                continue;
 
             rec = take_rec();
             if (rec == NULL) {
                 no_free_rec++;
-                LOG_Log(LOG_DEBUG, "Freelist exhausted, line DISCARDED: "
+                LOG_Log(LOG_DEBUG, "Freelist exhausted, record DISCARDED: "
                         "[%u %s %.*s]", VSL_ID(t->c->rec.ptr),
                         VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
                         VSL_CDATA(t->c->rec.ptr));
@@ -287,37 +283,34 @@ event(struct VSL_data *_vsl, struct VSL_transaction * const pt[], void *priv)
             }
             CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
             assert(rec->state == DATA_EMPTY);
+            assert(VSTAILQ_EMPTY(&rec->chunks));
 
             rec->tag = VSL_TAG(t->c->rec.ptr);
             rec->len = len;
-            if (len > 0) {
-                chunk_t *chunk;
-                int n = len;
-                const char *p = (const char *) VSL_CDATA(t->c->rec.ptr);
-                int nchunk = (len + config.chunk_size - 1) / config.chunk_size;
 
-                /* Copy the payload into chunks */
-                assert(VSTAILQ_EMPTY(&rec->chunks));
-                for (int i = 0; i < nchunk; i++) {
-                    assert(n > 0);
-                    chunk = take_chunk();
-                    if (chunk == NULL) {
-                        no_free_chunk++;
-                        LOG_Log(LOG_DEBUG,
+            /* Copy the payload into chunks */
+            n = len;
+            p = (const char *) VSL_CDATA(t->c->rec.ptr);
+            nchunk = (len + config.chunk_size - 1) / config.chunk_size;
+            for (int i = 0; i < nchunk; i++) {
+                assert(n > 0);
+                chunk = take_chunk();
+                if (chunk == NULL) {
+                    no_free_chunk++;
+                    LOG_Log(LOG_DEBUG,
                             "Freelist exhausted, payload TRUNCATED: "
                             "[%u %s %.*s]", VSL_ID(t->c->rec.ptr),
                             VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
                             VSL_CDATA(t->c->rec.ptr));
-                        break;
-                    }
-                    VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
-                    int cp = n;
-                    if (cp > config.chunk_size)
-                        cp = config.chunk_size;
-                    memcpy(chunk->data, p, cp);
-                    p += cp;
-                    n -= cp;
+                    continue;
                 }
+                VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
+                int cp = n;
+                if (cp > config.chunk_size)
+                    cp = config.chunk_size;
+                memcpy(chunk->data, p, cp);
+                p += cp;
+                n -= cp;
             }
             rec->state = DATA_DONE;
         }
@@ -363,12 +356,12 @@ static vas_f assert_fail __attribute__((__noreturn__));
 
 static void
 assert_fail(const char *func, const char *file, int line, const char *cond,
-    int err, enum vas_e err_e)
+            int err, enum vas_e err_e)
 {
     (void) err_e;
     
     LOG_Log(LOG_ALERT, "Condition (%s) failed in %s(), %s line %d",
-        cond, func, file, line);
+            cond, func, file, line);
     if (err)
         LOG_Log(LOG_ALERT, "errno = %d (%s)", err, strerror(err));
     abort();
@@ -392,7 +385,6 @@ read_default_config(void) {
 static void
 usage(void)
 {
-
     fprintf(stderr,
         "usage: varnishevent [-aDVg] [-G configfile] [-P pidfile] "
         "[-w outputfile]\n");
@@ -402,41 +394,36 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
-    int c, errnum, status, a_flag = 0, g_flag = 0, format_flag = 0;
+    int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0;
 #if 0
     int D_flag = 0;
     const char *P_arg = NULL;
 #endif
-    const char *w_arg = NULL;
+    char *w_arg = NULL, *q_arg = NULL, *g_arg = NULL;
     char scratch[BUFSIZ];
 #if 0
     struct vpf_fh *pfh = NULL;
 #endif
+    struct VSL_data *vsl;
+    struct VSLQ *vslq;
+    struct VSM_data *vsm;
+    struct VSL_cursor *cursor;
+    enum VSL_grouping_e grouping = VSL_g_vxid;
 
     vsl = VSL_New();
 
     CONF_Init();
     read_default_config();
 
-    while ((c = getopt(argc, argv, "aDP:Vw:fF:gG:")) != -1) {
+    while ((c = getopt(argc, argv, "adDvP:Vw:F:g:f:q:")) != -1) {
         switch (c) {
         case 'a':
             a_flag = 1;
             break;
-        case 'f':
-            if (format_flag) {
-                fprintf(stderr, "-f and -F can not be combined\n");
-                exit(1);
-            }
-            strcpy(config.cformat, ALT_CFORMAT);
-            format_flag = 1;
+        case 'd':
+            d_flag = 1;
             break;
         case 'F':
-            if (format_flag) {
-                fprintf(stderr, "-f and -F can not be combined\n");
-                exit(1);
-            }
-            format_flag = 1;
             strcpy(config.cformat, optarg);
             break;
 #if 0
@@ -453,21 +440,18 @@ main(int argc, char *argv[])
         case 'w':
             w_arg = optarg;
             break;
-        case 'g':
-            g_flag = 1;
+        case 'v':
+            v_flag = 1;
             break;
-        case 'G':
+        case 'g':
+            REPLACE(g_arg, optarg);
+            break;
+        case 'f':
             strcpy(cli_config_filename, optarg);
             break;
-        case 'b':
-        case 'i':
-        case 'I':
-        case 'c':
-            fprintf(stderr, "-%c is not valid for varnishevent\n", c);
-            exit(1);
+        case 'q':
+            REPLACE(q_arg, optarg);
             break;
-        case 'm':
-            m_flag = 1; /* Fall through */
         default:
             if (c == 'r') {
                 strcpy(config.varnish_bindump, optarg);
@@ -487,24 +471,6 @@ main(int argc, char *argv[])
         }
     }
 
-    /* XXX: set this up properly, possible for reading bin logs */
-    /* XXX: should do this after opening syslog, to log errors */
-    struct VSM_data *vd = VSM_New();
-    struct VSL_cursor *cursor = VSL_CursorVSM(vsl, vd, 0);
-    if (cursor == NULL) {
-        fprintf(stderr, "Cannot open log: %s\n", VSL_Error(vsl));
-        exit(1);
-    }
-
-    /* XXX: set up the query to filter the log contents narrowly for
-       the output format */
-    struct VSLQ *vslq;
-    vslq = VSLQ_New(vsl, &cursor, VSL_g_vxid, "");
-    if (vslq == NULL) {
-        fprintf(stderr, "Cannot init log query: %s\n", VSL_Error(vsl));
-        exit(1);
-    }
-
 #if 0
     if (P_arg && (pfh = VPF_Open(P_arg, 0644, NULL)) == NULL) {
         perror(P_arg);
@@ -518,6 +484,71 @@ main(int argc, char *argv[])
         exit(1);
     }
 #endif    
+
+    if (LOG_Open(config.syslog_ident) != 0) {
+        exit(EXIT_FAILURE);
+    }
+    if (v_flag)
+        LOG_SetLevel(LOG_DEBUG);
+
+    LOG_Log(LOG_INFO, "initializing (%s)", VCS_version);
+
+    /* XXX: also set grouping in config file */
+    if (g_arg != NULL) {
+        grouping = VSLQ_Name2Grouping(g_arg, -1);
+        if (grouping == -1 || grouping == -2) {
+            LOG_Log(LOG_CRIT, "Unknown grouping: %s", g_arg);
+            exit(EXIT_FAILURE);
+        }
+        switch(grouping) {
+        case VSL_g_session:
+            LOG_Log0(LOG_CRIT, "Session grouping not permitted");
+            exit(EXIT_FAILURE);
+        case VSL_g_raw:
+            if (!EMPTY(config.cformat) || !EMPTY(config.bformat)) {
+                /* XXX: this can be allowed with multi-threaded readers */
+                LOG_Log0(LOG_CRIT, "Raw grouping cannot be used with client "
+                         "or backend logging");
+                exit(EXIT_FAILURE);
+            }
+            break;
+        case VSL_g_vxid:
+        case VSL_g_request:
+            break;
+        default:
+            WRONG("Unknown grouping");
+        }
+    }
+
+    if (!EMPTY(config.rformat)) {
+        if (!EMPTY(config.cformat) || !EMPTY(config.bformat)) {
+            /* XXX: this can be allowed with multi-threaded readers */
+            LOG_Log0(LOG_CRIT, "Raw logging cannot be combined with client "
+                     "or backend logging");
+            exit(EXIT_FAILURE);
+        }
+        grouping = VSL_g_raw;
+    }
+
+    if (EMPTY(config.varnish_bindump)) {
+        unsigned options = VSL_COPT_BATCH;
+        vsm = VSM_New();
+        AN(vsm);
+        if (!d_flag)
+            options |= VSL_COPT_TAIL;
+        cursor = VSL_CursorVSM(vsl, vsm, options);
+    }
+    else
+        cursor = VSL_CursorFile(vsl, config.varnish_bindump, 0);
+    if (cursor == NULL) {
+        LOG_Log(LOG_CRIT, "Cannot open log: %s\n", VSL_Error(vsl));
+        exit(EXIT_FAILURE);
+    }
+    vslq = VSLQ_New(vsl, &cursor, grouping, q_arg);
+    if (vslq == NULL) {
+        LOG_Log(LOG_CRIT, "Cannot init log query: %s\n", VSL_Error(vsl));
+        exit(EXIT_FAILURE);
+    }
 
     terminate_action.sa_handler = terminate;
     AZ(sigemptyset(&terminate_action.sa_mask));
@@ -559,14 +590,6 @@ main(int argc, char *argv[])
     if (a_flag)
         config.append = 1;
 
-    if (LOG_Open(config.syslog_ident) != 0) {
-        exit(EXIT_FAILURE);
-    }
-    if (g_flag)
-        LOG_SetLevel(LOG_DEBUG);
-
-    LOG_Log(LOG_INFO, "initializing (%s)", VCS_version);
-
     VAS_Fail = assert_fail;
 
     if (FMT_Init(scratch) != 0) {
@@ -577,7 +600,7 @@ main(int argc, char *argv[])
     if (!EMPTY(config.varnish_bindump))
         LOG_Log(LOG_INFO, "Reading from file: %s", config.varnish_bindump);
     else {
-        strcpy(scratch, VSM_Name(vd));
+        strcpy(scratch, VSM_Name(vsm));
         if (EMPTY(scratch))
             LOG_Log0(LOG_INFO, "Reading default varnish instance");
         else
@@ -592,17 +615,13 @@ main(int argc, char *argv[])
     assert(VSL_Arg(vsl, 'i', scratch) > 0);
     LOG_Log(LOG_INFO, "Reading SHM tags: %s", scratch);
 
-#if 0    
     if (!EMPTY(config.cformat))
-        cb_flag |= VSL_S_CLIENT;
+        assert(VSL_Arg(vsl, 'b', scratch) > 0);
     if (!EMPTY(config.bformat))
-        cb_flag |= VSL_S_BACKEND;
-    if (!EMPTY(config.zformat))
-        z_flag = 1;
-#endif
+        assert(VSL_Arg(vsl, 'c', scratch) > 0);
 
     if ((errnum = DATA_Init()) != 0) {
-        LOG_Log(LOG_ALERT, "Cannot init data table: %s\n",
+        LOG_Log(LOG_ALERT, "Cannot init data tables: %s\n",
                 strerror(errnum));
         exit(EXIT_FAILURE);
     }

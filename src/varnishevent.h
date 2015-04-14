@@ -68,8 +68,6 @@
 
 #define DEFAULT_CFORMAT \
     "%h %l %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-agent}i\""
-#define ALT_CFORMAT \
-  "%{X-Forwarded-For}i %l %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-agent}i\""
 
 struct sigaction default_action;
     
