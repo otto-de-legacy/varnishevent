@@ -68,7 +68,7 @@ static void
 set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
                 enum VSL_tag_e tag)
 {
-    rec->len = strlen(data);
+    rec->len = strlen(data) + 1;
     strcpy(chunk->data, data);
     if (tag != SLT__Bogus)
         rec->tag = tag;
@@ -1263,12 +1263,15 @@ static const char
     MAZ(len);
 
     /* Binary tag with non-printables in the payload */
-    memcpy(chunk.data, "foo\0\xFF bar", 9);
-    rec.len = 9;
+    memcpy(chunk.data, "foo\0\xFF bar\0", 10);
+    rec.len = 10;
     rec.tag = SLT_Debug;
     args.tag = SLT_Debug;
     format_SLT(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "\"foo\\0\\377 bar\"", 15) == 0);
+#define EXP_SLT_BINARY "\"foo\\0\\377 bar\""
+    VMASSERT(strncmp(str, EXP_SLT_BINARY, 15) == 0,
+             "format_SLT with binary data: Expected '%s', got '%s'",
+             EXP_SLT_BINARY, str);
     MASSERT(len == 15);
 
     return NULL;
@@ -1384,8 +1387,8 @@ static const char
     set_record_data(recs[15], c[15], "baz: logload", SLT_VCL_Log);
     set_record_data(recs[16], c[16], "MATCH ACL \"10.0.0.0\"/8", SLT_VCL_acl);
     set_record_data(recs[17], c[17], "", SLT_Debug);
-    recs[17]->len = 9;
-    memcpy(c[17]->data, "foo\0\xFF bar", 9);
+    recs[17]->len = 10;
+    memcpy(c[17]->data, "foo\0\xFF bar\0", 10);
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_FULL_CLIENT_OUTPUT "105 c 15963 HTTP/1.1 127.0.0.1 60 foohdr "\
@@ -1437,8 +1440,8 @@ static const char
     set_record_data(recs[14], c[14], "", SLT__Bogus);
     set_record_data(recs[16], c[16], "2 chunked stream", SLT_Fetch_Body);
     set_record_data(recs[17], c[17], "", SLT_Debug);
-    recs[17]->len = 9;
-    memcpy(c[17]->data, "foo\0\xFF bar", 9);
+    recs[17]->len = 10;
+    memcpy(c[17]->data, "foo\0\xFF bar\0", 10);
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
@@ -1471,8 +1474,8 @@ static const char
 
     tx.type = VSL_t_raw;
     tx.t = 1427743146.529143;
-    #define HEALTH_PAYLOAD "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 "\
-            "HTTP/1.1 200 OK"
+#define HEALTH_PAYLOAD "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 " \
+        "HTTP/1.1 200 OK"
     set_record_data(recs[1], c[1], HEALTH_PAYLOAD, SLT_Backend_health);
     for (int i = 2; i < NRECS; i++)
         add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);

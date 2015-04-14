@@ -312,6 +312,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 n -= cp;
             }
             rec->state = DATA_DONE;
+            VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
         }
         tx->state = TX_DONE;
         seen++;
@@ -616,9 +617,9 @@ main(int argc, char *argv[])
     LOG_Log(LOG_INFO, "Reading SHM tags: %s", scratch);
 
     if (!EMPTY(config.cformat))
-        assert(VSL_Arg(vsl, 'b', scratch) > 0);
-    if (!EMPTY(config.bformat))
         assert(VSL_Arg(vsl, 'c', scratch) > 0);
+    if (!EMPTY(config.bformat))
+        assert(VSL_Arg(vsl, 'b', scratch) > 0);
 
     if ((errnum = DATA_Init()) != 0) {
         LOG_Log(LOG_ALERT, "Cannot init data tables: %s\n",

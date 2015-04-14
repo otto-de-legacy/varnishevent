@@ -184,7 +184,7 @@ format_slt(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
     logline_t *rec = get_tag(tx, tag);
     if (rec != NULL) {
         *s = get_payload(rec);
-        *len = rec->len;
+        *len = rec->len - 1;
     }
 }
 
@@ -360,7 +360,7 @@ format_q(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
     qs = memchr(p, '?', rec->len);
     if (qs != NULL) {
         *s = qs + 1;
-        *len = rec->len - (*s - p);
+        *len = rec->len - 1 - (*s - p);
     }
 }
 
@@ -514,7 +514,7 @@ format_U(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
         return;
     qs = memchr(*s, '?', rec->len);
     if (qs == NULL)
-        *len = rec->len;
+        *len = rec->len - 1;
     else
         *len = qs - *s;
 }
