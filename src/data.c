@@ -84,6 +84,7 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
 {
     logline_t *rec;
     chunk_t *chunk;
+    unsigned nchunk = 0, nrec = 0;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     
@@ -103,23 +104,27 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
             *chunk->data = '\0';
             VSTAILQ_REMOVE_HEAD(&rec->chunks, chunklist);
             VSTAILQ_INSERT_HEAD(freechunk, chunk, freelist);
-            *nfree_chunk += 1;
+            nchunk++;
         }
         assert(VSTAILQ_EMPTY(&rec->chunks));
         VSTAILQ_REMOVE_HEAD(&tx->lines, linelist);
         VSTAILQ_INSERT_HEAD(freerec, rec, freelist);
-        *nfree_rec += 1;
+        nrec++;
     }
     assert(VSTAILQ_EMPTY(&tx->lines));
     VSTAILQ_INSERT_HEAD(freetx, tx, freelist);
     *nfree_tx += 1;
+    *nfree_rec += nrec;
+    *nfree_chunk += nchunk;
+    MON_StatsUpdate(STATS_WRITTEN, nrec, nchunk);
 }
 
 int
 DATA_Init(void)
 {
     int bufidx = 0, chunks_per_rec, lines_per_tx = FMT_Estimate_RecsPerTx();
-    
+
+    LOG_Log(LOG_DEBUG, "Estimated %d records per transaction", lines_per_tx);
     nrecords = config.max_data * lines_per_tx;
     AN(config.chunk_size);
     chunks_per_rec
@@ -181,11 +186,12 @@ DATA_Init(void)
         txn[i].state = TX_EMPTY;
         txn[i].vxid = -1;
         txn[i].type = VSL_t_unknown;
+        txn[i].t = 0.;
         VSTAILQ_INIT(&txn[i].lines);
 	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
     }
 
-    data_open = data_done = data_occ_hi = 0;
+    tx_occ = rec_occ = chunk_occ = tx_occ_hi = rec_occ_hi = chunk_occ_hi = 0;
     global_nfree_tx = config.max_data;
     global_nfree_line = nrecords;
     global_nfree_chunk = nchunks;

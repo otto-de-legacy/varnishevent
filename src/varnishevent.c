@@ -86,7 +86,7 @@
 #define DISPATCH_TERMINATE 10
 #define DISPATCH_REOPEN 11
 
-static unsigned occ_hi = 0, len_hi = 0;
+static unsigned len_hi = 0;
 
 static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
     no_free_rec = 0, no_free_chunk = 0;
@@ -127,10 +127,11 @@ static char tx_type_name[VSL_t__MAX];
 void
 RDR_Stats(void)
 {
-    LOG_Log(LOG_INFO, "Reader: seen=%lu submitted=%lu occ_hi=%u "
-            "free_tx=%u free_rec=%u free_chunk=%u len_hi=%u len_overflows=%lu",
-            seen, submitted, occ_hi, rdr_tx_free, rdr_rec_free, rdr_chunk_free,
-            len_hi, len_overflows);
+    LOG_Log(LOG_INFO, "Reader: seen=%lu submitted=%lu free_tx=%u free_rec=%u "
+            "free_chunk=%u no_free_tx=%lu no_free_rec=%lu no_free_chunk=%lu "
+            "len_hi=%u len_overflows=%lu",
+            seen, submitted, rdr_tx_free, rdr_rec_free, rdr_chunk_free,
+            no_free_tx, no_free_rec, no_free_chunk, len_hi, len_overflows);
 }
 
 static inline void
@@ -212,7 +213,6 @@ submit(tx_t *tx)
     assert(tx->state == TX_DONE);
     SPSCQ_Enq(tx);
     signal_spscq_ready();
-    MON_StatsUpdate(STATS_DONE);
     submitted++;
 }
 
@@ -220,6 +220,7 @@ static int
 event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 {
     int status = DISPATCH_RETURN_OK;
+    unsigned nrec = 0, total_chunks = 0;
     (void) priv;
 
     if (term)
@@ -265,6 +266,12 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                         VSL_CDATA(t->c->rec.ptr));
             if (len <= 0)
                 continue;
+            if (len > config.max_reclen) {
+                len = config.max_reclen;
+                len_overflows++;
+            }
+            if (len > len_hi)
+                len_hi = len;
 
             rec = take_rec();
             if (rec == NULL) {
@@ -305,15 +312,21 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 memcpy(chunk->data, p, cp);
                 p += cp;
                 n -= cp;
+                total_chunks++;
             }
             rec->state = DATA_DONE;
             VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
+            nrec++;
         }
         tx->state = TX_DONE;
         seen++;
-        data_done++;
-        if (data_done > data_occ_hi)
-            data_occ_hi = data_done;
+        MON_StatsUpdate(STATS_DONE, nrec, total_chunks);
+        if (tx_occ > tx_occ_hi)
+            tx_occ_hi = tx_occ;
+        if (rec_occ > rec_occ_hi)
+            rec_occ_hi = rec_occ;
+        if (chunk_occ > chunk_occ_hi)
+            chunk_occ_hi = chunk_occ;
         submit(tx);
     }
     

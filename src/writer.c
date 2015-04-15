@@ -224,7 +224,6 @@ wrt_write(tx_t *tx)
         writes++;
         bytes += VSB_len(os);
     }
-    MON_StatsUpdate(STATS_WRITTEN);
 
     /* clean up */
     DATA_Clear_Tx(tx, &wrt_freetx, &wrt_freerecs, &wrt_freechunks,
@@ -341,9 +340,9 @@ WRT_Stats(void)
     
     LOG_Log(LOG_INFO,
         "Writer (%s): seen=%lu writes=%lu bytes=%lu errors=%lu timeouts=%lu"
-        " waits=%lu free=%u",
+        " waits=%lu free_tx=%u free_rec=%u free_chunk=%u",
             statename[wrt_data.state], deqs, writes, bytes, errors, timeouts,
-            waits, wrt_nfree_tx);
+            waits, wrt_nfree_tx, wrt_nfree_recs, wrt_nfree_chunks);
 }
 
 int

@@ -41,6 +41,15 @@ static txhead_t local_freetx = VSTAILQ_HEAD_INITIALIZER(local_freetx);
 static linehead_t local_freeline = VSTAILQ_HEAD_INITIALIZER(local_freeline);
 static chunkhead_t local_freechunk = VSTAILQ_HEAD_INITIALIZER(local_freechunk);
 
+/* So that we don't have to link monitor.o, and hence varnishevent.o */
+void
+MON_StatsUpdate(stats_update_t update, unsigned nrec, unsigned nchunk)
+{
+    (void) update;
+    (void) nrec;
+    (void) nchunk;
+}
+
 /* N.B.: Always run the tests in this order */
 static char
 *test_data_init(void)
@@ -62,9 +71,7 @@ static char
         MASSERT(txn[i].state == TX_EMPTY);
         MASSERT(txn[i].vxid == -1);
         MASSERT(txn[i].type == VSL_t_unknown);
-#if 0
         MAZ(txn[i].t);
-#endif
         MASSERT(VSTAILQ_EMPTY(&txn[i].lines));
     }
     MASSERT(global_nfree_tx == config.max_data);

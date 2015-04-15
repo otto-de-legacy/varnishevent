@@ -141,9 +141,7 @@ tx_t *txn;
 
 typedef VSTAILQ_HEAD(txhead_s, tx_t) txhead_t;
 
-unsigned data_open;
-unsigned data_done;
-unsigned data_occ_hi;
+unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi;
 
 int tag2idx[MAX_VSL_TAG];
 enum VSL_tag_e idx2tag[MAX_VSL_TAG];
@@ -277,7 +275,7 @@ void SPSCQ_Shutdown(void);
 
 /* monitor.c */
 typedef enum {
-    /* "Ending" VSL tag seen */
+    /* Transaction read */
     STATS_DONE,
     /* Log line written */
     STATS_WRITTEN,
@@ -285,7 +283,7 @@ typedef enum {
 
 void MON_Start(void);
 void MON_Shutdown(void);
-void MON_StatsUpdate(stats_update_t update);
+void MON_StatsUpdate(stats_update_t update, unsigned nrec, unsigned nchunk);
 void MON_Output(void);
 
 /* format.c */

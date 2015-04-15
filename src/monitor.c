@@ -46,10 +46,13 @@ static pthread_mutex_t stats_lock = PTHREAD_MUTEX_INITIALIZER;
 static void
 log_output(void)
 {
-    LOG_Log(LOG_INFO, "Data table: len=%u open=%u done=%u load=%.2f occ_hi=%u "
-        "global_free=%u", config.max_data, data_open, data_done,
-        100.0 * (data_open + data_done) / config.max_data,
-        data_occ_hi, global_nfree_tx);
+    LOG_Log(LOG_INFO, "Data tables: len_tx=%u len_rec=%u len_chunk=%u "
+            "tx_occ=%u rec_occ=%u chunk_occ=%u tx_occ_hi=%u rec_occ_hi=%u "
+            "chunk_occ_hi=%u global_free_tx=%u global_free_rec=%u "
+            "global_free_chunk=%u",
+            config.max_data, nrecords, nchunks, tx_occ, rec_occ, chunk_occ,
+            tx_occ_hi, rec_occ_hi, chunk_occ_hi, global_nfree_tx,
+            global_nfree_line, global_nfree_chunk);
 
     RDR_Stats();
 
@@ -110,17 +113,21 @@ MON_Start(void)
 }
 
 void
-MON_StatsUpdate(stats_update_t update)
+MON_StatsUpdate(stats_update_t update, unsigned nrec, unsigned nchunk)
 {
     AZ(pthread_mutex_lock(&stats_lock));
     switch(update) {
         
     case STATS_WRITTEN:
-        data_done--;
+        tx_occ--;
+        rec_occ -= nrec;
+        chunk_occ -= nchunk;
         break;
         
     case STATS_DONE:
-        data_done++;
+        tx_occ++;
+        rec_occ += nrec;
+        chunk_occ += nchunk;
         break;
         
     default:
