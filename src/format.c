@@ -78,6 +78,7 @@ get_payload(const logline_t *rec)
 
     chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
     CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
+    assert(chunk->state == DATA_DONE);
     if (rec->len <= config.chunk_size)
         return chunk->data;
 

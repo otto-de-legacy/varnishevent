@@ -72,6 +72,7 @@ set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
     strcpy(chunk->data, data);
     if (tag != SLT__Bogus)
         rec->tag = tag;
+    chunk->state = DATA_DONE;
 }
 
 static void
@@ -217,6 +218,7 @@ static const char
         VSTAILQ_INIT(&recs[i].chunks);
         c[i].magic = CHUNK_MAGIC;
         c[i].data = (char *) calloc(1, config.chunk_size);
+        c[i].state = DATA_DONE;
         strcpy(c[i].data, "Bar: baz");
         VSTAILQ_INSERT_TAIL(&recs[i].chunks, &c[i], chunklist);
     }
@@ -311,6 +313,7 @@ static const char
     VSTAILQ_INIT(&rec.chunks);
     chunk.magic = CHUNK_MAGIC;
     chunk.data = (char *) calloc(1, config.chunk_size);
+    chunk.state = DATA_DONE;
     MAN(chunk.data);
     rec.len = strlen(SHORT_STRING);
     strcpy(chunk.data, SHORT_STRING);
