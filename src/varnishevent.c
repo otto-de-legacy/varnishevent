@@ -266,12 +266,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                         VSL_CDATA(t->c->rec.ptr));
             if (len <= 0)
                 continue;
-            if (len > config.max_reclen) {
-                len = config.max_reclen;
-                len_overflows++;
-            }
-            if (len > len_hi)
-                len_hi = len;
 
             rec = take_rec();
             if (rec == NULL) {
@@ -287,16 +281,21 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             assert(VSTAILQ_EMPTY(&rec->chunks));
 
             rec->tag = VSL_TAG(t->c->rec.ptr);
-            rec->len = len;
+            n = len;
+            if (len > len_hi)
+                len_hi = len;
+            if (len > config.max_reclen) {
+                n = config.max_reclen;
+                len_overflows++;
+            }
+            rec->len = n;
 
             /* Copy the payload into chunks */
-            n = len;
             p = (const char *) VSL_CDATA(t->c->rec.ptr);
-            nchunk = (len + config.chunk_size - 1) / config.chunk_size;
+            nchunk = (n + config.chunk_size - 1) / config.chunk_size;
             for (int i = 0; i < nchunk; i++) {
                 assert(n > 0);
                 chunk = take_chunk();
-                assert(chunk->state == DATA_EMPTY);
                 if (chunk == NULL) {
                     no_free_chunk++;
                     LOG_Log(LOG_DEBUG,
@@ -306,6 +305,8 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                             VSL_CDATA(t->c->rec.ptr));
                     continue;
                 }
+                CHECK_OBJ(chunk, CHUNK_MAGIC);
+                assert(chunk->state == DATA_EMPTY);
                 VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
                 int cp = n;
                 if (cp > config.chunk_size)
