@@ -296,6 +296,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             for (int i = 0; i < nchunk; i++) {
                 assert(n > 0);
                 chunk = take_chunk();
+                assert(chunk->state == DATA_EMPTY);
                 if (chunk == NULL) {
                     no_free_chunk++;
                     LOG_Log(LOG_DEBUG,
@@ -310,6 +311,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 if (cp > config.chunk_size)
                     cp = config.chunk_size;
                 memcpy(chunk->data, p, cp);
+                chunk->state = DATA_DONE;
                 p += cp;
                 n -= cp;
                 total_chunks++;
