@@ -627,13 +627,16 @@ main(int argc, char *argv[])
             LOG_Log(LOG_INFO, "Reading varnish instance %s", scratch);
     }
 
-    strcpy(scratch, FMT_Get_i_Arg());
-    if (EMPTY(scratch)) {
-        LOG_Log0(LOG_ALERT, "Not configured to read any log data, exiting");
+    char **include_args = FMT_Get_I_Args();
+    if (include_args == 0) {
+        LOG_Log0(LOG_CRIT, "Not configured to read any data, exiting");
         exit(EXIT_FAILURE);
     }
-    assert(VSL_Arg(vsl, 'i', scratch) > 0);
-    LOG_Log(LOG_INFO, "Reading SHM tags: %s", scratch);
+    assert(VSL_Arg(vsl, 'C', NULL) > 0);
+    for (int i = 0; include_args[i] != NULL; i++) {
+        assert(VSL_Arg(vsl, 'I', include_args[i]) > 0);
+        LOG_Log(LOG_INFO, "Include filter: %s", include_args[i]);
+    }
 
     if (!EMPTY(config.cformat))
         assert(VSL_Arg(vsl, 'c', scratch) > 0);
@@ -667,17 +670,6 @@ main(int argc, char *argv[])
     rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
     assert(!VSTAILQ_EMPTY(&rdr_chunk_freelist));
 
-    WRT_Start();
-    /* XXX: configure wrt_waits and sleep interval? */
-    int wrt_waits = 0;
-    while (!WRT_Running()) {
-        if (wrt_waits++ > 10) {
-            LOG_Log0(LOG_ALERT, "Writer thread not running, giving up");
-            exit(EXIT_FAILURE);
-        }
-        VTIM_sleep(1);
-    }
-
     for (int i = 0; i < VSL_t__MAX; i++) {
         tx_type_log[i] = 0;
         tx_type_name[i] = 'X';
@@ -691,6 +683,17 @@ main(int argc, char *argv[])
     tx_type_name[VSL_t_req] = 'c';
     tx_type_name[VSL_t_bereq] = 'b';
     tx_type_name[VSL_t_raw] = '-';
+
+    WRT_Start();
+    /* XXX: configure wrt_waits and sleep interval? */
+    int wrt_waits = 0;
+    while (!WRT_Running()) {
+        if (wrt_waits++ > 10) {
+            LOG_Log0(LOG_ALERT, "Writer thread not running, giving up");
+            exit(EXIT_FAILURE);
+        }
+        VTIM_sleep(1);
+    }
 
     /* Main loop */
     term = 0;

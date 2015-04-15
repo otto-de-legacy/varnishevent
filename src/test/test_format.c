@@ -1294,7 +1294,7 @@ static const char
 *test_FMT_interface(void)
 {
 #define NRECS 20
-    char err[BUFSIZ], *i_arg, strftime_s[BUFSIZ];
+    char err[BUFSIZ], **i_args, strftime_s[BUFSIZ];
     int status, recs_per_tx;
     tx_t tx;
     logline_t *recs[NRECS];
@@ -1323,14 +1323,23 @@ static const char
     }
 
     /* Default client format */
-    i_arg = FMT_Get_i_Arg();
-#define DEFAULT_I_ARG "ReqMethod,ReqURL,ReqProtocol,ReqHeader,RespStatus," \
-        "ReqStart,Timestamp,ReqAcct,"
-    VMASSERT(strcmp(i_arg, DEFAULT_I_ARG) == 0, "'%s' != '%s'", i_arg,
-             DEFAULT_I_ARG);
+    i_args = FMT_Get_I_Args();
+    MAN(i_args);
+    const char *exp_default_I_args[] = {
+        "ReqMethod:.", "ReqURL:.", "ReqProtocol:.",
+        "ReqHeader:^\\s*Authorization\\s*:", "ReqHeader:^\\s*Host\\s*:",
+        "ReqHeader:^\\s*Referer\\s*:", "ReqHeader:^\\s*User-agent\\s*:",
+        "RespStatus:.", "ReqStart:.", "Timestamp:^\\s*Start\\s*:", "ReqAcct:.",
+        NULL
+    };
+    for (int i = 0; i_args[i] != NULL; i++) {
+        MAN(exp_default_I_args[i]);
+        VMASSERT(strcmp(i_args[i], exp_default_I_args[i]) == 0, "'%s' != '%s'",
+                 i_args[i], exp_default_I_args[i]);
+    }
 
     recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 78);
+    MASSERT(recs_per_tx == 11);
 
     tx.type = VSL_t_req;
     add_record_data(&tx, recs[0], c[0], T1, SLT_Timestamp);
@@ -1369,15 +1378,25 @@ static const char
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
-    i_arg = FMT_Get_i_Arg();
-#define FULL_CLIENT_I_ARG "Debug,ReqMethod,ReqURL,ReqProtocol,ReqHeader,"\
-        "RespStatus,RespHeader,VCL_acl,VCL_call,VCL_return,ReqStart,VCL_Log,"\
-        "Timestamp,ReqAcct,PipeAcct,"
-    VMASSERT(strcmp(i_arg, FULL_CLIENT_I_ARG) == 0, "'%s' != '%s'", i_arg,
-             FULL_CLIENT_I_ARG);
-
+    i_args = FMT_Get_I_Args();
+    MAN(i_args);
+    const char *exp_full_client_I_args[] = {
+        "Debug:.", "ReqMethod:.", "ReqURL:.", "ReqProtocol:.",
+        "ReqHeader:^\\s*Foo\\s*:", "ReqHeader:^\\s*Host\\s*:",
+        "ReqHeader:^\\s*Authorization\\s*:", "RespStatus:.",
+        "RespHeader:^\\s*Bar\\s*:", "VCL_acl:.", "VCL_call:.", "VCL_return:.", 
+        "ReqStart:.", "VCL_Log:^\\s*baz\\s*:", "Timestamp:^\\s*Resp\\s*:",
+        "Timestamp:^\\s*Start\\s*:", "Timestamp:^\\s*Process\\s*:", "ReqAcct:.",
+        "PipeAcct:.", NULL
+    };
+    for (int i = 0; i_args[i] != NULL; i++) {
+        MAN(exp_full_client_I_args[i]);
+        VMASSERT(strcmp(i_args[i], exp_full_client_I_args[i]) == 0,
+                 "'%s' != '%s'", i_args[i], exp_full_client_I_args[i]);
+    }
+    
     recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 175);
+    MASSERT(recs_per_tx == 46);
 
     set_record_data(recs[3], c[3], URL_QUERY_PAYLOAD, SLT_ReqURL);
     set_record_data(recs[6], c[6], "Host: foobar.com", SLT_ReqHeader);
@@ -1416,15 +1435,24 @@ static const char
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
-    i_arg = FMT_Get_i_Arg();
-#define FULL_BACKEND_I_ARG "Debug,Backend,BereqMethod,BereqURL,BereqProtocol,"\
-        "BereqHeader,BerespStatus,BerespHeader,Fetch_Body,VCL_Log,Timestamp,"\
-        "BereqAcct,"
-    VMASSERT(strcmp(i_arg, FULL_BACKEND_I_ARG) == 0, "'%s' != '%s'", i_arg,
-             FULL_BACKEND_I_ARG);
+    i_args = FMT_Get_I_Args();
+    const char *exp_full_backend_I_args[] = {
+        "Debug:.", "Backend:.", "BereqMethod:.", "BereqURL:.",
+        "BereqProtocol:.", "BereqHeader:^\\s*Foo\\s*:",
+        "BereqHeader:^\\s*Host\\s*:", "BereqHeader:^\\s*Authorization\\s*:",
+        "BerespStatus:.", "BerespHeader:^\\s*Bar\\s*:", "Fetch_Body:.",
+        "VCL_Log:^\\s*baz\\s*:", "Timestamp:^\\s*BerespBody\\s*:",
+        "Timestamp:^\\s*Start\\s*:", "Timestamp:^\\s*Beresp\\s*:",
+        "BereqAcct:.", NULL
+    };
+    for (int i = 0; i_args[i] != NULL; i++) {
+        MAN(exp_full_backend_I_args[i]);
+        VMASSERT(strcmp(i_args[i], exp_full_backend_I_args[i]) == 0,
+                 "'%s' != '%s'", i_args[i], exp_full_backend_I_args[i]);
+    }
 
     recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 154);
+    MASSERT(recs_per_tx == 25);
 
     tx.type = VSL_t_bereq;
     set_record_data(recs[1], c[1], BACKEND_PAYLOAD, SLT_Backend);
@@ -1467,10 +1495,13 @@ static const char
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
-    i_arg = FMT_Get_i_Arg();
-#define FULL_RAW_I_ARG "Backend_health,Timestamp,"
-    VMASSERT(strcmp(i_arg, FULL_RAW_I_ARG) == 0, "'%s' != '%s'", i_arg,
-             FULL_RAW_I_ARG);
+    i_args = FMT_Get_I_Args();
+    const char *exp_full_raw_I_args[] = { "Backend_health:.", NULL };
+    for (int i = 0; i_args[i] != NULL; i++) {
+        MAN(exp_full_raw_I_args[i]);
+        VMASSERT(strcmp(i_args[i], exp_full_raw_I_args[i]) == 0,
+                 "'%s' != '%s'", i_args[i], exp_full_raw_I_args[i]);
+    }
 
     recs_per_tx = FMT_Estimate_RecsPerTx();
     MASSERT(recs_per_tx == 1);

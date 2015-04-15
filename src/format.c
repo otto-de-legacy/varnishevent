@@ -39,6 +39,7 @@
 #include "vas.h"
 #include "miniobj.h"
 #include "base64.h"
+#include "vqueue.h"
 
 #include "varnishevent.h"
 #include "format.h"
@@ -53,7 +54,7 @@ typedef struct compiled_fmt_t {
 
 static struct vsb *payload;
 static struct vsb *bintag;
-static char *scratch;
+static char *scratch = NULL;
 
 static char empty[] = "";
 static char hit[] = "hit";
@@ -63,10 +64,17 @@ static char pipe[] = "pipe";
 static char error[] = "error";
 static char dash[] = "-";
 
-static struct vsb *i_arg;
+typedef struct include_t {
+    char *hdr;
+    VSTAILQ_ENTRY(include_t) inclist;
+} include_t;
+
+typedef VSTAILQ_HEAD(includehead_s, include_t) includehead_t;
 
 static compiled_fmt_t cformat, bformat, rformat;
-static char ctags[MAX_VSL_TAG], btags[MAX_VSL_TAG], rtags[MAX_VSL_TAG];
+static includehead_t cincl[MAX_VSL_TAG], bincl[MAX_VSL_TAG], rincl[MAX_VSL_TAG];
+static unsigned includes;
+static char **incl_arg = NULL;
 
 char *
 get_payload(const logline_t *rec)
@@ -721,44 +729,78 @@ add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
     (C(type) ? format_ltr##_client : format_ltr##_backend)
 
 static void
-add_tag(enum VSL_transaction_e type, enum VSL_tag_e tag)
+add_tag(enum VSL_transaction_e type, enum VSL_tag_e tag, const char *hdr)
 {
+    includehead_t *inclhead;
+    include_t *incl;
+
     switch(type) {
     case VSL_t_req:
-        ctags[tag] = 1;
+        inclhead = &cincl[tag];
         break;
     case VSL_t_bereq:
-        btags[tag] = 1;
+        inclhead = &bincl[tag];
         break;
     case VSL_t_raw:
-        rtags[tag] = 1;
+        inclhead = &rincl[tag];
         break;
     default:
         WRONG("Illegal transaction type");
     }
+
+    /* Don't add the same include more than once */
+    VSTAILQ_FOREACH(incl, inclhead, inclist)
+        if ((hdr == NULL && incl->hdr == NULL)
+            || (hdr != NULL && incl->hdr != NULL
+                && (strcmp(incl->hdr, hdr) == 0)))
+            return;
+
+    incl = calloc(1, sizeof(include_t));
+    AN(incl);
+    if (hdr != NULL)
+        incl->hdr = strdup(hdr);
+    VSTAILQ_INSERT_TAIL(inclhead, incl, inclist);
+    includes++;
 }
 
 static void
 add_cb_tag(enum VSL_transaction_e type, enum VSL_tag_e ctag,
-           enum VSL_tag_e btag)
+           enum VSL_tag_e btag, const char *hdr)
 {
     enum VSL_tag_e tag;
-    char *tags;
 
     switch(type) {
     case VSL_t_req:
         tag = ctag;
-        tags = ctags;
         break;
     case VSL_t_bereq:
         tag = btag;
-        tags = btags;
         break;
     default:
         WRONG("Illegal transaction type");
     }
 
-    tags[tag] = 1;
+    add_tag(type, tag, hdr);
+}
+
+static void
+add_cb_tag_incl(enum VSL_transaction_e type, enum VSL_tag_e tag,
+                const char *chdr, const char *bhdr)
+{
+    const char *hdr;
+
+    switch(type) {
+    case VSL_t_req:
+        hdr = chdr;
+        break;
+    case VSL_t_bereq:
+        hdr = bhdr;
+        break;
+    default:
+        WRONG("Illegal transaction type");
+    }
+
+    add_tag(type, tag, hdr);
 }
 
 static int
@@ -826,7 +868,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
         case 'b':
             add_fmt(fmt, os, n, FMT(type, format_b), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqAcct, SLT_BereqAcct);
+            add_cb_tag(type, SLT_ReqAcct, SLT_BereqAcct, NULL);
             n++;
             break;
 
@@ -836,30 +878,30 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             
         case 'D':
             add_fmt(fmt, os, n, FMT(type, format_D), NULL, SLT__Bogus);
-            add_tag(type, SLT_Timestamp);
+            add_cb_tag_incl(type, SLT_Timestamp, "Resp", "BerespBody");
             n++;
             break;
             
         case 'H':
             add_fmt(fmt, os, n, FMT(type, format_H), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqProtocol, SLT_BereqProtocol);
+            add_cb_tag(type, SLT_ReqProtocol, SLT_BereqProtocol, NULL);
             n++;
             break;
             
         case 'h':
             add_fmt(fmt, os, n, FMT(type, format_h), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqStart, SLT_Backend);
+            add_cb_tag(type, SLT_ReqStart, SLT_Backend, NULL);
             n++;
             break;
             
         case 'I':
             add_fmt(fmt, os, n, FMT(type, format_I), NULL, SLT__Bogus);
             if (C(type)) {
-                ctags[SLT_ReqAcct] = 1;
-                ctags[SLT_PipeAcct] = 1;
+                add_tag(type, SLT_ReqAcct, NULL);
+                add_tag(type, SLT_PipeAcct, NULL);
             }
             else
-                btags[SLT_BereqAcct] = 1;
+                add_tag(type, SLT_BereqAcct, NULL);
             n++;
             break;
             
@@ -869,63 +911,64 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
         case 'm':
             add_fmt(fmt, os, n, FMT(type, format_m), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod);
+            add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod, NULL);
             n++;
             break;
 
         case 'O':
             add_fmt(fmt, os, n, FMT(type, format_O), NULL, SLT__Bogus);
             if (C(type)) {
-                ctags[SLT_ReqAcct] = 1;
-                ctags[SLT_PipeAcct] = 1;
+                add_tag(type, SLT_ReqAcct, NULL);
+                add_tag(type, SLT_PipeAcct, NULL);
             }
             else
-                btags[SLT_BereqAcct] = 1;
+                add_tag(type, SLT_BereqAcct, NULL);
             n++;
             break;
             
         case 'q':
             add_fmt(fmt, os, n, FMT(type, format_q), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL);
+            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL, NULL);
             n++;
             break;
 
         case 'r':
             add_fmt(fmt, os, n, FMT(type, format_r), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod);
-            add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader);
-            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL);
-            add_cb_tag(type, SLT_ReqProtocol, SLT_BereqProtocol);
+            add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod, NULL);
+            add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, "Host");
+            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL, NULL);
+            add_cb_tag(type, SLT_ReqProtocol, SLT_BereqProtocol, NULL);
             n++;
             break;
 
         case 's':
             add_fmt(fmt, os, n, FMT(type, format_s), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_RespStatus, SLT_BerespStatus);
+            add_cb_tag(type, SLT_RespStatus, SLT_BerespStatus, NULL);
             n++;
             break;
 
         case 't':
             add_fmt(fmt, os, n, format_t, NULL, SLT__Bogus);
-            add_tag(type, SLT_Timestamp);
+            if (type != VSL_t_raw)
+                add_tag(type, SLT_Timestamp, "Start");
             n++;
             break;
 
         case 'T':
             add_fmt(fmt, os, n, FMT(type, format_T), NULL, SLT__Bogus);
-            add_tag(type, SLT_Timestamp);
+            add_tag(type, SLT_Timestamp, "Start");
             n++;
             break;
             
         case 'U':
             add_fmt(fmt, os, n, FMT(type, format_U), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL);
+            add_cb_tag(type, SLT_ReqURL, SLT_BereqURL, NULL);
             n++;
             break;
 
         case 'u':
             add_fmt(fmt, os, n, FMT(type, format_u), NULL, SLT__Bogus);
-            add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader);
+            add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, "Authorization");
             n++;
             break;
 
@@ -946,19 +989,20 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             switch (ltr) {
             case 'i':
                 add_fmt(fmt, os, n, FMT(type, format_Xi), fname, SLT__Bogus);
-                add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader);
+                add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, fname);
                 n++;
                 p = tmp;
                 break;
             case 'o':
                 add_fmt(fmt, os, n, FMT(type, format_Xo), fname, SLT__Bogus);
-                add_cb_tag(type, SLT_RespHeader, SLT_BerespHeader);
+                add_cb_tag(type, SLT_RespHeader, SLT_BerespHeader, fname);
                 n++;
                 p = tmp;
                 break;
             case 't':
                 add_fmt(fmt, os, n, format_Xt, fname, SLT__Bogus);
-                add_tag(type, SLT_Timestamp);
+                if (type != VSL_t_raw)
+                    add_tag(type, SLT_Timestamp, "Start");
                 n++;
                 p = tmp;
                 break;
@@ -966,13 +1010,13 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 if (strcmp(fname, "Varnish:time_firstbyte") == 0) {
                     add_fmt(fmt, os, n, FMT(type, format_Xttfb), NULL,
                             SLT__Bogus);
-                    add_tag(type, SLT_Timestamp);
+                    add_cb_tag_incl(type, SLT_Timestamp, "Process", "Beresp");
                 }
                 else if (strcmp(fname, "Varnish:hitmiss") == 0) {
                     if (C(type)) {
                         add_fmt(fmt, os, n, format_VCL_disp, "m", SLT__Bogus);
-                        ctags[SLT_VCL_call] = 1;
-                        ctags[SLT_VCL_return] = 1;
+                        add_tag(type, SLT_VCL_call, NULL);
+                        add_tag(type, SLT_VCL_return, NULL);
                     }
                     else {
                         sprintf(err,
@@ -983,8 +1027,8 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 else if (strcmp(fname, "Varnish:handling") == 0) {
                     if (C(type)) {
                         add_fmt(fmt, os, n, format_VCL_disp, "n", SLT__Bogus);
-                        ctags[SLT_VCL_call] = 1;
-                        ctags[SLT_VCL_return] = 1;
+                        add_tag(type, SLT_VCL_call, NULL);
+                        add_tag(type, SLT_VCL_return, NULL);
                     }
                     else {
                         sprintf(err,
@@ -998,7 +1042,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     // Format: %{VCL_Log:keyname}x
                     // Logging: std.log("keyname:value")
                     add_fmt(fmt, os, n, format_VCL_Log, fname+8, SLT__Bogus);
-                    add_tag(type, SLT_VCL_Log);
+                    add_tag(type, SLT_VCL_Log, fname+8);
                 }
                 else if (strncmp(fname, "tag:", 4) == 0) {
                     int t = 0;
@@ -1009,7 +1053,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                         return 1;
                     }
                     add_fmt(fmt, os, n, format_SLT, NULL, t);
-                    add_tag(type, t);
+                    add_tag(type, t, NULL);
                 }
                 else {
                     sprintf(err, "Unknown format starting at: %s", fname);
@@ -1043,6 +1087,28 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
     return 0;
 }
 
+static void
+fmt_build_I_arg(const includehead_t *inclhead, int *incl_idx)
+{
+    AN(incl_arg);
+    AN(includes);
+    AN(scratch);
+
+    for (int i = 0; i < MAX_VSL_TAG; i++) {
+        include_t *incl;
+
+        VSTAILQ_FOREACH(incl, &inclhead[i], inclist) {
+            assert(*incl_idx < includes);
+            if (incl->hdr == NULL)
+                sprintf(scratch, "%s:.", VSL_tags[i]);
+            else
+                sprintf(scratch, "%s:^\\s*%s\\s*:", VSL_tags[i], incl->hdr);
+            incl_arg[*incl_idx] = strdup(scratch);
+            *incl_idx += 1;
+        }
+    }
+}
+
 int
 FMT_Init(char *err)
 {
@@ -1058,13 +1124,12 @@ FMT_Init(char *err)
     if (bintag == NULL)
         return ENOMEM;
 
-    i_arg = VSB_new_auto();
-    if (i_arg == NULL)
-        return ENOMEM;
-
-    memset(ctags, 0, MAX_VSL_TAG);
-    memset(btags, 0, MAX_VSL_TAG);
-    memset(rtags, 0, MAX_VSL_TAG);
+    includes = 0;
+    for (int i = 0; i < MAX_VSL_TAG; i++) {
+        VSTAILQ_INIT(&cincl[i]);
+        VSTAILQ_INIT(&bincl[i]);
+        VSTAILQ_INIT(&rincl[i]);
+    }
 
     if (!EMPTY(config.cformat))
         if (compile_fmt(config.cformat, &cformat, VSL_t_req, err) != 0)
@@ -1078,44 +1143,46 @@ FMT_Init(char *err)
         if (compile_fmt(config.rformat, &rformat, VSL_t_raw, err) != 0)
             return EINVAL;
 
-    for (int i = 0; i < MAX_VSL_TAG; i++) {
-        char tag = ctags[i] | btags[i] | rtags[i];
-        if (tag) {
-            VSB_cat(i_arg, VSL_tags[i]);
-            VSB_cat(i_arg, ",");
-        }
+    if (includes > 0) {
+        incl_arg = calloc(includes + 1, sizeof(char *));
+        if (incl_arg == NULL)
+            return ENOMEM;
+        int incl_idx = 0;
+
+        fmt_build_I_arg(cincl, &incl_idx);
+        fmt_build_I_arg(bincl, &incl_idx);
+        fmt_build_I_arg(rincl, &incl_idx);
+        assert(incl_idx == includes);
     }
-    VSB_finish(i_arg);
 
     return 0;
 }
 
-char *
-FMT_Get_i_Arg(void)
+char **
+FMT_Get_I_Args(void)
 {
-    AN(i_arg);
-    return VSB_data(i_arg);
+    return incl_arg;
 }
 
 int
 FMT_Estimate_RecsPerTx(void)
 {
     int recs_per_tx = 0, recs_per_ctx = 0, recs_per_btx = 0;
+    include_t *incl;
+
+    if (includes == 0)
+        return 0;
 
     for (int i = 0; i < MAX_VSL_TAG; i++) {
-        if (rtags[i]) {
+        if (!VSTAILQ_EMPTY(&rincl[i])) {
             recs_per_tx = 1;
             break;
         }
     }
 
     for (int i = 0; i < MAX_VSL_TAG; i++) {
-        if (ctags[i]) {
+        VSTAILQ_FOREACH(incl, &cincl[i], inclist)
             switch(i) {
-            case SLT_ReqHeader:
-            case SLT_RespHeader:
-                recs_per_ctx += config.max_headers;
-                break;
             case SLT_VCL_call:
             case SLT_VCL_return:
                 recs_per_ctx += config.max_vcl_call;
@@ -1123,35 +1190,19 @@ FMT_Estimate_RecsPerTx(void)
             case SLT_VCL_Log:
                 recs_per_ctx += config.max_vcl_log;
                 break;
-            case SLT_Timestamp:
-                recs_per_ctx += config.max_timestamp;
-                break;
             default:
                 recs_per_ctx++;
             }
-        }
     }
     if (recs_per_ctx > recs_per_tx)
         recs_per_tx = recs_per_ctx;
 
-    for (int i = 0; i < MAX_VSL_TAG; i++) {
-        if (btags[i]) {
-            switch(i) {
-            case SLT_BereqHeader:
-            case SLT_BerespHeader:
-                recs_per_btx += config.max_headers;
-                break;
-            case SLT_VCL_Log:
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        VSTAILQ_FOREACH(incl, &bincl[i], inclist)
+            if (i == SLT_VCL_Log)
                 recs_per_btx += config.max_vcl_log;
-                break;
-            case SLT_Timestamp:
-                recs_per_btx += config.max_timestamp;
-                break;
-            default:
+            else
                 recs_per_btx++;
-            }
-        }
-    }
     if (recs_per_btx > recs_per_tx)
         recs_per_tx = recs_per_btx;
 
@@ -1207,12 +1258,36 @@ free_format(compiled_fmt_t *fmt)
     free(fmt->args);
 }
 
+static void
+free_incl(includehead_t inclhead[])
+{
+    include_t *incl;
+
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        VSTAILQ_FOREACH(incl, &inclhead[i], inclist) {
+            if (incl->hdr != NULL)
+                free(incl->hdr);
+            free(incl);
+        }
+}
+
 void
 FMT_Fini(void)
 {
     free(scratch);
     VSB_delete(payload);
-    VSB_delete(i_arg);
+    VSB_delete(bintag);
+
+    if (includes > 0) {
+        for (int i = 0; i <= includes; i++)
+            if (incl_arg[i] != NULL)
+                free((void *) incl_arg[i]);
+        free(incl_arg);
+
+        free_incl(cincl);
+        free_incl(bincl);
+        free_incl(rincl);
+    }
 
     if (!EMPTY(config.cformat))
         free_format(&cformat);
