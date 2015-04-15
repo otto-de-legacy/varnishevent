@@ -139,20 +139,26 @@ open_log(void)
 static inline void
 wrt_return_freelist(void)
 {
-    DATA_Return_Freetx(&wrt_freetx, wrt_nfree_tx);
-    LOG_Log(LOG_DEBUG, "Writer: returned %u tx to free list", wrt_nfree_tx);
-    wrt_nfree_tx = 0;
-    assert(VSTAILQ_EMPTY(&wrt_freetx));
-    DATA_Return_Freeline(&wrt_freerecs, wrt_nfree_recs);
-    LOG_Log(LOG_DEBUG, "Writer: returned %u records to free list",
-            wrt_nfree_recs);
-    wrt_nfree_recs = 0;
-    assert(VSTAILQ_EMPTY(&wrt_freerecs));
-    DATA_Return_Freechunk(&wrt_freechunks, wrt_nfree_chunks);
-    LOG_Log(LOG_DEBUG, "Writer: returned %u chunks to free list",
-            wrt_nfree_chunks);
-    wrt_nfree_chunks = 0;
-    assert(VSTAILQ_EMPTY(&wrt_freechunks));
+    if (wrt_nfree_tx > 0) {
+        DATA_Return_Freetx(&wrt_freetx, wrt_nfree_tx);
+        LOG_Log(LOG_DEBUG, "Writer: returned %u tx to free list", wrt_nfree_tx);
+        wrt_nfree_tx = 0;
+        assert(VSTAILQ_EMPTY(&wrt_freetx));
+    }
+    if (wrt_nfree_recs > 0) {
+        DATA_Return_Freeline(&wrt_freerecs, wrt_nfree_recs);
+        LOG_Log(LOG_DEBUG, "Writer: returned %u records to free list",
+                wrt_nfree_recs);
+        wrt_nfree_recs = 0;
+        assert(VSTAILQ_EMPTY(&wrt_freerecs));
+    }
+    if (wrt_nfree_chunks > 0) {
+        DATA_Return_Freechunk(&wrt_freechunks, wrt_nfree_chunks);
+        LOG_Log(LOG_DEBUG, "Writer: returned %u chunks to free list",
+                wrt_nfree_chunks);
+        wrt_nfree_chunks = 0;
+        assert(VSTAILQ_EMPTY(&wrt_freechunks));
+    }
 }
 
 void

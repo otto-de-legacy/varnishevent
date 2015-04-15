@@ -121,7 +121,7 @@ static unsigned rdr_tx_free = 0;
 
 static char cli_config_filename[BUFSIZ] = "";
 
-static int tx_type_log[VSL_t__MAX];
+static int tx_type_log[VSL_t__MAX], debug = 0;
 static char tx_type_name[VSL_t__MAX];
 
 void
@@ -154,6 +154,8 @@ static inline chunk_t
         rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
         if (VSTAILQ_EMPTY(&rdr_chunk_freelist))
             return NULL;
+        if (debug)
+            LOG_Log(LOG_DEBUG, "Reader: took %u free chunks", rdr_chunk_free);
     }
     chunk = VSTAILQ_FIRST(&rdr_chunk_freelist);
     VSTAILQ_REMOVE_HEAD(&rdr_chunk_freelist, freelist);
@@ -172,6 +174,8 @@ static inline logline_t
         rdr_rec_free = DATA_Take_Freeline(&rdr_rec_freelist);
         if (VSTAILQ_EMPTY(&rdr_rec_freelist))
             return NULL;
+        if (debug)
+            LOG_Log(LOG_DEBUG, "Reader: took %u free records", rdr_rec_free);
     }
     rec = VSTAILQ_FIRST(&rdr_rec_freelist);
     VSTAILQ_REMOVE_HEAD(&rdr_rec_freelist, freelist);
@@ -190,6 +194,8 @@ static inline tx_t
         rdr_tx_free = DATA_Take_Freetx(&rdr_tx_freelist);
         if (VSTAILQ_EMPTY(&rdr_tx_freelist))
             return NULL;
+        if (debug)
+            LOG_Log(LOG_DEBUG, "Reader: took %u free tx", rdr_tx_free);
     }
     tx = VSTAILQ_FIRST(&rdr_tx_freelist);
     VSTAILQ_REMOVE_HEAD(&rdr_tx_freelist, freelist);
@@ -247,7 +253,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         if (tx->type == VSL_t_raw)
             tx->t = VTIM_real();
 
-        if (logconf.level == LOG_DEBUG)
+        if (debug)
             LOG_Log(LOG_DEBUG, "Tx: [%u %c]", tx->vxid, tx_type_name[tx->type]);
 
         while ((status = VSL_Next(t->c)) > 0) {
@@ -260,7 +266,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 continue;
 
             len = VSL_LEN(t->c->rec.ptr);
-            if (logconf.level == LOG_DEBUG)
+            if (debug)
                 LOG_Log(LOG_DEBUG, "Line: [%u %s %.*s]", VSL_ID(t->c->rec.ptr),
                         VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
                         VSL_CDATA(t->c->rec.ptr));
@@ -499,8 +505,10 @@ main(int argc, char *argv[])
     if (LOG_Open(config.syslog_ident) != 0) {
         exit(EXIT_FAILURE);
     }
-    if (v_flag)
+    if (v_flag) {
+        debug = 1;
         LOG_SetLevel(LOG_DEBUG);
+    }
 
     LOG_Log(LOG_INFO, "initializing (%s)", VCS_version);
 

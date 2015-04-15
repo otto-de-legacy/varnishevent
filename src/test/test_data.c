@@ -56,6 +56,7 @@ static char
 {
     int err;
     char fmterr[BUFSIZ];
+    unsigned tx_free = 0, rec_free = 0, chunk_free = 0;
 
     printf("... testing data table initialization\n");
 
@@ -73,6 +74,8 @@ static char
         MASSERT(txn[i].type == VSL_t_unknown);
         MAZ(txn[i].t);
         MASSERT(VSTAILQ_EMPTY(&txn[i].lines));
+        if (VSTAILQ_NEXT(&txn[i], freelist) != NULL)
+            tx_free++;
     }
     MASSERT(global_nfree_tx == config.max_data);
 
@@ -82,6 +85,8 @@ static char
         MASSERT(lines[i].tag == SLT__Bogus);
         MASSERT(lines[i].len == 0);
         MASSERT(VSTAILQ_EMPTY(&lines[i].chunks));
+        if (VSTAILQ_NEXT(&lines[i], freelist) != NULL)
+            rec_free++;
     }
     MASSERT(global_nfree_line == nrecords);
 
@@ -89,8 +94,14 @@ static char
         MCHECK_OBJ(&chunks[i], CHUNK_MAGIC);
         MASSERT(chunks[i].state == DATA_EMPTY);
         MASSERT(chunks[i].data == (chunks[0].data + (i * config.chunk_size)));
+        if (VSTAILQ_NEXT(&chunks[i], freelist) != NULL)
+            chunk_free++;
     }
     MASSERT(global_nfree_chunk == nchunks);
+
+    MASSERT(tx_free == config.max_data - 1);
+    MASSERT(rec_free == nrecords - 1);
+    MASSERT(chunk_free == nchunks - 1);
 
     return NULL;
 }
@@ -170,7 +181,6 @@ static const char
 
     MASSERT(VSTAILQ_EMPTY(&local_freetx));
     MASSERT(global_nfree_tx == config.max_data);
-    /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
 
     return NULL;
 }
@@ -184,7 +194,6 @@ static const char
 
     MASSERT(VSTAILQ_EMPTY(&local_freeline));
     MASSERT(global_nfree_line == nrecords);
-    /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
 
     return NULL;
 }
@@ -198,7 +207,6 @@ static const char
 
     MASSERT(VSTAILQ_EMPTY(&local_freechunk));
     MASSERT(global_nfree_chunk == nchunks);
-    /*MASSERT(!VSTAILQ_EMPTY(&freehead));*/
 
     return NULL;
 }
@@ -239,9 +247,10 @@ static const char
         if (n < 10)
             MASSERT(tx == &txn[n + 10]);
         else
-            MASSERT(tx == &txn[n]);
+            MASSERT(tx == &txn[n - 10]);
         n++;
     }
+    MASSERT(n == 20);
 
     return NULL;
 }

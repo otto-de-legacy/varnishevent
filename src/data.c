@@ -42,14 +42,13 @@
 
 /* Preprend head2 before head1, result in head1, head2 empty afterward */
 #define	VSTAILQ_PREPEND(head1, head2) do {                      \
-	if (VSTAILQ_EMPTY((head1))) {                           \
-		(head1)->vstqh_first = (head2)->vstqh_first;    \
-		(head1)->vstqh_last = (head2)->vstqh_last;      \
-	}                                                       \
-	else if (!VSTAILQ_EMPTY((head2))) {                     \
-		(head2)->vstqh_last = &(head1)->vstqh_first;    \
-		(head1)->vstqh_first = (head2)->vstqh_first;    \
-	}                                                       \
+        if (VSTAILQ_EMPTY((head2)))                             \
+            break;                                              \
+	if (VSTAILQ_EMPTY((head1)))                             \
+            (head1)->vstqh_last = (head2)->vstqh_last;          \
+	else                                                    \
+            *(head2)->vstqh_last = VSTAILQ_FIRST((head1));      \
+        VSTAILQ_FIRST((head1)) = VSTAILQ_FIRST((head2));        \
         VSTAILQ_INIT((head2));                                  \
 } while (0)
 
