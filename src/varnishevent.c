@@ -327,6 +327,10 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
             nrec++;
         }
+
+        if (nrec == 0)
+            continue;
+
         tx->state = TX_DONE;
         seen++;
         MON_StatsUpdate(STATS_DONE, nrec, total_chunks);
