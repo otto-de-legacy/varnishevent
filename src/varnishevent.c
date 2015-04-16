@@ -436,7 +436,7 @@ main(int argc, char *argv[])
     CONF_Init();
     read_default_config();
 
-    while ((c = getopt(argc, argv, "adDvP:Vw:F:g:f:q:")) != -1) {
+    while ((c = getopt(argc, argv, "adDvP:Vw:F:g:f:q:r:")) != -1) {
         switch (c) {
         case 'a':
             a_flag = 1;
@@ -473,13 +473,18 @@ main(int argc, char *argv[])
         case 'q':
             REPLACE(q_arg, optarg);
             break;
+        case 'r':
+            strcpy(config.varnish_bindump, optarg);
+            break;
         default:
-            if (c == 'r') {
-                strcpy(config.varnish_bindump, optarg);
+            if ((errnum = VSL_Arg(vsl, c, optarg)) <= 0) {
+                if (errnum == -1)
+                    fprintf(stderr, "-%c: %s\n", c, VSL_Error(vsl));
+                else
+                    fprintf(stderr, "unknown option -%c\n", c);
+                usage();
             }
-            if (VSL_Arg(vsl, c, optarg) > 0)
-                break;
-            usage();
+            break;
         }
     }
 
