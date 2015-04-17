@@ -115,7 +115,7 @@ set_fdset(void)
 static int
 open_log(void)
 {
-    if (EMPTY(config.output_file))
+    if (EMPTY(config.output_file) || strcmp(config.output_file, "-") == 0)
         fo = stdout;
     else if ((fo = fopen(config.output_file, config.append ? "a" : "w"))
               == NULL)
