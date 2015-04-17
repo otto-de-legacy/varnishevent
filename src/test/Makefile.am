@@ -1,6 +1,6 @@
 AM_CPPFLAGS = @VARNISH_CFLAGS@ -I ${ac_varnish_pkgdataincludedir}
 
-TESTS = test_data test_strfTIM test_format test_writer regress.sh # ncsa.sh vslarg.sh
+TESTS = test_data test_strfTIM test_format test_writer ncsa.sh regress.sh # vslarg.sh
 
 check_PROGRAMS = test_data test_strfTIM test_format test_writer
 
