@@ -67,11 +67,13 @@ stdio_log(int level, const char *msg, ...)
     
     if (level > logconf.level)
         return;
+    flockfile(logconf.out);
     fprintf(logconf.out, "%s: ", level2name[level]);
     va_start(ap, msg);
     (void) vfprintf(logconf.out, msg, ap);
     va_end(ap);
     fprintf(logconf.out, "\n");
+    funlockfile(logconf.out);
     fflush(logconf.out);
 }
 
