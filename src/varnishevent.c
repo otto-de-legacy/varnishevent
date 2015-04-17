@@ -326,8 +326,10 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             nrec++;
         }
 
-        if (nrec == 0)
+        if (nrec == 0) {
+            VSTAILQ_INSERT_HEAD(&rdr_tx_freelist, tx, freelist);
             continue;
+        }
 
         tx->state = TX_DONE;
         seen++;
