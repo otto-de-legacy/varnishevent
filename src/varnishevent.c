@@ -238,6 +238,9 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         if (!tx_type_log[t->type])
             continue;
             
+        if (debug)
+            LOG_Log(LOG_DEBUG, "Tx: [%u %c]", t->vxid, tx_type_name[t->type]);
+
         tx = take_tx();
         if (tx == NULL) {
             no_free_tx++;
@@ -253,9 +256,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         if (tx->type == VSL_t_raw)
             tx->t = VTIM_real();
 
-        if (debug)
-            LOG_Log(LOG_DEBUG, "Tx: [%u %c]", tx->vxid, tx_type_name[tx->type]);
-
         while ((status = VSL_Next(t->c)) > 0) {
             int len, n, nchunk;
             logline_t *rec;
@@ -270,8 +270,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 LOG_Log(LOG_DEBUG, "Line: [%u %s %.*s]", VSL_ID(t->c->rec.ptr),
                         VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
                         VSL_CDATA(t->c->rec.ptr));
-            if (len <= 0)
-                continue;
 
             rec = take_rec();
             if (rec == NULL) {
