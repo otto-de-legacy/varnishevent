@@ -647,9 +647,9 @@ main(int argc, char *argv[])
         LOG_Log(LOG_INFO, "Include filter: %s", include_args[i]);
     }
 
-    if (!EMPTY(config.cformat))
+    if (!EMPTY(config.cformat) && EMPTY(config.bformat))
         assert(VSL_Arg(vsl, 'c', scratch) > 0);
-    if (!EMPTY(config.bformat))
+    else if (!EMPTY(config.bformat) && EMPTY(config.cformat))
         assert(VSL_Arg(vsl, 'b', scratch) > 0);
 
     if ((errnum = DATA_Init()) != 0) {
