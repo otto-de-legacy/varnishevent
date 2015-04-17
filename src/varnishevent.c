@@ -415,9 +415,8 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
-    int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0;
+    int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0, D_flag = 0;
 #if 0
-    int D_flag = 0;
     const char *P_arg = NULL;
 #endif
     char *w_arg = NULL, *q_arg = NULL, *g_arg = NULL;
@@ -447,10 +446,15 @@ main(int argc, char *argv[])
         case 'F':
             strcpy(config.cformat, optarg);
             break;
-#if 0
         case 'D':
+#ifdef HAVE_DAEMON
             D_flag = 1;
+#else
+            fprintf(stderr, "-D not supported");
+            exit(EXIT_FAILURE);
+#endif
             break;
+#if 0
         case 'P':
             P_arg = optarg;
             break;
@@ -502,14 +506,18 @@ main(int argc, char *argv[])
         perror(P_arg);
         exit(1);
     }
+#endif
 
-    if (D_flag && varnish_daemon(0, 0) == -1) {
+#ifdef HAVE_DAEMON
+    if (D_flag && daemon(0, 0) == -1) {
         perror("daemon()");
+#if 0
         if (pfh != NULL)
             VPF_Remove(pfh);
+#endif
         exit(1);
     }
-#endif    
+#endif
 
     if (LOG_Open(config.syslog_ident) != 0) {
         exit(EXIT_FAILURE);
