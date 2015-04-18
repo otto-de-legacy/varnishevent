@@ -83,7 +83,7 @@
 #define DISPATCH_TERMINATE 10
 #define DISPATCH_REOPEN 11
 
-static unsigned len_hi = 0;
+static unsigned len_hi = 0, closed = 0, overrun = 0, ioerr = 0, reacquire = 0;
 
 static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
     no_free_rec = 0, no_free_chunk = 0;
@@ -103,7 +103,7 @@ static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
 static struct sigaction dump_action, terminate_action, reopen_action,
     stacktrace_action, ignore_action;
 
-static volatile sig_atomic_t reopen = 0, term = 0;
+static volatile sig_atomic_t reopen = 0, term = 0, flush = 0;
 
 /* Local freelists */
 static chunkhead_t rdr_chunk_freelist
@@ -126,9 +126,11 @@ RDR_Stats(void)
 {
     LOG_Log(LOG_INFO, "Reader: seen=%lu submitted=%lu free_tx=%u free_rec=%u "
             "free_chunk=%u no_free_tx=%lu no_free_rec=%lu no_free_chunk=%lu "
-            "len_hi=%u len_overflows=%lu",
+            "len_hi=%u len_overflows=%lu closed=%u overrun=%u ioerr=%u "
+            "reacquire=%u",
             seen, submitted, rdr_tx_free, rdr_rec_free, rdr_chunk_free,
-            no_free_tx, no_free_rec, no_free_chunk, len_hi, len_overflows);
+            no_free_tx, no_free_rec, no_free_chunk, len_hi, len_overflows,
+            closed, overrun, ioerr, reacquire);
 }
 
 static inline void
@@ -368,6 +370,7 @@ terminate(int sig)
 {
     (void) sig;
     term = 1;
+    flush = 1;
 }
 
 static vas_f assert_fail __attribute__((__noreturn__));
@@ -418,7 +421,7 @@ main(int argc, char *argv[])
     struct vpf_fh *pfh = NULL;
     struct VSL_data *vsl;
     struct VSLQ *vslq;
-    struct VSM_data *vsm;
+    struct VSM_data *vsm = NULL;
     struct VSL_cursor *cursor;
     enum VSL_grouping_e grouping = VSL_g_vxid;
 
@@ -565,8 +568,8 @@ main(int argc, char *argv[])
         vsm = VSM_New();
         AN(vsm);
         if (VSM_Open(vsm) < 0) {
-            LOG_Log(LOG_CRIT, "Cannot attach to shared memory for instance %s: "
-                    "%s", VSM_Name(vsm), VSM_Error(vsm));
+            LOG_Log(LOG_CRIT, "Cannot attach to shared memory: %s",
+                    VSM_Error(vsm));
             exit(EXIT_FAILURE);
         }
         if (!d_flag)
@@ -719,37 +722,74 @@ main(int argc, char *argv[])
             VTIM_sleep(config.idle_pause);
             continue;
         case DISPATCH_TERMINATE:
-            assert(term == 1);
-            LOG_Log0(LOG_INFO, "Termination signal received, will flush"
-                     "pending transactions and exit");
+            AN(term);
+            AN(flush);
             break;
         case DISPATCH_EOF:
             term = 1;
-            LOG_Log0(LOG_INFO, "Reached end of file, will exit");
+            LOG_Log0(LOG_INFO, "Reached end of file");
             break;
-        /* XXX: for the rest of these, try to flush, re-acquire the log and
-           continue. */
         case DISPATCH_CLOSED:
-            term = 1;
-            LOG_Log0(LOG_ERR, "Log was closed or abandoned, will exit");
+            flush = 1;
+            closed++;
+            LOG_Log0(LOG_ERR, "Log was closed or abandoned");
             break;
         case DISPATCH_OVERRUN:
-            term = 1;
-            LOG_Log0(LOG_ERR, "Log reads were overrun, will exit");
+            flush = 1;
+            overrun++;
+            LOG_Log0(LOG_ERR, "Log reads were overrun");
             break;
         case DISPATCH_IOERR:
-            term = 1;
+            flush = 1;
+            ioerr++;
             LOG_Log(LOG_ERR,
-                    "IO error reading the log, will exit: %s (errno = %d)",
+                    "IO error reading the log: %s (errno = %d)",
                     strerror(errno), errno);
             break;
         default:
             WRONG("Unknown return status from dispatcher");
         }
+        if (flush) {
+            LOG_Log0(LOG_NOTICE, "Flushing transactions");
+            VSLQ_Flush(vslq, event, NULL);
+            VSLQ_Delete(&vslq);
+            AZ(vslq);
+            flush = 0;
+            if (!term && EMPTY(config.varnish_bindump)) {
+                /* cf. VUT_Main() in Varnish vut.c */
+                LOG_Log0(LOG_NOTICE, "Attempting to reacquire the log");
+                while (!term && vslq == NULL) {
+                    AN(vsm);
+                    VTIM_sleep(0.1);
+                    if (VSM_Open(vsm)) {
+                        VSM_ResetError(vsm);
+                        continue;
+                    }
+                    cursor = VSL_CursorVSM(vsl, vsm,
+                                           VSL_COPT_TAIL | VSL_COPT_BATCH);
+                    if (cursor == NULL) {
+                        VSL_ResetError(vsl);
+                        VSM_Close(vsm);
+                        continue;
+                    }
+                    vslq = VSLQ_New(vsl, &cursor, grouping, q_arg);
+                    AZ(cursor);
+                }
+                if (vslq != NULL) {
+                    reacquire++;
+                    LOG_Log0(LOG_NOTICE, "Log reacquired");
+                }
+            }
+        }
     }
 
-    if (status == DISPATCH_TERMINATE)
-        VSLQ_Flush(vslq, event, NULL);
+    if (term && status != DISPATCH_EOF) {
+        LOG_Log0(LOG_NOTICE, "Termination signal received");
+        if (flush && vslq != NULL) {
+            LOG_Log0(LOG_NOTICE, "Flushing transactions");
+            VSLQ_Flush(vslq, event, NULL);
+        }
+    }
 
     WRT_Halt();
     WRT_Fini();

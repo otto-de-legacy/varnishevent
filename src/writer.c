@@ -342,8 +342,6 @@ WRT_Start(void)
 void
 WRT_Stats(void)
 {
-    if (!run) return;
-    
     LOG_Log(LOG_INFO,
         "Writer (%s): seen=%lu writes=%lu bytes=%lu errors=%lu timeouts=%lu"
         " waits=%lu free_tx=%u free_rec=%u free_chunk=%u",

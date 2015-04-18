@@ -23,7 +23,7 @@ fi
 # predictable from one run to the next.
 CKSUM=$( sed -e 's/\(initializing\) \(.*\)/\1/' $LOG | egrep -v 'Writer: returned|Reader: took|Allocating table' | cksum )
 
-if [ "$CKSUM" != '3970198226 66951221' ]; then
+if [ "$CKSUM" != '1400833201 66951210' ]; then
     echo "ERROR: Regression test varnishevent log incorrect cksum: $CKSUM"
     exit 1
 fi
