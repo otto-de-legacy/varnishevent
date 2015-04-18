@@ -26,7 +26,11 @@ varnishevent_SOURCES = \
 	format.c \
 	handler.c \
 	vtim.h \
-	vtim.c
+	vtim.c \
+	vpf.h \
+	vpf.c \
+	flopen.h \
+	flopen.c
 
 varnishevent_LDADD = \
 	${PTHREAD_LIBS} ${RT_LIBS} ${LIBM} @VARNISH_LIBS@ \

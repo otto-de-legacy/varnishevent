@@ -60,11 +60,7 @@
 #include <errno.h>
 
 #include "vsb.h"
-#if 0
-#include "vpf.h"
-#endif
 #include "vqueue.h"
-
 #include "vapi/vsl.h"
 #include "vre.h"
 #include "miniobj.h"
@@ -73,6 +69,7 @@
 
 #include "varnishevent.h"
 #include "vtim.h"
+#include "vpf.h"
 
 #define DEFAULT_CONFIG "/etc/varnishevent.conf"
 
@@ -416,14 +413,9 @@ int
 main(int argc, char *argv[])
 {
     int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0, D_flag = 0;
-#if 0
-    const char *P_arg = NULL;
-#endif
-    char *w_arg = NULL, *q_arg = NULL, *g_arg = NULL;
-    char scratch[BUFSIZ];
-#if 0
+    char *P_arg = NULL, *w_arg = NULL, *q_arg = NULL, *g_arg = NULL,
+        scratch[BUFSIZ];
     struct vpf_fh *pfh = NULL;
-#endif
     struct VSL_data *vsl;
     struct VSLQ *vslq;
     struct VSM_data *vsm;
@@ -454,16 +446,14 @@ main(int argc, char *argv[])
             exit(EXIT_FAILURE);
 #endif
             break;
-#if 0
         case 'P':
-            P_arg = optarg;
+            REPLACE(P_arg, optarg);
             break;
-#endif
         case 'V':
             VCS_Message("varnishevent");
             exit(0);
         case 'w':
-            w_arg = optarg;
+            REPLACE(w_arg, optarg);
             break;
         case 'v':
             v_flag = 1;
@@ -501,21 +491,15 @@ main(int argc, char *argv[])
         }
     }
 
-#if 0
     if (P_arg && (pfh = VPF_Open(P_arg, 0644, NULL)) == NULL) {
         perror(P_arg);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
-#endif
 
 #ifdef HAVE_DAEMON
     if (D_flag && daemon(0, 0) == -1) {
         perror("daemon()");
-#if 0
-        if (pfh != NULL)
-            VPF_Remove(pfh);
-#endif
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 #endif
 
@@ -529,6 +513,16 @@ main(int argc, char *argv[])
 
     LOG_Log(LOG_INFO, "initializing (%s)", VCS_version);
 
+    if (pfh != NULL) {
+        errno = 0;
+        if (VPF_Write(pfh) != 0) {
+            LOG_Log(LOG_CRIT, "Cannot write pid file %s, exiting: %s", P_arg,
+                    strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        errno = 0;
+    }
+    
     /* XXX: also set grouping in config file */
     if (g_arg != NULL) {
         grouping = VSLQ_Name2Grouping(g_arg, -1);
@@ -613,11 +607,6 @@ main(int argc, char *argv[])
     /* Install signal handlers */
 #include "signals.h"
 
-#if 0
-    if (pfh != NULL)
-        VPF_Write(pfh);
-#endif
-    
     if (w_arg)
         strcpy(config.output_file, w_arg);
     if (!EMPTY(config.output_file))
@@ -769,6 +758,12 @@ main(int argc, char *argv[])
     FMT_Fini();
     AZ(pthread_cond_destroy(&spscq_ready_cond));
     AZ(pthread_mutex_destroy(&spscq_ready_lock));
+    if (pfh != NULL) {
+        errno = 0;
+        if (VPF_Remove(pfh) != 0)
+            LOG_Log(LOG_WARNING, "Could not remove pid file %s: %s", P_arg,
+                    strerror(errno));
+    }
     LOG_Log0(LOG_INFO, "Exiting");
     LOG_Close();
 
