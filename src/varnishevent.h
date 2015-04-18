@@ -83,18 +83,6 @@ typedef enum {
     TX_DONE,
 } tx_state_e;
 
-typedef struct {
-    unsigned magic;
-#define RECORD_MAGIC 0xdf4399b1
-    char *data;
-    unsigned len;
-} record_t;
-
-typedef struct {
-    record_t *record;
-    unsigned nrec;
-} hdr_t;
-
 typedef struct chunk_t {
     unsigned magic;
 #define CHUNK_MAGIC 0x676e0d19
