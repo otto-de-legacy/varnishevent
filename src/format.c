@@ -80,13 +80,14 @@ char *
 get_payload(const logline_t *rec)
 {
     CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+    assert(OCCUPIED(rec));
 
     if (!rec->len)
         return empty;
 
     chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
     CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
-    assert(chunk->state == DATA_DONE);
+    assert(OCCUPIED(chunk));
     if (rec->len <= config.chunk_size)
         return chunk->data;
 
@@ -117,6 +118,7 @@ get_tag(const tx_t *tx, enum VSL_tag_e tag)
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
         CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        assert(OCCUPIED(rec));
         if (rec->tag == tag)
             tagrec = rec;
     }
@@ -138,6 +140,7 @@ get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr)
         char *c;
 
         CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        assert(OCCUPIED(rec));
         if (rec->tag != tag)
             continue;
         c = get_payload(rec);
@@ -1215,7 +1218,7 @@ FMT_Format(tx_t *tx, struct vsb *os)
     compiled_fmt_t fmt;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    assert(tx->state == TX_DONE);
+    assert(OCCUPIED(tx));
 
     switch(tx->type) {
     case VSL_t_req:

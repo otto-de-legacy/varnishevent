@@ -52,7 +52,7 @@
         VSTAILQ_INIT((head2));                                  \
 } while (0)
 
-static const char *statename[3] = { "EMPTY", "DONE" };
+static const char *statename[3] = { "EMPTY", "OCCUPIED" };
 
 static pthread_mutex_t freetx_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t freeline_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -87,19 +87,19 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     
-    tx->state = TX_EMPTY;
+    tx->occupied = 0;
     tx->vxid = -1;
     tx->type = VSL_t_unknown;
     tx->t = 0.;
 
     while ((rec = VSTAILQ_FIRST(&tx->lines)) != NULL) {
         CHECK_OBJ(rec, LOGLINE_MAGIC);
-        rec->state = DATA_EMPTY;
+        rec->occupied = 0;
         rec->tag = SLT__Bogus;
         rec->len = 0;
         while ((chunk = VSTAILQ_FIRST(&rec->chunks)) != NULL) {
             CHECK_OBJ(chunk, CHUNK_MAGIC);
-            chunk->state = DATA_EMPTY;
+            chunk->occupied = 0;
             *chunk->data = '\0';
             VSTAILQ_REMOVE_HEAD(&rec->chunks, chunklist);
             VSTAILQ_INSERT_HEAD(freechunk, chunk, freelist);
@@ -146,7 +146,7 @@ DATA_Init(void)
     VSTAILQ_INIT(&freechunkhead);
     for (int i = 0; i < nchunks; i++) {
         chunks[i].magic = CHUNK_MAGIC;
-        chunks[i].state = DATA_EMPTY;
+        chunks[i].occupied = 0;
         chunks[i].data = &bufptr[bufidx++ * config.chunk_size];
         VSTAILQ_INSERT_TAIL(&freechunkhead, &chunks[i], freelist);
     }
@@ -163,7 +163,7 @@ DATA_Init(void)
     VSTAILQ_INIT(&freelinehead);
     for (int i = 0; i < nrecords; i++) {
         lines[i].magic = LOGLINE_MAGIC;
-        lines[i].state = DATA_EMPTY;
+        lines[i].occupied = 0;
         lines[i].tag = SLT__Bogus;
         lines[i].len = 0;
         VSTAILQ_INIT(&lines[i].chunks);
@@ -182,7 +182,7 @@ DATA_Init(void)
     VSTAILQ_INIT(&freetxhead);
     for (int i = 0; i < config.max_data; i++) {
         txn[i].magic = TX_MAGIC;
-        txn[i].state = TX_EMPTY;
+        txn[i].occupied = 0;
         txn[i].vxid = -1;
         txn[i].type = VSL_t_unknown;
         txn[i].t = 0.;
@@ -260,14 +260,14 @@ DATA_Dump(void)
             continue;
         }
         
-        if (txn[i].state == TX_EMPTY)
+        if (txn[i].occupied == 0)
             continue;
 
         tx = &txn[i];
         VSB_clear(data);
 
         VSB_printf(data, "Tx entry %d: vxid=%u state=%s dir=%c records={",
-            i, tx->vxid, statename[tx->state],
+            i, tx->vxid, statename[tx->occupied],
             C(tx->type) ? 'c' : B(tx->type) ? 'b' : '-');
 
         VSTAILQ_FOREACH(rec, &tx->lines, linelist) {

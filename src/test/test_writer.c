@@ -77,7 +77,7 @@ static char
     chunk.data = (char *) calloc(1, config.chunk_size);
 
     for (int i = 0; i < THRESHOLD; i++) {
-        tx.state = DATA_DONE;
+        tx.occupied = 1;
         tx.type = VSL_t_req;
 
         wrt_write(&tx);

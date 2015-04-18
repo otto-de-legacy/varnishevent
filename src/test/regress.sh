@@ -18,12 +18,12 @@ if [ "$CKSUM" != "4102580059 20793538 $OUT" ]; then
 fi
 
 # sed removes the version/revision from the "initializing" line.
-# grep removes logs by the threads about free lists, which are not
-# relevant to the regression, and are not predictable from one run to
-# the next.
-CKSUM=$( sed -e 's/\(initializing\) \(.*\)/\1/' $LOG | egrep -v 'Writer: returned|Reader: took' | cksum )
+# grep removes logs about table allocations and by the threads about
+# free lists, which are not relevant to the regression, and are not
+# predictable from one run to the next.
+CKSUM=$( sed -e 's/\(initializing\) \(.*\)/\1/' $LOG | egrep -v 'Writer: returned|Reader: took|Allocating table' | cksum )
 
-if [ "$CKSUM" != '469328279 66951401' ]; then
+if [ "$CKSUM" != '3970198226 66951221' ]; then
     echo "ERROR: Regression test varnishevent log incorrect cksum: $CKSUM"
     exit 1
 fi

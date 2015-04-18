@@ -48,6 +48,7 @@ add_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
 {
     VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
     rec->magic = LOGLINE_MAGIC;
+    rec->occupied = 1;
     VSTAILQ_INIT(&rec->chunks);
     VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
     chunk->magic = CHUNK_MAGIC;
@@ -72,7 +73,7 @@ set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
     strcpy(chunk->data, data);
     if (tag != SLT__Bogus)
         rec->tag = tag;
-    chunk->state = DATA_DONE;
+    chunk->occupied = 1;
 }
 
 static void
@@ -109,9 +110,11 @@ static const char
     printf("... testing get_payload()\n");
 
     rec.magic = LOGLINE_MAGIC;
+    rec.occupied = 1;
     VSTAILQ_INIT(&rec.chunks);
     chunk.magic = CHUNK_MAGIC;
     chunk.data = (char *) calloc(1, config.chunk_size);
+    chunk.occupied = 1;
     MAN(chunk.data);
 
     /* Record with one chunk */
@@ -177,6 +180,7 @@ static const char
     for (int i = 0; i < NRECORDS; i++) {
         recs[i].magic = LOGLINE_MAGIC;
         recs[i].tag = SLT_ReqHeader;
+        recs[i].occupied = 1;
         VSTAILQ_INSERT_TAIL(&tx.lines, &recs[i], linelist);
     }
     recs[NRECORDS / 2].tag = SLT_RespHeader;
@@ -218,7 +222,7 @@ static const char
         VSTAILQ_INIT(&recs[i].chunks);
         c[i].magic = CHUNK_MAGIC;
         c[i].data = (char *) calloc(1, config.chunk_size);
-        c[i].state = DATA_DONE;
+        c[i].occupied = 1;
         strcpy(c[i].data, "Bar: baz");
         VSTAILQ_INSERT_TAIL(&recs[i].chunks, &c[i], chunklist);
     }
@@ -313,7 +317,7 @@ static const char
     VSTAILQ_INIT(&rec.chunks);
     chunk.magic = CHUNK_MAGIC;
     chunk.data = (char *) calloc(1, config.chunk_size);
-    chunk.state = DATA_DONE;
+    chunk.occupied = 1;
     MAN(chunk.data);
     rec.len = strlen(SHORT_STRING);
     strcpy(chunk.data, SHORT_STRING);
@@ -1313,7 +1317,7 @@ static const char
     MAN(os);
 
     tx.magic = TX_MAGIC;
-    tx.state = TX_DONE;
+    tx.occupied = 1;
     VSTAILQ_INIT(&tx.lines);
     for (int i = 0; i < NRECS; i++) {
         recs[i] = (logline_t *) calloc(1, sizeof(logline_t));

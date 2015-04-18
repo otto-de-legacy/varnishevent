@@ -69,7 +69,7 @@ static char
 
     for (int i = 0; i < config.max_data; i++) {
         MCHECK_OBJ(&txn[i], TX_MAGIC);
-        MASSERT(txn[i].state == TX_EMPTY);
+        MASSERT(!OCCUPIED(&txn[i]));
         MASSERT(txn[i].vxid == -1);
         MASSERT(txn[i].type == VSL_t_unknown);
         MAZ(txn[i].t);
@@ -81,7 +81,7 @@ static char
 
     for (int i = 0; i < nrecords; i++) {
         MCHECK_OBJ(&lines[i], LOGLINE_MAGIC);
-        MASSERT(lines[i].state == DATA_EMPTY);
+        MASSERT(!OCCUPIED(&lines[i]));
         MASSERT(lines[i].tag == SLT__Bogus);
         MASSERT(lines[i].len == 0);
         MASSERT(VSTAILQ_EMPTY(&lines[i].chunks));
@@ -92,7 +92,7 @@ static char
 
     for (int i = 0; i < nchunks; i++) {
         MCHECK_OBJ(&chunks[i], CHUNK_MAGIC);
-        MASSERT(chunks[i].state == DATA_EMPTY);
+        MASSERT(!OCCUPIED(&chunks[i]));
         MASSERT(chunks[i].data == (chunks[0].data + (i * config.chunk_size)));
         if (VSTAILQ_NEXT(&chunks[i], freelist) != NULL)
             chunk_free++;
@@ -294,7 +294,7 @@ static const char
     MASSERT(nfree_chunks == 1147 + NRECS*CHUNKS_PER_REC);
 
     MCHECK_OBJ(&tx, TX_MAGIC);
-    MASSERT(tx.state == TX_EMPTY);
+    MASSERT(!OCCUPIED(&tx));
     MASSERT(tx.vxid == -1);
     MASSERT(tx.type == VSL_t_unknown);
     MAZ(tx.t);
@@ -307,7 +307,7 @@ static const char
     MASSERT(!VSTAILQ_EMPTY(&local_freeline));
     VSTAILQ_FOREACH(rec, &local_freeline, freelist) {
         MCHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
-        MASSERT(rec->state == DATA_EMPTY);
+        MASSERT(!OCCUPIED(rec));
         MASSERT(rec->tag == SLT__Bogus);
         MAZ(rec->len);
         MASSERT(VSTAILQ_EMPTY(&tx.lines));
@@ -319,7 +319,7 @@ static const char
     n = 0;
     VSTAILQ_FOREACH(chunk, &local_freechunk, freelist) {
         MCHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
-        MASSERT(chunk->state == DATA_EMPTY);
+        MASSERT(!OCCUPIED(chunk));
         MAZ(chunk->data[0]);
         n++;
         free(chunk->data);

@@ -73,23 +73,13 @@
 
 struct sigaction default_action;
     
-typedef enum {
-    DATA_EMPTY = 0,
-    DATA_DONE,
-} data_state_e;
-
-typedef enum {
-    TX_EMPTY = 0,
-    TX_DONE,
-} tx_state_e;
-
 typedef struct chunk_t {
     unsigned magic;
 #define CHUNK_MAGIC 0x676e0d19
-    data_state_e state;
     char *data;
     VSTAILQ_ENTRY(chunk_t) freelist;
     VSTAILQ_ENTRY(chunk_t) chunklist;
+    unsigned int occupied:1;
 } chunk_t;
 
 typedef VSTAILQ_HEAD(chunkhead_s, chunk_t) chunkhead_t;
@@ -100,12 +90,12 @@ unsigned nchunks;
 typedef struct logline_t {
     unsigned magic;
 #define LOGLINE_MAGIC 0xf427a374
-    enum VSL_tag_e tag;
-    data_state_e state;
-    chunkhead_t chunks;
     unsigned len;
+    chunkhead_t chunks;
     VSTAILQ_ENTRY(logline_t) freelist;
     VSTAILQ_ENTRY(logline_t) linelist;
+    enum VSL_tag_e tag;
+    unsigned int occupied:1;
 } logline_t;
 
 logline_t *lines;
@@ -116,27 +106,23 @@ typedef VSTAILQ_HEAD(linehead_s, logline_t) linehead_t;
 typedef struct tx_t {
     unsigned magic;
 #define TX_MAGIC 0xff463e42
-    double t;
-    tx_state_e state;
     int32_t vxid;
-    enum VSL_transaction_e type;
     linehead_t lines;
     VSTAILQ_ENTRY(tx_t) freelist;
     VSTAILQ_ENTRY(tx_t) spscq;
+    double t;
+    enum VSL_transaction_e type:7;
+    unsigned int occupied:1;
 } tx_t;
 
 tx_t *txn;
 
 typedef VSTAILQ_HEAD(txhead_s, tx_t) txhead_t;
 
-unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi;
+#define OCCUPIED(p) ((p)->occupied == 1)
 
-int tag2idx[MAX_VSL_TAG];
-enum VSL_tag_e idx2tag[MAX_VSL_TAG];
-
-VSTAILQ_HEAD(freehead_s, logline_t);
-
-unsigned global_nfree_tx, global_nfree_line, global_nfree_chunk;
+unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi,
+    global_nfree_tx, global_nfree_line, global_nfree_chunk;
 
 /* Writer (consumer) waits for this condition when the SPSC queue is empty.
    Reader (producer) signals the condition after enqueue. */

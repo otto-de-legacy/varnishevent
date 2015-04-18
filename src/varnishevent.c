@@ -213,7 +213,7 @@ static inline void
 submit(tx_t *tx)
 {
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    assert(tx->state == TX_DONE);
+    assert(OCCUPIED(tx));
     SPSCQ_Enq(tx);
     signal_spscq_ready();
     submitted++;
@@ -246,7 +246,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             continue;
         }
         CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-        assert(tx->state == TX_EMPTY);
+        assert(!OCCUPIED(tx));
         assert(VSTAILQ_EMPTY(&tx->lines));
         tx->type = t->type;
         tx->vxid = t->vxid;
@@ -278,7 +278,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 continue;
             }
             CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
-            assert(rec->state == DATA_EMPTY);
+            assert(!OCCUPIED(rec));
             assert(VSTAILQ_EMPTY(&rec->chunks));
 
             rec->tag = VSL_TAG(t->c->rec.ptr);
@@ -307,18 +307,18 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                     continue;
                 }
                 CHECK_OBJ(chunk, CHUNK_MAGIC);
-                assert(chunk->state == DATA_EMPTY);
+                assert(!OCCUPIED(chunk));
                 VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
                 int cp = n;
                 if (cp > config.chunk_size)
                     cp = config.chunk_size;
                 memcpy(chunk->data, p, cp);
-                chunk->state = DATA_DONE;
+                chunk->occupied = 1;
                 p += cp;
                 n -= cp;
                 total_chunks++;
             }
-            rec->state = DATA_DONE;
+            rec->occupied = 1;
             VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
             nrec++;
         }
@@ -328,7 +328,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             continue;
         }
 
-        tx->state = TX_DONE;
+        tx->occupied = 1;
         seen++;
         MON_StatsUpdate(STATS_DONE, nrec, total_chunks);
         if (tx_occ > tx_occ_hi)

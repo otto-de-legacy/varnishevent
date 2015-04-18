@@ -167,7 +167,7 @@ wrt_write(tx_t *tx)
     int errnum;
     
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    assert(tx->state == TX_DONE);
+    assert(OCCUPIED(tx));
 
     AZ(pthread_mutex_lock(&reopen_lock));
     if (reopen && fo != stdout) {
