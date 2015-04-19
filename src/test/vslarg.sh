@@ -50,29 +50,18 @@ if [ "$?" != "1" ]; then
     exit 1
 fi
 
-exit 0
+echo "... -q query"
+CKSUM=$( ../varnishevent -q 'ReqURL ~ "_static"' -r varnish-doc.log | cksum)
 
-echo "... -m tag:regex"
-CKSUM=$( ../varnishevent -m RxURL:manual -m RxURL:pt-br -r varnish.binlog | cksum)
-
-if [ "$CKSUM" != '3698415327 24419' ]; then
-    echo "ERROR: -m tag:regex incorrect cksum: $CKSUM"
+if [ "$CKSUM" != '2045926544 8190' ]; then
+    echo "ERROR: -q query unexpected cksum: $CKSUM"
     exit 1
 fi
 
-echo "... -s skip"
-CKSUM=$( ../varnishevent -s 20000 -r varnish.binlog | cksum)
+../varnishevent -q 'ReqURL ~'
 
-if [ "$CKSUM" != '3254949310 3668220' ]; then
-    echo "ERROR: -s skip incorrect cksum: $CKSUM"
-    exit 1
-fi
-
-echo "... -X regex"
-CKSUM=$( ../varnishevent -X manual -r varnish.binlog | cksum)
-
-if [ "$CKSUM" != '2279381770 3663437' ]; then
-    echo "ERROR: -X regex incorrect cksum: $CKSUM"
+if [ "$?" != "1" ]; then
+    echo "ERROR: -q query with illegal VSL query did not exit with failure as expected"
     exit 1
 fi
 
