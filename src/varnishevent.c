@@ -502,15 +502,21 @@ main(int argc, char *argv[])
         case 'r':
             strcpy(config.varnish_bindump, optarg);
             break;
-        default:
-            if ((errnum = VSL_Arg(vsl, c, optarg)) <= 0) {
-                if (errnum == -1)
-                    fprintf(stderr, "-%c: %s\n", c, VSL_Error(vsl));
-                else
-                    fprintf(stderr, "unknown option -%c\n", c);
+        case 'L':
+        case 'T':
+            if ((errnum = VSL_Arg(vsl, c, optarg)) < 0) {
+                fprintf(stderr, "%s\n", VSL_Error(vsl));
                 usage();
             }
+            /* XXX: VSL_Arg doesn't check this */
+            if (c == 'L' && atoi(optarg) == 0) {
+                fprintf(stderr, "-L: Range error\n");
+                usage();
+            }
+            AN(errnum);
             break;
+        default:
+            usage();
         }
     }
 
