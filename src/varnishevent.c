@@ -420,12 +420,14 @@ read_default_config(void) {
 }
 
 static void
-usage(void)
+usage(int status)
 {
     fprintf(stderr,
-        "usage: varnishevent [-aDVg] [-G configfile] [-P pidfile] "
-        "[-w outputfile]\n");
-    exit(1);
+            "usage: varnishevent [-adDhvV] [-f configfile] [-F format]\n"
+            "                    [-g grouping] [-L txlimit] [-n name] \n"
+            "                    [-N vsmfile] [-P pidfile] [-q query] \n"
+            "                    [-r binlog] [-T txtimeout] [-w outputfile]\n");
+    exit(status);
 }
 
 int
@@ -446,7 +448,7 @@ main(int argc, char *argv[])
     CONF_Init();
     read_default_config();
 
-    while ((c = getopt(argc, argv, "adDvVP:w:F:g:f:q:r:n:N:L:T:")) != -1) {
+    while ((c = getopt(argc, argv, "adDhvVP:w:F:g:f:q:r:n:N:L:T:")) != -1) {
         switch (c) {
         case 'a':
             a_flag = 1;
@@ -506,23 +508,25 @@ main(int argc, char *argv[])
         case 'T':
             if ((errnum = VSL_Arg(vsl, c, optarg)) < 0) {
                 fprintf(stderr, "%s\n", VSL_Error(vsl));
-                usage();
+                usage(EXIT_FAILURE);
             }
             /* XXX: VSL_Arg doesn't check this */
             if (c == 'L' && atoi(optarg) == 0) {
                 fprintf(stderr, "-L: Range error\n");
-                usage();
+                usage(EXIT_FAILURE);
             }
             AN(errnum);
             break;
+        case 'h':
+            usage(EXIT_SUCCESS);
         default:
-            usage();
+            usage(EXIT_FAILURE);
         }
     }
 
     if (n_arg && N_arg) {
         fprintf(stderr, "Cannot have both -n and -N options\n");
-        usage();
+        usage(EXIT_FAILURE);
     }
 
     if (! EMPTY(cli_config_filename)) {
@@ -537,7 +541,7 @@ main(int argc, char *argv[])
     if (!EMPTY(config.varnish_bindump) && (n_arg || N_arg)) {
         fprintf(stderr, "Cannot specify -r/varnish.bindump together with -n "
                 " or -N\n");
-        usage();
+        usage(EXIT_FAILURE);
     }
 
     if (P_arg && (pfh = VPF_Open(P_arg, 0644, NULL)) == NULL) {
