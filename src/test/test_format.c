@@ -1247,7 +1247,7 @@ static const char
     logline_t rec;
     chunk_t chunk;
     arg_t args;
-    char *str;
+    char *str, *substr;
     size_t len;
 
     printf("... testing format_SLT()\n");
@@ -1280,6 +1280,17 @@ static const char
              "format_SLT with binary data: Expected '%s', got '%s'",
              EXP_SLT_BINARY, str);
     MASSERT(len == 15);
+
+    /* header selector */
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    rec.len = strlen(TS_RESP_PAYLOAD);
+    rec.tag = SLT_Timestamp;
+    args.tag = SLT_Timestamp;
+    args.name = strdup("Resp");
+    format_SLT(&tx, &args, &str, &len);
+    substr = strstr(TS_RESP_PAYLOAD, "14");
+    MASSERT(strncmp(str, substr, strlen(substr)) == 0);
+    MASSERT(len == strlen(substr));
 
     return NULL;
 }
@@ -1377,7 +1388,7 @@ static const char
 #define FULL_CLIENT_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x "\
         "%{Varnish:hitmiss}x %{Varnish:handling}x %{VCL_Log:baz}x "\
-        "%{tag:VCL_acl}x %{tag:Debug}x"
+        "%{tag:VCL_acl}x %{tag:Debug}x %{tag:Timestamp:Req}x"
     strcpy(config.cformat, FULL_CLIENT_FMT);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
@@ -1390,8 +1401,8 @@ static const char
         "ReqHeader:^\\s*Authorization\\s*:", "RespStatus:.",
         "RespHeader:^\\s*Bar\\s*:", "VCL_acl:.", "VCL_call:.", "VCL_return:.", 
         "ReqStart:.", "VCL_Log:^\\s*baz\\s*:", "Timestamp:^\\s*Resp\\s*:",
-        "Timestamp:^\\s*Start\\s*:", "Timestamp:^\\s*Process\\s*:", "ReqAcct:.",
-        "PipeAcct:.", NULL
+        "Timestamp:^\\s*Start\\s*:", "Timestamp:^\\s*Process\\s*:",
+        "Timestamp:^\\s*Req\\s*:", "ReqAcct:.", "PipeAcct:.", NULL
     };
     for (int i = 0; i_args[i] != NULL; i++) {
         MAN(exp_full_client_I_args[i]);
@@ -1400,8 +1411,9 @@ static const char
     }
     
     recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 46);
+    VMASSERT(recs_per_tx == 47, "recs_per_tx(%d) != 47", recs_per_tx);
 
+#define TS_REQ_PAYLOAD "Req: 1429213569.602005 0.000000 0.000000"
     set_record_data(recs[3], c[3], URL_QUERY_PAYLOAD, SLT_ReqURL);
     set_record_data(recs[6], c[6], "Host: foobar.com", SLT_ReqHeader);
     set_record_data(recs[7], c[7], "Foo: foohdr", SLT_ReqHeader);
@@ -1415,13 +1427,15 @@ static const char
     set_record_data(recs[17], c[17], "", SLT_Debug);
     recs[17]->len = 10;
     memcpy(c[17]->data, "foo\0\xFF bar\0", 10);
+    set_record_data(recs[18], c[18], TS_REQ_PAYLOAD, SLT_Timestamp);
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_FULL_CLIENT_OUTPUT "105 c 15963 HTTP/1.1 127.0.0.1 60 foohdr "\
         "barhdr - GET 283 bar=baz&quux=wilco GET "\
         "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.000166 hit hit "\
-        "logload MATCH ACL \"10.0.0.0\"/8 \"foo\\0\\377 bar\"\n"
+        "logload MATCH ACL \"10.0.0.0\"/8 \"foo\\0\\377 bar\" " \
+        "1429213569.602005 0.000000 0.000000\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
@@ -1433,7 +1447,7 @@ static const char
 
 #define FULL_BACKEND_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x %{VCL_Log:baz}x "\
-        "%{tag:Fetch_Body}x %{tag:Debug}x"
+        "%{tag:Fetch_Body}x %{tag:Debug}x %{tag:Timestamp:Bereq}x"
     strcpy(config.bformat, FULL_BACKEND_FMT);
     config.cformat[0] = '\0';
     status = FMT_Init(err);
@@ -1447,7 +1461,7 @@ static const char
         "BerespStatus:.", "BerespHeader:^\\s*Bar\\s*:", "Fetch_Body:.",
         "VCL_Log:^\\s*baz\\s*:", "Timestamp:^\\s*BerespBody\\s*:",
         "Timestamp:^\\s*Start\\s*:", "Timestamp:^\\s*Beresp\\s*:",
-        "BereqAcct:.", NULL
+        "Timestamp:^\\s*Bereq\\s*:", "BereqAcct:.", NULL
     };
     for (int i = 0; i_args[i] != NULL; i++) {
         MAN(exp_full_backend_I_args[i]);
@@ -1456,8 +1470,9 @@ static const char
     }
 
     recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 25);
+    MASSERT(recs_per_tx == 26);
 
+#define TS_BEREQ_PAYLOAD "Bereq: 1429210777.728290 0.000048 0.000048"
     tx.type = VSL_t_bereq;
     set_record_data(recs[1], c[1], BACKEND_PAYLOAD, SLT_Backend);
     recs[2]->tag = SLT_BereqMethod;
@@ -1477,13 +1492,15 @@ static const char
     set_record_data(recs[17], c[17], "", SLT_Debug);
     recs[17]->len = 10;
     memcpy(c[17]->data, "foo\0\xFF bar\0", 10);
+    set_record_data(recs[18], c[18], TS_BEREQ_PAYLOAD, SLT_Timestamp);
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
         "283 foohdr barhdr - GET 60 bar=baz&quux=wilco GET "\
         "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
-        "2 chunked stream \"foo\\0\\377 bar\"\n"
+        "2 chunked stream \"foo\\0\\377 bar\" "\
+        "1429210777.728290 0.000048 0.000048\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",

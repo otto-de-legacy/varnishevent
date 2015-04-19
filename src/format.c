@@ -191,12 +191,21 @@ get_rec_fld(const logline_t *rec, int n, size_t *len)
 }
 
 static inline void
-format_slt(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
+format_slt(const tx_t *tx, enum VSL_tag_e tag, char *hdr, char **s, size_t *len)
 {
-    logline_t *rec = get_tag(tx, tag);
-    if (rec != NULL) {
-        *s = get_payload(rec);
-        *len = rec->len - 1;
+    logline_t *rec;
+
+    if (hdr == NULL) {
+        rec = get_tag(tx, tag);
+        if (rec != NULL) {
+            *s = get_payload(rec);
+            *len = rec->len - 1;
+        }
+    }
+    else {
+        *s = get_hdr(tx, tag, hdr);
+        if (*s != NULL)
+            *len = strlen(*s);
     }
 }
 
@@ -260,14 +269,14 @@ void
 format_H_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_ReqProtocol, s, len);
+    format_slt(tx, SLT_ReqProtocol, NULL, s, len);
 }
 
 void
 format_H_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_BereqProtocol, s, len);
+    format_slt(tx, SLT_BereqProtocol, NULL, s, len);
 }
 
 static inline void
@@ -335,14 +344,14 @@ void
 format_m_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_ReqMethod, s, len);
+    format_slt(tx, SLT_ReqMethod, NULL, s, len);
 }
 
 void
 format_m_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_BereqMethod, s, len);
+    format_slt(tx, SLT_BereqMethod, NULL, s, len);
 }
 
 void
@@ -448,14 +457,14 @@ void
 format_s_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_RespStatus, s, len);
+    format_slt(tx, SLT_RespStatus, NULL, s, len);
 }
 
 void
 format_s_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_BerespStatus, s, len);
+    format_slt(tx, SLT_BerespStatus, NULL, s, len);
 }
 
 static inline void
@@ -698,7 +707,7 @@ format_VCL_Log(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 void
 format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    format_slt(tx, args->tag, s, len);
+    format_slt(tx, args->tag, args->name, s, len);
     if (VSL_tagflags[args->tag] & SLT_F_BINARY) {
         VSB_clear(bintag);
         VSB_quote(bintag, *s, (int) *len, 0);
@@ -1048,15 +1057,25 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     add_tag(type, SLT_VCL_Log, fname+8);
                 }
                 else if (strncmp(fname, "tag:", 4) == 0) {
-                    int t = 0;
-                    
                     /* retrieve the tag contents from the log */
-                    if ((t = VSL_Name2Tag(fname+4, strlen(fname+4))) < 0) {
-                        sprintf(err, "Unknown or non-unique tag %s", fname+4);
+                    char *c, *tagname = fname+4, *hdr = NULL;
+                    int t = 0;
+
+                    c = tagname + 1;
+                    while (*c != ':' && *c != '\0')
+                        c++;
+                    if ((t = VSL_Name2Tag(tagname, c - tagname)) < 0) {
+                        sprintf(err, "Unknown or non-unique tag %*s",
+                                (int) (c - tagname), tagname);
                         return 1;
                     }
-                    add_fmt(fmt, os, n, format_SLT, NULL, t);
-                    add_tag(type, t, NULL);
+                    if (*c == ':') {
+                        hdr = c + 1;
+                        while (*c != '\0')
+                            c++;
+                    }
+                    add_fmt(fmt, os, n, format_SLT, hdr, t);
+                    add_tag(type, t, hdr);
                 }
                 else {
                     sprintf(err, "Unknown format starting at: %s", fname);
