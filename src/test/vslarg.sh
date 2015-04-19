@@ -34,6 +34,14 @@ if [ "$CKSUM" != '2652535054 3311' ]; then
     exit 1
 fi
 
+# Cannot mix raw grouping with client and/or backend formats
+../varnishevent -g raw -f varnishevent.conf
+
+if [ "$?" != "1" ]; then
+    echo "ERROR: -g raw with client/backend formats did not exit with failure as expected"
+    exit 1
+fi
+
 echo '... -g session'
 ../varnishevent -g session
 
