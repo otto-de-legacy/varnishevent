@@ -82,6 +82,7 @@
 #define DISPATCH_IOERR -4
 #define DISPATCH_TERMINATE 10
 #define DISPATCH_REOPEN 11
+#define DISPATCH_FLUSH 12
 
 static unsigned len_hi = 0, closed = 0, overrun = 0, ioerr = 0, reacquire = 0;
 
@@ -101,7 +102,7 @@ static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
     } while(0)
 
 static struct sigaction dump_action, terminate_action, reopen_action,
-    stacktrace_action, ignore_action;
+    stacktrace_action, ignore_action, flush_action;
 
 static volatile sig_atomic_t reopen = 0, term = 0, flush = 0;
 
@@ -341,7 +342,9 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             chunk_occ_hi = chunk_occ;
         submit(tx);
     }
-    
+
+    if (flush)
+        return DISPATCH_FLUSH;
     if (!reopen)
         return status;
     return DISPATCH_REOPEN;
@@ -352,15 +355,16 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 static void
 sigreopen(int sig)
 {
-    LOG_Log(LOG_WARNING, "Received signal %d (%s), reopening output",
-        sig, strsignal(sig));
+    LOG_Log(LOG_NOTICE, "Received signal %d (%s), reopening output",
+            sig, strsignal(sig));
     reopen = 1;
 }
 
 static void
 dump(int sig)
 {
-    (void) sig;
+    LOG_Log(LOG_NOTICE, "Received signal %d (%s), "
+            "dumping config and data table", sig, strsignal(sig));
     CONF_Dump();
     DATA_Dump();
 }
@@ -368,9 +372,18 @@ dump(int sig)
 static void
 terminate(int sig)
 {
-    (void) sig;
     term = 1;
     flush = 1;
+    LOG_Log(LOG_NOTICE, "Received signal %d (%s), terminating",
+            sig, strsignal(sig));
+}
+
+static void
+sigflush(int sig)
+{
+    flush = 1;
+    LOG_Log(LOG_NOTICE, "Received signal %d (%s), "
+            "flushing pending transactions", sig, strsignal(sig));
 }
 
 static vas_f assert_fail __attribute__((__noreturn__));
@@ -600,6 +613,10 @@ main(int argc, char *argv[])
     AZ(sigemptyset(&reopen_action.sa_mask));
     reopen_action.sa_flags |= SA_RESTART;
 
+    flush_action.sa_handler = sigflush;
+    AZ(sigemptyset(&flush_action.sa_mask));
+    flush_action.sa_flags |= SA_RESTART;
+
     stacktrace_action.sa_handler = HNDL_Abort;
 
     ignore_action.sa_handler = SIG_IGN;
@@ -713,16 +730,20 @@ main(int argc, char *argv[])
             continue;
         case DISPATCH_REOPEN:
             take_free();
-            LOG_Log0(LOG_INFO, "Signal received to re-open output");
             WRT_Reopen();
             reopen = 0;
             continue;
         case DISPATCH_EOL:
             take_free();
             VTIM_sleep(config.idle_pause);
-            continue;
+            if (!flush)
+                continue;
+            break;
         case DISPATCH_TERMINATE:
             AN(term);
+            AN(flush);
+            break;
+        case DISPATCH_FLUSH:
             AN(flush);
             break;
         case DISPATCH_EOF:
@@ -751,10 +772,13 @@ main(int argc, char *argv[])
         }
         if (flush) {
             LOG_Log0(LOG_NOTICE, "Flushing transactions");
+            take_free();
             VSLQ_Flush(vslq, event, NULL);
+            flush = 0;
+            if (status == DISPATCH_FLUSH || status == DISPATCH_EOL)
+                continue;
             VSLQ_Delete(&vslq);
             AZ(vslq);
-            flush = 0;
             if (!term && EMPTY(config.varnish_bindump)) {
                 /* cf. VUT_Main() in Varnish vut.c */
                 LOG_Log0(LOG_NOTICE, "Attempting to reacquire the log");
@@ -783,12 +807,10 @@ main(int argc, char *argv[])
         }
     }
 
-    if (term && status != DISPATCH_EOF) {
-        LOG_Log0(LOG_NOTICE, "Termination signal received");
-        if (flush && vslq != NULL) {
-            LOG_Log0(LOG_NOTICE, "Flushing transactions");
-            VSLQ_Flush(vslq, event, NULL);
-        }
+    if (term && status != DISPATCH_EOF && flush && vslq != NULL) {
+        LOG_Log0(LOG_NOTICE, "Flushing transactions");
+        take_free();
+        VSLQ_Flush(vslq, event, NULL);
     }
 
     WRT_Halt();
@@ -801,7 +823,7 @@ main(int argc, char *argv[])
     if (pfh != NULL) {
         errno = 0;
         if (VPF_Remove(pfh) != 0)
-            LOG_Log(LOG_WARNING, "Could not remove pid file %s: %s", P_arg,
+            LOG_Log(LOG_ERR, "Could not remove pid file %s: %s", P_arg,
                     strerror(errno));
     }
     LOG_Log0(LOG_INFO, "Exiting");

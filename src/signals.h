@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2012 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2012 Otto Gmbh & Co KG
+ * Copyright (c) 2012-2015 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2012-2015 Otto Gmbh & Co KG
  * All rights reserved
  * Use only with permission
  *
@@ -29,12 +29,12 @@
  *
  */
 
-
 SIGDISP(SIGTERM, terminate_action);
 SIGDISP(SIGINT, terminate_action);
-SIGDISP(SIGUSR1, dump_action);
-SIGDISP(SIGUSR2, ignore_action);
+SIGDISP(SIGUSR1, flush_action);
+SIGDISP(SIGUSR2, dump_action);
 SIGDISP(SIGABRT, stacktrace_action);
 SIGDISP(SIGSEGV, stacktrace_action);
 SIGDISP(SIGBUS, stacktrace_action);
 SIGDISP(SIGPIPE, reopen_action);
+SIGDISP(SIGHUP, reopen_action);
