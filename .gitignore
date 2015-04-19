@@ -32,5 +32,6 @@ src/test/test_writer
 src/test/output.log
 src/test/test.log
 src/varnishevent
+src/vcs_version.h
 *.1
 stamp-h1

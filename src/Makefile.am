@@ -30,7 +30,8 @@ varnishevent_SOURCES = \
 	vpf.h \
 	vpf.c \
 	flopen.h \
-	flopen.c
+	flopen.c \
+	vcs_version.h
 
 varnishevent_LDADD = \
 	${PTHREAD_LIBS} ${RT_LIBS} ${LIBM} @VARNISH_LIBS@ \
@@ -45,3 +46,38 @@ else
 	@echo "========================================"
 	@false
 endif
+
+# from Varnish include/Makefile.am
+BUILT_SOURCES = vcs_version.h
+MAINTAINERCLEANFILES = vcs_version.h 
+vcs_version.h: FORCE
+	@if [ -d "$(top_srcdir)/.git" ]; then \
+		V="$$(git show -s --pretty=format:%h)" \
+		B="$$(git rev-parse --abbrev-ref HEAD)" \
+		H="$$(head -n 1 vcs_version.h 2>/dev/null || true)"; \
+		if [ "/* $$V */" != "$$H" ]; then \
+		( \
+		  echo "/* $$V */" ;\
+		  echo '/*' ;\
+		  echo ' * NB:  This file is machine generated, DO NOT EDIT!' ;\
+		  echo ' *' ;\
+		  echo ' * Run make to regenerate' ;\
+		  echo ' *'  ;\
+		  echo ' */' ;\
+		  echo "/* $$V */" ;\
+		  echo '' ;\
+		  echo "#define VCS_Version \"$$V\"" ; \
+		  echo "#define VCS_Branch \"$$B\"" \
+		) > vcs_version.h ; \
+		fi \
+	else \
+		if [ ! -f vcs_version.h ]; then \
+		( \
+		  echo "/* NOGIT */" ; \
+		  echo '/* No git commit ID available, see include/Makefile.am for explanation */' ; \
+		  echo '#define VCS_Version "NOGIT"' ; \
+		  echo '#define VCS_Branch "NOGIT"' \
+		) >  vcs_version.h ; \
+		fi \
+	fi
+FORCE:

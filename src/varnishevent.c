@@ -65,11 +65,11 @@
 #include "vre.h"
 #include "miniobj.h"
 #include "vas.h"
-#include "vcs.h"
 
 #include "varnishevent.h"
 #include "vtim.h"
 #include "vpf.h"
+#include "vcs_version.h"
 
 #define DEFAULT_CONFIG "/etc/varnishevent.conf"
 
@@ -83,6 +83,9 @@
 #define DISPATCH_TERMINATE 10
 #define DISPATCH_REOPEN 11
 #define DISPATCH_FLUSH 12
+
+const char *version = PACKAGE_TARNAME "-" PACKAGE_VERSION " revision " \
+    VCS_Version " branch " VCS_Branch;
 
 static unsigned len_hi = 0, closed = 0, overrun = 0, ioerr = 0, reacquire = 0;
 
@@ -466,8 +469,14 @@ main(int argc, char *argv[])
             REPLACE(P_arg, optarg);
             break;
         case 'V':
-            VCS_Message("varnishevent");
-            exit(0);
+            fprintf(stderr, "varnishevent (%s)\n", version);
+            fprintf(stderr, "Copyright (c) 2012-2015 UPLEX Nils Goroll "
+                    "Systemoptimierung\n");
+            fprintf(stderr, "Copyright (c) 2012-2015 Otto Gmbh & Co KG\n");
+            fprintf(stderr, "Portions adapted from Varnish:\n");
+            fprintf(stderr, "Copyright (c) 2006 Verdens Gang AS\n");
+            fprintf(stderr, "Copyright (c) 2006-2015 Varnish Software AS\n");
+            exit(EXIT_SUCCESS);
         case 'w':
             REPLACE(w_arg, optarg);
             break;
@@ -527,7 +536,7 @@ main(int argc, char *argv[])
         LOG_SetLevel(LOG_DEBUG);
     }
 
-    LOG_Log(LOG_INFO, "initializing (%s)", VCS_version);
+    LOG_Log(LOG_INFO, "initializing (%s)", version);
 
     if (pfh != NULL) {
         errno = 0;
