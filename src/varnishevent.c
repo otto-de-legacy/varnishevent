@@ -433,7 +433,7 @@ main(int argc, char *argv[])
 {
     int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0, D_flag = 0;
     char *P_arg = NULL, *w_arg = NULL, *q_arg = NULL, *g_arg = NULL,
-        scratch[BUFSIZ];
+        *n_arg = NULL, *N_arg = NULL, scratch[BUFSIZ];
     struct vpf_fh *pfh = NULL;
     struct VSL_data *vsl;
     struct VSLQ *vslq;
@@ -446,7 +446,7 @@ main(int argc, char *argv[])
     CONF_Init();
     read_default_config();
 
-    while ((c = getopt(argc, argv, "adDvP:Vw:F:g:f:q:r:")) != -1) {
+    while ((c = getopt(argc, argv, "adDvVP:w:F:g:f:q:r:n:N:L:T:")) != -1) {
         switch (c) {
         case 'a':
             a_flag = 1;
@@ -492,6 +492,13 @@ main(int argc, char *argv[])
         case 'q':
             REPLACE(q_arg, optarg);
             break;
+        case 'n':
+            REPLACE(n_arg, optarg);
+            break;
+        case 'N':
+            REPLACE(N_arg, optarg);
+            d_flag = 1;
+            break;
         case 'r':
             strcpy(config.varnish_bindump, optarg);
             break;
@@ -507,6 +514,11 @@ main(int argc, char *argv[])
         }
     }
 
+    if (n_arg && N_arg) {
+        fprintf(stderr, "Cannot have both -n and -N options\n");
+        usage();
+    }
+
     if (! EMPTY(cli_config_filename)) {
         printf("Reading config from %s\n", cli_config_filename);
         if (CONF_ReadFile(cli_config_filename) != 0) {
@@ -514,6 +526,12 @@ main(int argc, char *argv[])
                 cli_config_filename);
             exit(EXIT_FAILURE);
         }
+    }
+
+    if (!EMPTY(config.varnish_bindump) && (n_arg || N_arg)) {
+        fprintf(stderr, "Cannot specify -r/varnish.bindump together with -n "
+                " or -N\n");
+        usage();
     }
 
     if (P_arg && (pfh = VPF_Open(P_arg, 0644, NULL)) == NULL) {
@@ -589,9 +607,17 @@ main(int argc, char *argv[])
         unsigned options = VSL_COPT_BATCH;
         vsm = VSM_New();
         AN(vsm);
+        if (n_arg && VSM_n_Arg(vsm, n_arg) <= 0) {
+            LOG_Log(LOG_CRIT, "-n %s: %s\n", n_arg, VSM_Error(vsm));
+            exit(EXIT_FAILURE);
+        }
+        else if (N_arg && VSM_N_Arg(vsm, N_arg) <= 0) {
+            LOG_Log(LOG_CRIT, "-N %s: %s\n", n_arg, VSM_Error(vsm));
+            exit(EXIT_FAILURE);
+        }
         if (VSM_Open(vsm) < 0) {
-            LOG_Log(LOG_CRIT, "Cannot attach to shared memory: %s",
-                    VSM_Error(vsm));
+            LOG_Log(LOG_CRIT, "Cannot attach to shared memory for instance %s: "
+                    "%s", VSM_Name(vsm), VSM_Error(vsm));
             exit(EXIT_FAILURE);
         }
         if (!d_flag)
