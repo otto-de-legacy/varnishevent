@@ -215,11 +215,14 @@ static const char
     tx.magic = TX_MAGIC;
     VSTAILQ_INIT(&tx.lines);
     for (int i = 0; i < NRECORDS; i++) {
+        memset(&recs[i], 0, sizeof(logline_t));
         recs[i].magic = LOGLINE_MAGIC;
         recs[i].tag = SLT_ReqHeader;
         recs[i].len = strlen("Bar: baz");
+        recs[i].occupied = 1;
         VSTAILQ_INSERT_TAIL(&tx.lines, &recs[i], linelist);
         VSTAILQ_INIT(&recs[i].chunks);
+        memset(&c[i], 0, sizeof(chunk_t));
         c[i].magic = CHUNK_MAGIC;
         c[i].data = (char *) calloc(1, config.chunk_size);
         c[i].occupied = 1;
