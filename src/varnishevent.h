@@ -48,7 +48,7 @@
 #define B(txtype) ((txtype) == VSL_t_bereq)
 #define R(txtype) ((txtype) == VSL_t_raw)
 
-/* Defaults from Varnish 3.0.3 */
+/* Defaults from Varnish 4.0.3 */
 #define DEFAULT_MAX_RECLEN 255	/* shm_reclen */
 #define DEFAULT_MAX_HEADERS 64	/* http_max_hdr */
 
@@ -57,14 +57,10 @@
 #define DEFAULT_MAX_TIMESTAMP 8
 
 #define DEFAULT_CHUNK_SIZE 64
-#define DEFAULT_MAX_FD 1024
 #define DEFAULT_MAX_DATA 4096
 #define DEFAULT_PID_FILE "/var/run/varnishevent.pid"
 
 #define DEFAULT_IDLE_PAUSE 0.01
-
-#define DEFAULT_HOUSEKEEP_INTERVAL 10
-#define DEFAULT_TTL 120
 
 #define MAX_VSL_TAG SLT__MAX
 
@@ -172,12 +168,8 @@ struct config {
     unsigned	max_vcl_call;
     unsigned	max_timestamp;
 
-    unsigned	max_fd;
     unsigned	max_data;    
 
-    unsigned	housekeep_interval;
-    unsigned	ttl;
-    
     size_t	output_bufsiz;
     
     char        user_name[BUFSIZ];

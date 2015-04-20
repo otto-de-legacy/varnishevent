@@ -138,12 +138,9 @@ CONF_Add(const char *lval, const char *rval)
     confUnsigned("max.vcl_log", max_vcl_log);
     confUnsigned("max.vcl_call", max_vcl_call);
     confUnsigned("max.timestamp", max_vcl_call);
-    confUnsigned("max.fd", max_fd);
     confUnsigned("max.data", max_data);
     confUnsigned("monitor.interval", monitor_interval);
     confUnsigned("output.bufsiz", output_bufsiz);
-    confUnsigned("housekeep.interval", housekeep_interval);
-    confUnsigned("ttl", ttl);
     confUnsigned("append", append);
 
     if (strcmp(lval, "syslog.facility") == 0) {
@@ -236,11 +233,8 @@ CONF_Init(void)
     config.max_vcl_log = DEFAULT_MAX_VCL_LOG;
     config.max_vcl_call = DEFAULT_MAX_VCL_CALL;
     config.max_timestamp = DEFAULT_MAX_TIMESTAMP;
-    config.max_fd = DEFAULT_MAX_FD;
     config.max_data = DEFAULT_MAX_DATA;
     config.chunk_size = DEFAULT_CHUNK_SIZE;
-    config.housekeep_interval = DEFAULT_HOUSEKEEP_INTERVAL;
-    config.ttl = DEFAULT_TTL;
     config.idle_pause = DEFAULT_IDLE_PAUSE;
 
     /* Default is stdout */
@@ -337,10 +331,7 @@ CONF_Dump(void)
     confdump("max.vcl_log = %u", config.max_vcl_log);
     confdump("max.vcl_call = %u", config.max_vcl_call);
     confdump("max.timestamp = %u", config.max_timestamp);
-    confdump("max.fd = %u", config.max_fd);
     confdump("max.data = %u", config.max_data);
-    confdump("housekeep.interval = %u", config.housekeep_interval);
-    confdump("ttl = %u", config.ttl);
     confdump("idle.pause = %d", config.idle_pause);
     confdump("output.bufsiz = %u", config.output_bufsiz);
     confdump("user = %s", config.user_name);
