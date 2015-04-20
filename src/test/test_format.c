@@ -109,9 +109,11 @@ static const char
 
     printf("... testing get_payload()\n");
 
+    memset(&rec, 0, sizeof(logline_t));
     rec.magic = LOGLINE_MAGIC;
     rec.occupied = 1;
     VSTAILQ_INIT(&rec.chunks);
+    memset(&chunk, 0, sizeof(chunk_t));
     chunk.magic = CHUNK_MAGIC;
     chunk.data = (char *) calloc(1, config.chunk_size);
     chunk.occupied = 1;
@@ -178,6 +180,7 @@ static const char
     tx.magic = TX_MAGIC;
     VSTAILQ_INIT(&tx.lines);
     for (int i = 0; i < NRECORDS; i++) {
+        memset(&recs[i], 0, sizeof(logline_t));
         recs[i].magic = LOGLINE_MAGIC;
         recs[i].tag = SLT_ReqHeader;
         recs[i].occupied = 1;
@@ -316,8 +319,12 @@ static const char
 
     printf("... testing get_rec_fld()\n");
 
+    memset(&rec, 0, sizeof(logline_t));
+    memset(&chunk, 0, sizeof(chunk_t));
+
     rec.magic = LOGLINE_MAGIC;
     VSTAILQ_INIT(&rec.chunks);
+    rec.occupied = 1;
     chunk.magic = CHUNK_MAGIC;
     chunk.data = (char *) calloc(1, config.chunk_size);
     chunk.occupied = 1;
