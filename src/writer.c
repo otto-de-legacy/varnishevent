@@ -276,8 +276,7 @@ static void
                 errno, strerror(errno));
             errors++;
         }
-	if (wrt_nfree_tx > 0)
-            wrt_return_freelist();
+        wrt_return_freelist();
         
         wrt->state = WRT_WAITING;
         AZ(pthread_mutex_lock(&spscq_ready_lock));
