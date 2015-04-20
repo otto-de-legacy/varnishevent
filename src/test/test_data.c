@@ -71,6 +71,7 @@ static char
         MCHECK_OBJ(&txn[i], TX_MAGIC);
         MASSERT(!OCCUPIED(&txn[i]));
         MASSERT(txn[i].vxid == -1);
+        MASSERT(txn[i].pvxid == -1);
         MASSERT(txn[i].type == VSL_t_unknown);
         MAZ(txn[i].t);
         MASSERT(VSTAILQ_EMPTY(&txn[i].lines));
@@ -296,6 +297,7 @@ static const char
     MCHECK_OBJ(&tx, TX_MAGIC);
     MASSERT(!OCCUPIED(&tx));
     MASSERT(tx.vxid == -1);
+    MASSERT(tx.pvxid == -1);
     MASSERT(tx.type == VSL_t_unknown);
     MAZ(tx.t);
     MASSERT(VSTAILQ_EMPTY(&tx.lines));

@@ -89,6 +89,7 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
     
     tx->occupied = 0;
     tx->vxid = -1;
+    tx->pvxid = -1;
     tx->type = VSL_t_unknown;
     tx->t = 0.;
 
@@ -184,6 +185,7 @@ DATA_Init(void)
         txn[i].magic = TX_MAGIC;
         txn[i].occupied = 0;
         txn[i].vxid = -1;
+        txn[i].pvxid = -1;
         txn[i].type = VSL_t_unknown;
         txn[i].t = 0.;
         VSTAILQ_INIT(&txn[i].lines);
@@ -266,9 +268,10 @@ DATA_Dump(void)
         tx = &txn[i];
         VSB_clear(data);
 
-        VSB_printf(data, "Tx entry %d: vxid=%u state=%s dir=%c records={",
-            i, tx->vxid, statename[tx->occupied],
-            C(tx->type) ? 'c' : B(tx->type) ? 'b' : '-');
+        VSB_printf(data,
+                   "Tx entry %d: vxid=%u pvxid=%d state=%s dir=%c records={",
+                   i, tx->vxid, tx->pvxid, statename[tx->occupied],
+                   C(tx->type) ? 'c' : B(tx->type) ? 'b' : '-');
 
         VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
             if (rec == NULL)
