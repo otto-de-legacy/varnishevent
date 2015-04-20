@@ -256,6 +256,7 @@ void MON_Output(void);
 /* format.c */
 int FMT_Init(char *err);
 char **FMT_Get_I_Args(void);
+char *FMT_Get_i_Arg(void);
 int FMT_Estimate_RecsPerTx(void);
 void FMT_Format(tx_t *tx, struct vsb *os);
 void FMT_Fini(void);

@@ -21,9 +21,9 @@ fi
 # grep removes logs about table allocations and by the threads about
 # free lists, which are not relevant to the regression, and are not
 # predictable from one run to the next.
-CKSUM=$( sed -e 's/\(initializing\) \(.*\)/\1/' $LOG | egrep -v 'Writer: returned|Reader: took|Allocating table' | cksum )
+CKSUM=$( sed -e 's/\(initializing\) \(.*\)/\1/' $LOG | egrep -v 'Writer: returned|Reader: took|^DEBUG: Allocating' | cksum )
 
-if [ "$CKSUM" != '4104483911 69264089' ]; then
+if [ "$CKSUM" != '1684260647 69263259' ]; then
     echo "ERROR: Regression test varnishevent log incorrect cksum: $CKSUM"
     exit 1
 fi

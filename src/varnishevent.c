@@ -702,14 +702,17 @@ main(int argc, char *argv[])
     }
 
     char **include_args = FMT_Get_I_Args();
-    if (include_args == 0) {
-        LOG_Log0(LOG_CRIT, "Not configured to read any data, exiting");
-        exit(EXIT_FAILURE);
+    if (include_args != NULL) {
+        assert(VSL_Arg(vsl, 'C', NULL) > 0);
+        for (int i = 0; include_args[i] != NULL; i++) {
+            LOG_Log(LOG_INFO, "Include filter: %s", include_args[i]);
+            assert(VSL_Arg(vsl, 'I', include_args[i]) > 0);
+        }
     }
-    assert(VSL_Arg(vsl, 'C', NULL) > 0);
-    for (int i = 0; include_args[i] != NULL; i++) {
-        assert(VSL_Arg(vsl, 'I', include_args[i]) > 0);
-        LOG_Log(LOG_INFO, "Include filter: %s", include_args[i]);
+    strcpy(scratch, FMT_Get_i_Arg());
+    if (!EMPTY(scratch)) {
+        LOG_Log(LOG_INFO, "Include tags: %s", scratch);
+        assert(VSL_Arg(vsl, 'i', scratch) > 0);
     }
 
     if (!EMPTY(config.cformat) && EMPTY(config.bformat))

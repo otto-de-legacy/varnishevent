@@ -53,7 +53,7 @@ typedef struct compiled_fmt_t {
 } compiled_fmt_t;
 
 static struct vsb payload_storage, * const payload = &payload_storage,
-    bintag_storage, * const bintag = &bintag_storage;
+    bintag_storage, * const bintag = &bintag_storage, *i_arg;
 static char *scratch = NULL;
 
 static char empty[] = "";
@@ -73,7 +73,7 @@ typedef VSTAILQ_HEAD(includehead_s, include_t) includehead_t;
 
 static compiled_fmt_t cformat, bformat, rformat;
 static includehead_t cincl[MAX_VSL_TAG], bincl[MAX_VSL_TAG], rincl[MAX_VSL_TAG];
-static unsigned includes;
+static unsigned includes, include_rx;
 static char **incl_arg = NULL;
 
 char *
@@ -811,8 +811,10 @@ add_tag(enum VSL_transaction_e type, enum VSL_tag_e tag, const char *hdr)
 
     incl = calloc(1, sizeof(include_t));
     AN(incl);
-    if (hdr != NULL)
+    if (hdr != NULL) {
         incl->hdr = strdup(hdr);
+        include_rx++;
+    }
     VSTAILQ_INSERT_TAIL(inclhead, incl, inclist);
     includes++;
 }
@@ -1172,7 +1174,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 }
 
 static void
-fmt_build_I_arg(const includehead_t *inclhead, int *incl_idx)
+fmt_build_include_args(const includehead_t *inclhead, int *incl_idx)
 {
     AN(incl_arg);
     AN(includes);
@@ -1183,12 +1185,15 @@ fmt_build_I_arg(const includehead_t *inclhead, int *incl_idx)
 
         VSTAILQ_FOREACH(incl, &inclhead[i], inclist) {
             assert(*incl_idx < includes);
-            if (incl->hdr == NULL)
-                sprintf(scratch, "%s:.", VSL_tags[i]);
-            else
+            if (incl->hdr == NULL) {
+                VSB_cat(i_arg, VSL_tags[i]);
+                VSB_cat(i_arg, ",");
+            }
+            else {
                 sprintf(scratch, "%s:^\\s*%s\\s*:", VSL_tags[i], incl->hdr);
-            incl_arg[*incl_idx] = strdup(scratch);
-            *incl_idx += 1;
+                incl_arg[*incl_idx] = strdup(scratch);
+                *incl_idx += 1;
+            }
         }
     }
 }
@@ -1202,8 +1207,11 @@ FMT_Init(char *err)
 
     AN(VSB_new(payload, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
     AN(VSB_new(bintag, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
+    i_arg = VSB_new_auto();
+    AN(i_arg);
 
     includes = 0;
+    include_rx = 0;
     for (int i = 0; i < MAX_VSL_TAG; i++) {
         VSTAILQ_INIT(&cincl[i]);
         VSTAILQ_INIT(&bincl[i]);
@@ -1223,15 +1231,16 @@ FMT_Init(char *err)
             return EINVAL;
 
     if (includes > 0) {
-        incl_arg = calloc(includes + 1, sizeof(char *));
+        incl_arg = calloc(include_rx + 1, sizeof(char *));
         if (incl_arg == NULL)
             return ENOMEM;
         int incl_idx = 0;
 
-        fmt_build_I_arg(cincl, &incl_idx);
-        fmt_build_I_arg(bincl, &incl_idx);
-        fmt_build_I_arg(rincl, &incl_idx);
-        assert(incl_idx == includes);
+        fmt_build_include_args(cincl, &incl_idx);
+        fmt_build_include_args(bincl, &incl_idx);
+        fmt_build_include_args(rincl, &incl_idx);
+        assert(incl_idx == include_rx);
+        VSB_finish(i_arg);
     }
 
     return 0;
@@ -1241,6 +1250,13 @@ char **
 FMT_Get_I_Args(void)
 {
     return incl_arg;
+}
+
+char *
+FMT_Get_i_Arg(void)
+{
+    assert(VSB_done(i_arg));
+    return VSB_data(i_arg);
 }
 
 int
@@ -1356,13 +1372,16 @@ FMT_Fini(void)
     free(scratch);
     VSB_delete(payload);
     VSB_delete(bintag);
+    VSB_delete(i_arg);
 
-    if (includes > 0) {
-        for (int i = 0; i <= includes; i++)
+    if (include_rx > 0) {
+        for (int i = 0; i <= include_rx; i++)
             if (incl_arg[i] != NULL)
                 free((void *) incl_arg[i]);
         free(incl_arg);
+    }
 
+    if (includes > 0) {
         free_incl(cincl);
         free_incl(bincl);
         free_incl(rincl);
