@@ -191,21 +191,30 @@ get_rec_fld(const logline_t *rec, int n, size_t *len)
 }
 
 static inline void
-format_slt(const tx_t *tx, enum VSL_tag_e tag, char *hdr, char **s, size_t *len)
+format_slt(const tx_t *tx, enum VSL_tag_e tag, char *hdr, int fld, char **s,
+           size_t *len)
 {
     logline_t *rec;
 
     if (hdr == NULL) {
         rec = get_tag(tx, tag);
         if (rec != NULL) {
-            *s = get_payload(rec);
-            *len = rec->len - 1;
+            if (fld == -1) {
+                *s = get_payload(rec);
+                *len = rec->len - 1;
+            }
+            else
+                *s = get_rec_fld(rec, fld, len);
         }
     }
     else {
         *s = get_hdr(tx, tag, hdr);
-        if (*s != NULL)
-            *len = strlen(*s);
+        if (*s != NULL) {
+            if (fld == -1)
+                *len = strlen(*s);
+            else
+                *s = get_fld(*s, fld, len);
+        }
     }
 }
 
@@ -269,14 +278,14 @@ void
 format_H_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_ReqProtocol, NULL, s, len);
+    format_slt(tx, SLT_ReqProtocol, NULL, -1, s, len);
 }
 
 void
 format_H_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_BereqProtocol, NULL, s, len);
+    format_slt(tx, SLT_BereqProtocol, NULL, -1, s, len);
 }
 
 static inline void
@@ -344,14 +353,14 @@ void
 format_m_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_ReqMethod, NULL, s, len);
+    format_slt(tx, SLT_ReqMethod, NULL, -1, s, len);
 }
 
 void
 format_m_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_BereqMethod, NULL, s, len);
+    format_slt(tx, SLT_BereqMethod, NULL, -1, s, len);
 }
 
 void
@@ -457,14 +466,14 @@ void
 format_s_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_RespStatus, NULL, s, len);
+    format_slt(tx, SLT_RespStatus, NULL, -1, s, len);
 }
 
 void
 format_s_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_slt(tx, SLT_BerespStatus, NULL, s, len);
+    format_slt(tx, SLT_BerespStatus, NULL, -1, s, len);
 }
 
 static inline void
@@ -707,7 +716,7 @@ format_VCL_Log(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 void
 format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    format_slt(tx, args->tag, args->name, s, len);
+    format_slt(tx, args->tag, args->name, args->fld, s, len);
     if (VSL_tagflags[args->tag] & SLT_F_BINARY) {
         VSB_clear(bintag);
         VSB_quote(bintag, *s, (int) *len, 0);
@@ -719,7 +728,7 @@ format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 
 static void
 add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
-        formatter_f formatter, const char *name, enum VSL_tag_e tag)
+        formatter_f formatter, const char *name, enum VSL_tag_e tag, int fld)
 {
     fmt->str[n] = (char *) malloc(VSB_len(os) + 1);
     AN(fmt->str[n]);
@@ -735,6 +744,21 @@ add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
     VSB_clear(os);
     fmt->formatter[n] = formatter;
     fmt->args[n].tag = tag;
+    fmt->args[n].fld = fld;
+}
+
+static void
+add_formatter(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
+              formatter_f formatter)
+{
+    add_fmt(fmt, os, n, formatter, NULL, SLT__Bogus, -1);
+}
+
+static void
+add_fmt_name(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
+             formatter_f formatter, const char *name)
+{
+    add_fmt(fmt, os, n, formatter, name, SLT__Bogus, -1);
 }
 
 #define FMT(type, format_ltr)                           \
@@ -879,7 +903,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
         switch (*p) {
 
         case 'b':
-            add_fmt(fmt, os, n, FMT(type, format_b), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_b));
             add_cb_tag(type, SLT_ReqAcct, SLT_BereqAcct, NULL);
             n++;
             break;
@@ -889,25 +913,25 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             break;
             
         case 'D':
-            add_fmt(fmt, os, n, FMT(type, format_D), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_D));
             add_cb_tag_incl(type, SLT_Timestamp, "Resp", "BerespBody");
             n++;
             break;
             
         case 'H':
-            add_fmt(fmt, os, n, FMT(type, format_H), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_H));
             add_cb_tag(type, SLT_ReqProtocol, SLT_BereqProtocol, NULL);
             n++;
             break;
             
         case 'h':
-            add_fmt(fmt, os, n, FMT(type, format_h), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_h));
             add_cb_tag(type, SLT_ReqStart, SLT_Backend, NULL);
             n++;
             break;
             
         case 'I':
-            add_fmt(fmt, os, n, FMT(type, format_I), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_I));
             if (C(type)) {
                 add_tag(type, SLT_ReqAcct, NULL);
                 add_tag(type, SLT_PipeAcct, NULL);
@@ -922,13 +946,13 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             break;
 
         case 'm':
-            add_fmt(fmt, os, n, FMT(type, format_m), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_m));
             add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod, NULL);
             n++;
             break;
 
         case 'O':
-            add_fmt(fmt, os, n, FMT(type, format_O), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_O));
             if (C(type)) {
                 add_tag(type, SLT_ReqAcct, NULL);
                 add_tag(type, SLT_PipeAcct, NULL);
@@ -939,13 +963,13 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             break;
             
         case 'q':
-            add_fmt(fmt, os, n, FMT(type, format_q), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_q));
             add_cb_tag(type, SLT_ReqURL, SLT_BereqURL, NULL);
             n++;
             break;
 
         case 'r':
-            add_fmt(fmt, os, n, FMT(type, format_r), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_r));
             add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod, NULL);
             add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, "Host");
             add_cb_tag(type, SLT_ReqURL, SLT_BereqURL, NULL);
@@ -954,32 +978,32 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             break;
 
         case 's':
-            add_fmt(fmt, os, n, FMT(type, format_s), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_s));
             add_cb_tag(type, SLT_RespStatus, SLT_BerespStatus, NULL);
             n++;
             break;
 
         case 't':
-            add_fmt(fmt, os, n, format_t, NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, format_t);
             if (type != VSL_t_raw)
                 add_tag(type, SLT_Timestamp, "Start");
             n++;
             break;
 
         case 'T':
-            add_fmt(fmt, os, n, FMT(type, format_T), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_T));
             add_tag(type, SLT_Timestamp, "Start");
             n++;
             break;
             
         case 'U':
-            add_fmt(fmt, os, n, FMT(type, format_U), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_U));
             add_cb_tag(type, SLT_ReqURL, SLT_BereqURL, NULL);
             n++;
             break;
 
         case 'u':
-            add_fmt(fmt, os, n, FMT(type, format_u), NULL, SLT__Bogus);
+            add_formatter(fmt, os, n, FMT(type, format_u));
             add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, "Authorization");
             n++;
             break;
@@ -1000,19 +1024,19 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
             switch (ltr) {
             case 'i':
-                add_fmt(fmt, os, n, FMT(type, format_Xi), fname, SLT__Bogus);
+                add_fmt_name(fmt, os, n, FMT(type, format_Xi), fname);
                 add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, fname);
                 n++;
                 p = tmp;
                 break;
             case 'o':
-                add_fmt(fmt, os, n, FMT(type, format_Xo), fname, SLT__Bogus);
+                add_fmt_name(fmt, os, n, FMT(type, format_Xo), fname);
                 add_cb_tag(type, SLT_RespHeader, SLT_BerespHeader, fname);
                 n++;
                 p = tmp;
                 break;
             case 't':
-                add_fmt(fmt, os, n, format_Xt, fname, SLT__Bogus);
+                add_fmt_name(fmt, os, n, format_Xt, fname);
                 if (type != VSL_t_raw)
                     add_tag(type, SLT_Timestamp, "Start");
                 n++;
@@ -1020,13 +1044,12 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 break;
             case 'x':
                 if (strcmp(fname, "Varnish:time_firstbyte") == 0) {
-                    add_fmt(fmt, os, n, FMT(type, format_Xttfb), NULL,
-                            SLT__Bogus);
+                    add_formatter(fmt, os, n, FMT(type, format_Xttfb));
                     add_cb_tag_incl(type, SLT_Timestamp, "Process", "Beresp");
                 }
                 else if (strcmp(fname, "Varnish:hitmiss") == 0) {
                     if (C(type)) {
-                        add_fmt(fmt, os, n, format_VCL_disp, "m", SLT__Bogus);
+                        add_fmt_name(fmt, os, n, format_VCL_disp, "m");
                         add_tag(type, SLT_VCL_call, NULL);
                         add_tag(type, SLT_VCL_return, NULL);
                     }
@@ -1038,7 +1061,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 }
                 else if (strcmp(fname, "Varnish:handling") == 0) {
                     if (C(type)) {
-                        add_fmt(fmt, os, n, format_VCL_disp, "n", SLT__Bogus);
+                        add_fmt_name(fmt, os, n, format_VCL_disp, "n");
                         add_tag(type, SLT_VCL_call, NULL);
                         add_tag(type, SLT_VCL_return, NULL);
                     }
@@ -1053,16 +1076,16 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     // output.
                     // Format: %{VCL_Log:keyname}x
                     // Logging: std.log("keyname:value")
-                    add_fmt(fmt, os, n, format_VCL_Log, fname+8, SLT__Bogus);
+                    add_fmt_name(fmt, os, n, format_VCL_Log, fname+8);
                     add_tag(type, SLT_VCL_Log, fname+8);
                 }
                 else if (strncmp(fname, "tag:", 4) == 0) {
                     /* retrieve the tag contents from the log */
-                    char *c, *tagname = fname+4, *hdr = NULL;
-                    int t = 0;
+                    char *c, *tagname = fname+4, *hdr = NULL, *fld = NULL;
+                    int t = 0, fld_nr = -1;
 
                     c = tagname + 1;
-                    while (*c != ':' && *c != '\0')
+                    while (*c != ':' && *c != '[' && *c != '\0')
                         c++;
                     if ((t = VSL_Name2Tag(tagname, c - tagname)) < 0) {
                         sprintf(err, "Unknown or non-unique tag %*s",
@@ -1071,10 +1094,24 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     }
                     if (*c == ':') {
                         hdr = c + 1;
-                        while (*c != '\0')
+                        while (*c != '[' && *c != '\0')
                             c++;
                     }
-                    add_fmt(fmt, os, n, format_SLT, hdr, t);
+                    if (*c == '[') {
+                        *c = '\0';
+                        c++;
+                        fld = c;
+                        while (isdigit(*c))
+                            c++;
+                        if (*c != ']') {
+                            sprintf(err, "Unterminated field specifier "
+                                    "starting at %s", --p);
+                            return 1;
+                        }
+                        *c = '\0';
+                        fld_nr = atoi(fld);
+                    }
+                    add_fmt(fmt, os, n, format_SLT, hdr, t, fld_nr);
                     add_tag(type, t, hdr);
                 }
                 else {
@@ -1104,7 +1141,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
      * and the terminating newline
      */
     VSB_putc(os, '\n');
-    add_fmt(fmt, os, n, NULL, NULL, SLT__Bogus);
+    add_formatter(fmt, os, n, NULL);
     VSB_delete(os);
     return 0;
 }

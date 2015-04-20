@@ -34,6 +34,7 @@
 typedef struct arg_t {
     char *name;
     enum VSL_tag_e tag;
+    int fld;
 } arg_t;
 
 typedef void formatter_f(const tx_t *tx, const arg_t *args, char **s,

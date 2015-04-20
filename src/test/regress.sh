@@ -12,7 +12,7 @@ rm -f $LOG $OUT
 ../varnishevent -f varnishevent.conf -r sw-doc.log -w $OUT -v
 
 CKSUM=$( cksum $OUT )
-if [ "$CKSUM" != "4178357783 21920698 $OUT" ]; then
+if [ "$CKSUM" != "4053530460 22327728 $OUT" ]; then
     echo "ERROR: Regression test log output incorrect cksum: $CKSUM"
     exit 1
 fi

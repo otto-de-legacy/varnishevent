@@ -11,7 +11,7 @@ echo "... -g vxid"
 CKSUM=$( ../varnishevent -g vxid -r sw-doc.log -f varnishevent.conf | cksum)
 
 # Same as default (no -g arg)
-if [ "$CKSUM" != '2669898744 21920736' ]; then
+if [ "$CKSUM" != '2110242182 22327766' ]; then
     echo "ERROR: -g vxid unexpected cksum: $CKSUM"
     exit 1
 fi
@@ -19,7 +19,7 @@ fi
 echo "... -g request"
 CKSUM=$( ../varnishevent -g request -r sw-doc.log -f varnishevent.conf | cksum)
 
-if [ "$CKSUM" != '1458016223 21920736' ]; then
+if [ "$CKSUM" != '1162377575 22327766' ]; then
     echo "ERROR: -g request unexpected cksum: $CKSUM"
     exit 1
 fi

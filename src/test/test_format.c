@@ -1257,6 +1257,7 @@ static const char
 
     set_record_data(&rec, &chunk, "no backend connection", SLT_FetchError);
     args.tag = SLT_FetchError;
+    args.fld = -1;
     format_SLT(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "no backend connection", 21) == 0);
     MASSERT(len == 21);
@@ -1292,6 +1293,49 @@ static const char
     MASSERT(strncmp(str, substr, strlen(substr)) == 0);
     MASSERT(len == strlen(substr));
 
+    /* field selector */
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    args.name = NULL;
+    args.fld = 0;
+    format_SLT(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "Resp:", 5) == 0);
+    MASSERT(len == 5);
+
+    /* header and field selector */
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    args.name = strdup("Resp");
+    format_SLT(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, substr, len) == 0);
+    MASSERT(len == strlen("1427799478.166798"));
+
+    /* header not found */
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    args.name = strdup("Foo");
+    args.fld = -1;
+    str = NULL;
+    len = 0;
+    format_SLT(&tx, &args, &str, &len);
+    MAZ(str);
+    MAZ(len);
+    
+    /* field not found */
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    args.name = NULL;
+    args.fld = 4;
+    str = NULL;
+    len = 0;
+    format_SLT(&tx, &args, &str, &len);
+    MAZ(len);
+    
+    /* header field not found */
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    args.name = strdup("Resp");
+    args.fld = 3;
+    str = NULL;
+    len = 0;
+    format_SLT(&tx, &args, &str, &len);
+    MAZ(len);
+    
     return NULL;
 }
 
@@ -1388,7 +1432,8 @@ static const char
 #define FULL_CLIENT_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x "\
         "%{Varnish:hitmiss}x %{Varnish:handling}x %{VCL_Log:baz}x "\
-        "%{tag:VCL_acl}x %{tag:Debug}x %{tag:Timestamp:Req}x"
+        "%{tag:VCL_acl}x %{tag:Debug}x %{tag:Timestamp:Req}x "\
+        "%{tag:ReqAcct[0]}x %{tag:Timestamp:Resp[2]}x"
     strcpy(config.cformat, FULL_CLIENT_FMT);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
@@ -1435,7 +1480,7 @@ static const char
         "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.000166 hit hit "\
         "logload MATCH ACL \"10.0.0.0\"/8 \"foo\\0\\377 bar\" " \
-        "1429213569.602005 0.000000 0.000000\n"
+        "1429213569.602005 0.000000 0.000000 60 0.000125\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
@@ -1447,7 +1492,8 @@ static const char
 
 #define FULL_BACKEND_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x %{VCL_Log:baz}x "\
-        "%{tag:Fetch_Body}x %{tag:Debug}x %{tag:Timestamp:Bereq}x"
+        "%{tag:Fetch_Body}x %{tag:Debug}x %{tag:Timestamp:Bereq}x "\
+        "%{tag:BereqAcct[5]}x %{tag:Timestamp:Bereq[1]}x"
     strcpy(config.bformat, FULL_BACKEND_FMT);
     config.cformat[0] = '\0';
     status = FMT_Init(err);
@@ -1500,7 +1546,7 @@ static const char
         "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
         "2 chunked stream \"foo\\0\\377 bar\" "\
-        "1429210777.728290 0.000048 0.000048\n"
+        "1429210777.728290 0.000048 0.000048 283 0.000048\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
