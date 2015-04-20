@@ -52,8 +52,8 @@ typedef struct compiled_fmt_t {
     unsigned n;
 } compiled_fmt_t;
 
-static struct vsb *payload;
-static struct vsb *bintag;
+static struct vsb payload_storage, * const payload = &payload_storage,
+    bintag_storage, * const bintag = &bintag_storage;
 static char *scratch = NULL;
 
 static char empty[] = "";
@@ -1200,13 +1200,8 @@ FMT_Init(char *err)
     if (scratch == NULL)
         return errno;
 
-    payload = VSB_new(NULL, NULL, config.max_reclen + 1, VSB_FIXEDLEN);
-    if (payload == NULL)
-        return ENOMEM;
-
-    bintag = VSB_new(NULL, NULL, config.max_reclen + 1, VSB_FIXEDLEN);
-    if (bintag == NULL)
-        return ENOMEM;
+    AN(VSB_new(payload, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
+    AN(VSB_new(bintag, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
 
     includes = 0;
     for (int i = 0; i < MAX_VSL_TAG; i++) {
