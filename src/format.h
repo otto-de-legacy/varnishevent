@@ -102,3 +102,5 @@ formatter_f format_VCL_disp;
 formatter_f format_VCL_Log;
 
 formatter_f format_SLT;
+
+formatter_f format_vxid;

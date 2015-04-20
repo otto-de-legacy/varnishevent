@@ -726,6 +726,26 @@ format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
     }
 }
 
+void
+format_vxid(const tx_t *tx, const arg_t *args, char **s, size_t *len)
+{
+    (void) args;
+    sprintf(scratch, "%d", tx->vxid);
+    *s = scratch;
+    *len = strlen(*s);
+}
+
+#if 0
+void
+format_pvxid(const tx_t *tx, const arg_t *args, char **s, size_t *len)
+{
+    (void) args;
+    sprintf(scratch, "%d", tx->pvxid);
+    *s = scratch;
+    *len = strlen(*s);
+}
+#endif
+
 static void
 add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
         formatter_f formatter, const char *name, enum VSL_tag_e tag, int fld)
@@ -890,10 +910,11 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
         
         p++;
 
-        /* Only the SLT or time formatters permitted for the "zero" format
-           (neither client nor backend) */
+        /* Only the SLT, vxid or time formatters permitted for the "raw"
+           format (neither client nor backend) */
         if (R(type)
             && sscanf(p, "{tag:%s}x", scratch) != 1
+            && sscanf(p, "{vxid}x") != 1
             && *p != 't'
             && sscanf(p, "{%s}t", scratch) != 1) {
             sprintf(err, "Unknown format starting at: %s", --p);
@@ -1113,6 +1134,9 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     }
                     add_fmt(fmt, os, n, format_SLT, hdr, t, fld_nr);
                     add_tag(type, t, hdr);
+                }
+                else if (strncmp(fname, "vxid", 4) == 0) {
+                    add_formatter(fmt, os, n, format_vxid);
                 }
                 else {
                     sprintf(err, "Unknown format starting at: %s", fname);

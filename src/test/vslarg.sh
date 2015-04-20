@@ -11,7 +11,7 @@ echo "... -g vxid"
 CKSUM=$( ../varnishevent -g vxid -r sw-doc.log -f varnishevent.conf | cksum)
 
 # Same as default (no -g arg)
-if [ "$CKSUM" != '2110242182 22327766' ]; then
+if [ "$CKSUM" != '1569412425 22573475' ]; then
     echo "ERROR: -g vxid unexpected cksum: $CKSUM"
     exit 1
 fi
@@ -19,17 +19,17 @@ fi
 echo "... -g request"
 CKSUM=$( ../varnishevent -g request -r sw-doc.log -f varnishevent.conf | cksum)
 
-if [ "$CKSUM" != '1162377575 22327766' ]; then
+if [ "$CKSUM" != '157371635 22573475' ]; then
     echo "ERROR: -g request unexpected cksum: $CKSUM"
     exit 1
 fi
 
 echo "... -g raw"
 # Timestamps for raw grouping are always the time at which the tx was read,
-# even for binary file reads. So we check against the last three columns.
-CKSUM=$( ../varnishevent -g raw -r varnish-doc.log -f raw.conf | awk '{print $(NF-2), $(NF-1), $NF}' | cksum)
+# even for binary file reads. So we check against the last four columns.
+CKSUM=$( ../varnishevent -g raw -r varnish-doc.log -f raw.conf | awk '{print $(NF-3), $(NF-2), $(NF-1), $NF}' | cksum)
 
-if [ "$CKSUM" != '2652535054 3311' ]; then
+if [ "$CKSUM" != '4287974290 4744' ]; then
     echo "ERROR: -g raw unexpected cksum: $CKSUM"
     exit 1
 fi
