@@ -44,6 +44,7 @@
 #include "vas.h"
 #include "miniobj.h"
 #include "vsb.h"
+#include "vmb.h"
 
 typedef enum {
     WRT_NOTSTARTED = 0,
@@ -254,7 +255,8 @@ static void
     wrt_nfree_tx = 0;
 
     wrt->state = WRT_RUNNING;
-    
+
+    VMB();
     while (run) {
 	tx = SPSCQ_Deq();
 	if (tx != NULL) {
