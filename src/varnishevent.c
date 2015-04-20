@@ -70,6 +70,7 @@
 #include "vtim.h"
 #include "vpf.h"
 #include "vcs_version.h"
+#include "vmb.h"
 
 #define DEFAULT_CONFIG "/etc/varnishevent.conf"
 
@@ -220,6 +221,7 @@ submit(tx_t *tx)
 {
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     assert(OCCUPIED(tx));
+    VWMB();
     SPSCQ_Enq(tx);
     signal_spscq_ready();
     submitted++;

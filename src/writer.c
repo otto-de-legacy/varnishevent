@@ -188,7 +188,8 @@ wrt_write(tx_t *tx)
         reopen = 0;
     }
     AZ(pthread_mutex_unlock(&reopen_lock));
-        
+
+    VRMB();
     VSB_clear(os);
     FMT_Format(tx, os);
     VSB_finish(os);
