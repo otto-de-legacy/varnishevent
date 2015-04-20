@@ -735,7 +735,6 @@ format_vxid(const tx_t *tx, const arg_t *args, char **s, size_t *len)
     *len = strlen(*s);
 }
 
-#if 0
 void
 format_pvxid(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
@@ -744,7 +743,6 @@ format_pvxid(const tx_t *tx, const arg_t *args, char **s, size_t *len)
     *s = scratch;
     *len = strlen(*s);
 }
-#endif
 
 static void
 add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
@@ -1137,6 +1135,9 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 }
                 else if (strncmp(fname, "vxid", 4) == 0) {
                     add_formatter(fmt, os, n, format_vxid);
+                }
+                else if (strncmp(fname, "pvxid", 5) == 0) {
+                    add_formatter(fmt, os, n, format_pvxid);
                 }
                 else {
                     sprintf(err, "Unknown format starting at: %s", fname);

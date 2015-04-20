@@ -256,6 +256,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         assert(VSTAILQ_EMPTY(&tx->lines));
         tx->type = t->type;
         tx->vxid = t->vxid;
+        tx->pvxid = t->vxid_parent;
         if (tx->type == VSL_t_raw)
             tx->t = VTIM_real();
 

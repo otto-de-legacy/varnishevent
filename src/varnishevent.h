@@ -107,6 +107,7 @@ typedef struct tx_t {
     unsigned magic;
 #define TX_MAGIC 0xff463e42
     int32_t vxid;
+    int32_t pvxid;
     linehead_t lines;
     VSTAILQ_ENTRY(tx_t) freelist;
     VSTAILQ_ENTRY(tx_t) spscq;

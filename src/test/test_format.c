@@ -1340,18 +1340,25 @@ static const char
 }
 
 static const char
-*test_format_vxid(void)
+*test_format_p_vxid(void)
 {
     tx_t tx;
     arg_t args;
     char *str;
     size_t len;
 
-    printf("... testing format_vxid()\n");
+    printf("... testing format_vxid() and format_pvxid()\n");
 
     tx.vxid = 4711;
+    tx.pvxid = 1147;
     format_vxid(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "4711", 4) == 0);
+    MASSERT(len == 4);
+
+    str = NULL;
+    len = 0;
+    format_pvxid(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "1147", 4) == 0);
     MASSERT(len == 4);
 
     return NULL;
@@ -1392,6 +1399,7 @@ static const char
     tx.magic = TX_MAGIC;
     tx.occupied = 1;
     tx.vxid = 4711;
+    tx.pvxid = 1147;
     VSTAILQ_INIT(&tx.lines);
     for (int i = 0; i < NRECS; i++) {
         recs[i] = (logline_t *) calloc(1, sizeof(logline_t));
@@ -1452,7 +1460,7 @@ static const char
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x "\
         "%{Varnish:hitmiss}x %{Varnish:handling}x %{VCL_Log:baz}x "\
         "%{tag:VCL_acl}x %{tag:Debug}x %{tag:Timestamp:Req}x "\
-        "%{tag:ReqAcct[0]}x %{tag:Timestamp:Resp[2]}x %{vxid}x"
+        "%{tag:ReqAcct[0]}x %{tag:Timestamp:Resp[2]}x %{vxid}x %{pvxid}x"
     strcpy(config.cformat, FULL_CLIENT_FMT);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
@@ -1499,7 +1507,7 @@ static const char
         "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.000166 hit hit "\
         "logload MATCH ACL \"10.0.0.0\"/8 \"foo\\0\\377 bar\" " \
-        "1429213569.602005 0.000000 0.000000 60 0.000125 4711\n"
+        "1429213569.602005 0.000000 0.000000 60 0.000125 4711 1147\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
@@ -1512,7 +1520,7 @@ static const char
 #define FULL_BACKEND_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x %{VCL_Log:baz}x "\
         "%{tag:Fetch_Body}x %{tag:Debug}x %{tag:Timestamp:Bereq}x "\
-        "%{tag:BereqAcct[5]}x %{tag:Timestamp:Bereq[1]}x %{vxid}x"
+        "%{tag:BereqAcct[5]}x %{tag:Timestamp:Bereq[1]}x %{vxid}x %{pvxid}x"
     strcpy(config.bformat, FULL_BACKEND_FMT);
     config.cformat[0] = '\0';
     status = FMT_Init(err);
@@ -1565,7 +1573,7 @@ static const char
         "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
         "2 chunked stream \"foo\\0\\377 bar\" "\
-        "1429210777.728290 0.000048 0.000048 283 0.000048 4711\n"
+        "1429210777.728290 0.000048 0.000048 283 0.000048 4711 1147\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
@@ -1673,7 +1681,7 @@ static const char
     mu_run_test(test_format_VCL_disp);
     mu_run_test(test_format_VCL_Log);
     mu_run_test(test_format_SLT);
-    mu_run_test(test_format_vxid);
+    mu_run_test(test_format_p_vxid);
     mu_run_test(test_FMT_Fini);
     mu_run_test(test_FMT_interface);
 
