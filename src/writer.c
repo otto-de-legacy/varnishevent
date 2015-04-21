@@ -173,7 +173,7 @@ wrt_write(tx_t *tx)
     AZ(pthread_mutex_lock(&reopen_lock));
     if (reopen && fo != stdout) {
         if (fflush(fo) != 0)
-            LOG_Log(LOG_ALERT, "Cannot flush to %s, DATA DISCARDED: %s",
+            LOG_Log(LOG_ERR, "Cannot flush to %s, DATA DISCARDED: %s",
                 config.output_file, strerror(errno));
         if (fclose(fo) != 0) {
             LOG_Log(LOG_ALERT, "Cannot close %s, exiting: %s",
@@ -197,7 +197,7 @@ wrt_write(tx_t *tx)
     if (timeout != NULL)
         to = config.output_timeout;
     if ((errnum = select(fd + 1, NULL, &set, NULL, timeout)) == -1) {
-        LOG_Log(LOG_ALERT,
+        LOG_Log(LOG_ERR,
             "Error waiting for ready output %d (%s), DATA DISCARDED: %s",
             errno, strerror(errno), VSB_data(os));
         errors++;
@@ -209,7 +209,7 @@ wrt_write(tx_t *tx)
         }
     }
     else if (errnum == 0) {
-        LOG_Log(LOG_ALERT,
+        LOG_Log(LOG_ERR,
             "Timeout waiting for ready output, DATA DISCARDED: %s",
             VSB_data(os));
         timeouts++;
@@ -224,7 +224,7 @@ wrt_write(tx_t *tx)
     else if (!FD_ISSET(fd, &set))
         WRONG("Wrong file descriptor found ready for output");
     else if (fprintf(fo, "%s", VSB_data(os)) < 0) {
-        LOG_Log(LOG_ALERT, "Output error %d (%s), DATA DISCARDED: %s",
+        LOG_Log(LOG_ERR, "Output error %d (%s), DATA DISCARDED: %s",
             errno, strerror(errno), VSB_data(os));
         errors++;
     }
@@ -247,7 +247,7 @@ static void
     writer_data_t *wrt = (writer_data_t *) arg;
     tx_t *tx;
 
-    LOG_Log0(LOG_INFO, "Writer thread starting");
+    LOG_Log0(LOG_NOTICE, "Writer thread starting");
     CHECK_OBJ_NOTNULL(wrt, WRITER_DATA_MAGIC);
     wrt->state = WRT_INITIALIZING;
 
@@ -271,7 +271,7 @@ static void
          * flush ouput and return space before sleeping
          */
         if (fflush(fo) != 0) {
-            LOG_Log(LOG_ALERT, "Output flush failed, error %d (%s)",
+            LOG_Log(LOG_ERR, "Output flush failed, error %d (%s)",
                 errno, strerror(errno));
             errors++;
         }
@@ -299,13 +299,13 @@ static void
         wrt_write(tx);
     }
     if (fflush(fo) != 0) {
-        LOG_Log(LOG_ALERT, "Output flush failed, error %d (%s)",
+        LOG_Log(LOG_ERR, "Output flush failed, error %d (%s)",
             errno, strerror(errno));
         errors++;
     }
 
     wrt->status = EXIT_SUCCESS;
-    LOG_Log0(LOG_INFO, "Writer thread exiting");
+    LOG_Log0(LOG_NOTICE, "Writer thread exiting");
     wrt->state = WRT_EXITED;
     pthread_exit((void *) wrt);
 }

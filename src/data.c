@@ -256,7 +256,7 @@ DATA_Dump(void)
         logline_t *rec;
 
         if (txn[i].magic != TX_MAGIC) {
-            LOG_Log(LOG_ALERT,
+            LOG_Log(LOG_ERR,
                 "Invalid tx at index %d, magic = 0x%08x, expected 0x%08x",
                 i, txn[i].magic, TX_MAGIC);
             continue;
@@ -277,7 +277,7 @@ DATA_Dump(void)
             if (rec == NULL)
                 continue;
             if (rec->magic != LOGLINE_MAGIC) {
-                LOG_Log(LOG_ALERT,
+                LOG_Log(LOG_ERR,
                     "Invalid record at tx %d, magic = 0x%08x, expected 0x%08x",
                     i, rec->magic, LOGLINE_MAGIC);
                 continue;
@@ -288,7 +288,7 @@ DATA_Dump(void)
                 chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
                 while (n > 0 && chunk != NULL) {
                     if (chunk->magic != CHUNK_MAGIC) {
-                        LOG_Log(LOG_ALERT,
+                        LOG_Log(LOG_ERR,
                             "Invalid chunk at tx %d, magic = 0x%08x, "
                             "expected 0x%08x",
                             i, chunk->magic, CHUNK_MAGIC);

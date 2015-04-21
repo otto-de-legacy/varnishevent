@@ -102,7 +102,7 @@ static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
 #define SIGDISP(SIG, action)						\
     do { if (UNDEFINED(SIG)) break;					\
         if (sigaction((SIG), (&action), NULL) != 0)			\
-            LOG_Log(LOG_ALERT,						\
+            LOG_Log(LOG_ERR,						\
                 "Cannot install handler for " #SIG ": %s",		\
                 strerror(errno));					\
     } while(0)
@@ -589,7 +589,7 @@ main(int argc, char *argv[])
         LOG_SetLevel(LOG_DEBUG);
     }
 
-    LOG_Log(LOG_INFO, "initializing (%s)", version);
+    LOG_Log(LOG_NOTICE, "initializing (%s)", version);
 
     if (pfh != NULL) {
         errno = 0;
@@ -709,7 +709,7 @@ main(int argc, char *argv[])
     VAS_Fail = assert_fail;
 
     if (FMT_Init(scratch) != 0) {
-        LOG_Log(LOG_ALERT, "Error in output formats: %s", scratch);
+        LOG_Log(LOG_CRIT, "Error in output formats: %s", scratch);
         exit(EXIT_FAILURE);
     }
 
@@ -742,7 +742,7 @@ main(int argc, char *argv[])
         assert(VSL_Arg(vsl, 'b', scratch) > 0);
 
     if ((errnum = DATA_Init()) != 0) {
-        LOG_Log(LOG_ALERT, "Cannot init data tables: %s\n",
+        LOG_Log(LOG_CRIT, "Cannot init data tables: %s\n",
                 strerror(errnum));
         exit(EXIT_FAILURE);
     }
@@ -756,7 +756,7 @@ main(int argc, char *argv[])
         LOG_Log0(LOG_INFO, "Monitoring thread not running");
 
     if ((errnum = WRT_Init()) != 0) {
-        LOG_Log(LOG_ALERT, "Cannot init writer thread: %s\n", strerror(errnum));
+        LOG_Log(LOG_CRIT, "Cannot init writer thread: %s\n", strerror(errnum));
         exit(EXIT_FAILURE);
     }
 
@@ -787,7 +787,7 @@ main(int argc, char *argv[])
     int wrt_waits = 0;
     while (!WRT_Running()) {
         if (wrt_waits++ > 10) {
-            LOG_Log0(LOG_ALERT, "Writer thread not running, giving up");
+            LOG_Log0(LOG_CRIT, "Writer thread not running, giving up");
             exit(EXIT_FAILURE);
         }
         VTIM_sleep(1);
@@ -820,7 +820,7 @@ main(int argc, char *argv[])
             break;
         case DISPATCH_EOF:
             term = 1;
-            LOG_Log0(LOG_INFO, "Reached end of file");
+            LOG_Log0(LOG_NOTICE, "Reached end of file");
             break;
         case DISPATCH_CLOSED:
             flush = 1;
@@ -898,7 +898,7 @@ main(int argc, char *argv[])
             LOG_Log(LOG_ERR, "Could not remove pid file %s: %s", P_arg,
                     strerror(errno));
     }
-    LOG_Log0(LOG_INFO, "Exiting");
+    LOG_Log0(LOG_NOTICE, "Exiting");
     LOG_Close();
 
     exit(EXIT_SUCCESS);

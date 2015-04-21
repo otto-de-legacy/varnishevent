@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2013 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2013 Otto Gmbh & Co KG
+ * Copyright (c) 2013-2015 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2013-2015 Otto Gmbh & Co KG
  * All rights reserved
  * Use only with permission
  *
@@ -67,13 +67,13 @@ monitor_cleanup(void *arg)
     (void) arg;
 
     log_output();
-    LOG_Log0(LOG_INFO, "Monitoring thread exiting");
+    LOG_Log0(LOG_NOTICE, "Monitoring thread exiting");
 }
 
 static void *
 monitor_main(void *arg)
 {
-    LOG_Log(LOG_INFO, "Monitor thread running every %u secs",
+    LOG_Log(LOG_NOTICE, "Monitor thread running every %u secs",
         config.monitor_interval);
     run = 1;
 
@@ -85,7 +85,7 @@ monitor_main(void *arg)
     }
 
     pthread_cleanup_pop(0);
-    LOG_Log0(LOG_INFO, "Monitoring thread exiting");
+    LOG_Log0(LOG_NOTICE, "Monitoring thread exiting");
     pthread_exit((void *) NULL);
 }
 
