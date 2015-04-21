@@ -199,6 +199,7 @@ AC_CHECK_FUNCS([abort2])
 AC_CHECK_FUNCS([timegm])
 AC_CHECK_FUNCS([nanosleep])
 AC_CHECK_FUNCS([setppriv])
+AC_CHECK_FUNCS([getline])
 
 save_LIBS="${LIBS}"
 LIBS="${PTHREAD_LIBS}"

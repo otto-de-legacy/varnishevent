@@ -41,6 +41,8 @@
 #include <unistd.h>
 #include <pwd.h>
 
+#include "config.h"
+
 #include "varnishevent.h"
 #include "vtim.h"
 
@@ -252,10 +254,24 @@ CONF_Init(void)
     config.gid = pw->pw_gid;
 }
 
+static int
+conf_get_line(char *line, FILE *in)
+{
+#ifdef HAVE_GETLINE
+    size_t n = BUFSIZ;
+    errno = 0;
+    return (getline(&line, &n, in));
+#else
+    if (fgets(line, BUFSIZ, in) == NULL)
+        return -1;
+    return 0;
+#endif
+}
+
 int
 CONF_ReadFile(const char *file) {
     FILE *in;
-    char line[BUFSIZ];
+    char *line;
     int linenum = 0;
 
     in = fopen(file, "r");
@@ -263,10 +279,12 @@ CONF_ReadFile(const char *file) {
         perror(file);
         return(-1);
     }
-    
-    while (fgets(line, BUFSIZ, in) != NULL) {
+
+    line = (char *) malloc(BUFSIZ);
+    AN(line);
+    while (conf_get_line(line, in) != -1) {
         char orig[BUFSIZ];
-        
+
         linenum++;
         char *comment = strchr(line, '#');
         if (comment != NULL)
@@ -299,8 +317,18 @@ CONF_ReadFile(const char *file) {
             return(-1);
         }
     }
-    fclose(in);
-    return(0);
+    int ret = 0;
+    if (ferror(in)) {
+        fprintf(stderr, "Error reading file %s (errno %d: %s)\n", file, errno,
+                strerror(errno));
+        ret = -1;
+    }
+    errno = 0;
+    if (fclose(in) != 0) {
+        fprintf(stderr, "Error closing file %s: %s)\n", file,  strerror(errno));
+        ret = -1;
+    }
+    return(ret);
 }
 
 #define confdump(str,val) \
