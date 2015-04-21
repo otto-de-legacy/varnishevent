@@ -123,8 +123,6 @@ static unsigned rdr_rec_free = 0;
 static txhead_t rdr_tx_freelist = VSTAILQ_HEAD_INITIALIZER(rdr_tx_freelist);
 static unsigned rdr_tx_free = 0;
 
-static char cli_config_filename[BUFSIZ] = "";
-
 static int tx_type_log[VSL_t__MAX], debug = 0;
 static char tx_type_name[VSL_t__MAX];
 
@@ -456,6 +454,7 @@ main(int argc, char *argv[])
     int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0, D_flag = 0;
     char *P_arg = NULL, *w_arg = NULL, *q_arg = NULL, *g_arg = NULL,
         *n_arg = NULL, *N_arg = NULL, scratch[BUFSIZ];
+    char cli_config_filename[PATH_MAX + 1] = "";
     struct vpf_fh *pfh = NULL;
     struct VSL_data *vsl;
     struct VSLQ *vslq;
@@ -511,7 +510,11 @@ main(int argc, char *argv[])
             REPLACE(g_arg, optarg);
             break;
         case 'f':
-            strcpy(cli_config_filename, optarg);
+            if (strlen(optarg) > PATH_MAX) {
+                fprintf(stderr, "-f: path length exceeds max %d\n", PATH_MAX);
+                usage(EXIT_FAILURE);
+            }
+            bprintf(cli_config_filename, "%s", optarg);
             break;
         case 'q':
             REPLACE(q_arg, optarg);
@@ -713,11 +716,10 @@ main(int argc, char *argv[])
     if (!EMPTY(config.varnish_bindump))
         LOG_Log(LOG_INFO, "Reading from file: %s", config.varnish_bindump);
     else {
-        strcpy(scratch, VSM_Name(vsm));
-        if (EMPTY(scratch))
+        if (EMPTY(VSM_Name(vsm)))
             LOG_Log0(LOG_INFO, "Reading default varnish instance");
         else
-            LOG_Log(LOG_INFO, "Reading varnish instance %s", scratch);
+            LOG_Log(LOG_INFO, "Reading varnish instance %s", VSM_Name(vsm));
     }
 
     char **include_args = FMT_Get_I_Args();
@@ -728,7 +730,7 @@ main(int argc, char *argv[])
             assert(VSL_Arg(vsl, 'I', include_args[i]) > 0);
         }
     }
-    strcpy(scratch, FMT_Get_i_Arg());
+    bprintf(scratch, "%s", FMT_Get_i_Arg());
     if (!EMPTY(scratch)) {
         LOG_Log(LOG_INFO, "Include tags: %s", scratch);
         assert(VSL_Arg(vsl, 'i', scratch) > 0);
