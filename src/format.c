@@ -53,8 +53,7 @@ typedef struct compiled_fmt_t {
 } compiled_fmt_t;
 
 static struct vsb payload_storage, * const payload = &payload_storage,
-    bintag_storage, * const bintag = &bintag_storage, *i_arg;
-static char *scratch = NULL;
+    *i_arg,  *scratch;
 
 static char empty[] = "";
 static char hit[] = "hit";
@@ -63,6 +62,7 @@ static char pass[] = "pass";
 static char pipe[] = "pipe";
 static char error[] = "error";
 static char dash[] = "-";
+static char buf[BUFSIZ];
 
 typedef struct include_t {
     char *hdr;
@@ -252,12 +252,13 @@ format_DT(const tx_t *tx, const char *ts, int m, char **s, size_t *len)
     t = get_fld(f, 1, len);
     errno = 0;
     d = strtod(t, NULL);
-    if (errno != 0)
-        scratch[0] = '\0';
-    else
-        sprintf(scratch, "%d", (int) (d * m));
-    *s = scratch;
-    *len = strlen(scratch);
+    if (errno == 0) {
+        VSB_clear(scratch);
+        VSB_printf(scratch, "%d", (int) (d * m));
+        VSB_finish(scratch);
+        *s = VSB_data(scratch);
+        *len = VSB_len(scratch);
+    }
 }
 
 void
@@ -414,36 +415,38 @@ format_r(const tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
 {
     char *str;
 
+    VSB_clear(scratch);
     logline_t *rec = get_tag(tx, mtag);
     if (rec != NULL)
-        sprintf(scratch, get_payload(rec));
+        VSB_cpy(scratch, get_payload(rec));
     else
-        strcpy(scratch, "-");
-    strcat(scratch, " ");
+        VSB_cpy(scratch, "-");
+    VSB_cat(scratch, " ");
 
     if ((str = get_hdr(tx, htag, "Host")) != NULL) {
         if (strncmp(str, "http://", 7) != 0)
-            strcat(scratch, "http://");
-        strcat(scratch, str);
+            VSB_cat(scratch, "http://");
+        VSB_cat(scratch, str);
     }
     else
-        strcat(scratch, "http://localhost");
+        VSB_cat(scratch, "http://localhost");
 
     rec = get_tag(tx, utag);
     if (rec != NULL && rec->len > 0)
-        strcat(scratch, get_payload(rec));
+        VSB_cat(scratch, get_payload(rec));
     else
-        strcat(scratch, "-");
+        VSB_cat(scratch, "-");
 
-    strcat(scratch, " ");
+    VSB_cat(scratch, " ");
     rec = get_tag(tx, ptag);
     if (rec != NULL && rec->len > 0)
-        strcat(scratch, get_payload(rec));
+        VSB_cat(scratch, get_payload(rec));
     else
-        strcat(scratch, "HTTP/1.0");
+        VSB_cat(scratch, "HTTP/1.0");
 
-    *s = scratch;
-    *len = strlen(scratch);
+    VSB_finish(scratch);
+    *s = VSB_data(scratch);
+    *len = VSB_len(scratch);
 }
 
 void
@@ -502,11 +505,10 @@ format_tim(const tx_t *tx, const char *fmt, char **s, size_t *len)
         usecs = (tx->t - (double)t) * 1e6;
     }
     AN(localtime_r(&t, &tm));
-    AN(scratch);
-    size_t n = strfTIM(scratch, config.max_reclen, fmt, &tm, usecs);
+    size_t n = strfTIM(buf, BUFSIZ, fmt, &tm, usecs);
     if (n != 0) {
-        *s = scratch;
-        *len = strlen(scratch);
+        *s = buf;
+        *len = strlen(buf);
     }
 }
 
@@ -572,13 +574,13 @@ format_u(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
         && strncasecmp(get_fld(hdr, 0, len), "Basic", 5) == 0) {
         const char *c, *auth = get_fld(hdr, 1, len);
         VB64_init();
-        VB64_decode(scratch, config.max_reclen, auth, auth + *len);
-        c = strchr(scratch, ':');
-        *s = scratch;
+        VB64_decode(buf, BUFSIZ, auth, auth + *len);
+        c = strchr(buf, ':');
+        *s = buf;
         if (c != NULL)
-            *len = c - scratch;
+            *len = c - buf;
         else
-            *len = strlen(scratch);
+            *len = strlen(buf);
     }
     else {
         *s = dash;
@@ -718,30 +720,36 @@ format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     format_slt(tx, args->tag, args->name, args->fld, s, len);
     if (VSL_tagflags[args->tag] & SLT_F_BINARY) {
-        VSB_clear(bintag);
-        VSB_quote(bintag, *s, (int) *len, 0);
-        VSB_finish(bintag);
-        *s = VSB_data(bintag);
-        *len = VSB_len(bintag);
+        VSB_clear(scratch);
+        VSB_quote(scratch, *s, (int) *len, 0);
+        VSB_finish(scratch);
+        *s = VSB_data(scratch);
+        *len = VSB_len(scratch);
     }
+}
+
+static inline void
+format_xid(int32_t xid, char **s, size_t *len)
+{
+    VSB_clear(scratch);
+    VSB_printf(scratch, "%d", xid);
+    VSB_finish(scratch);
+    *s = VSB_data(scratch);
+    *len = VSB_len(scratch);
 }
 
 void
 format_vxid(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    sprintf(scratch, "%d", tx->vxid);
-    *s = scratch;
-    *len = strlen(*s);
+    format_xid(tx->vxid, s, len);
 }
 
 void
 format_pvxid(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    sprintf(scratch, "%d", tx->pvxid);
-    *s = scratch;
-    *len = strlen(*s);
+    format_xid(tx->pvxid, s, len);
 }
 
 static void
@@ -913,10 +921,10 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
         /* Only the SLT, vxid or time formatters permitted for the "raw"
            format (neither client nor backend) */
         if (R(type)
-            && sscanf(p, "{tag:%s}x", scratch) != 1
+            && sscanf(p, "{tag:%s}x", buf) != 1
             && sscanf(p, "{vxid}x") != 1
             && *p != 't'
-            && sscanf(p, "{%s}t", scratch) != 1) {
+            && sscanf(p, "{%s}t", buf) != 1) {
             sprintf(err, "Unknown format starting at: %s", --p);
             return 1;
         }
@@ -1031,7 +1039,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
         case '{': {
             const char *tmp;
-            char fname[100], ltr;
+            char *fname, ltr;
             tmp = p;
             ltr = '\0';
             while (*tmp != '\0' && *tmp != '}')
@@ -1039,8 +1047,8 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             if (*tmp == '}') {
                 tmp++;
                 ltr = *tmp;
-                memcpy(fname, p+1, tmp-p-2);
-                fname[tmp-p-2] = 0;
+                fname = strndup(p+1, tmp-p-2);
+                AN(fname);
             }
 
             switch (ltr) {
@@ -1147,6 +1155,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 }
                 n++;
                 p = tmp;
+                free(fname);
                 break;
                 
             default:
@@ -1178,7 +1187,6 @@ fmt_build_include_args(const includehead_t *inclhead, int *incl_idx)
 {
     AN(incl_arg);
     AN(includes);
-    AN(scratch);
 
     for (int i = 0; i < MAX_VSL_TAG; i++) {
         include_t *incl;
@@ -1190,8 +1198,10 @@ fmt_build_include_args(const includehead_t *inclhead, int *incl_idx)
                 VSB_cat(i_arg, ",");
             }
             else {
-                sprintf(scratch, "%s:^\\s*%s\\s*:", VSL_tags[i], incl->hdr);
-                incl_arg[*incl_idx] = strdup(scratch);
+                VSB_clear(scratch);
+                VSB_printf(scratch, "%s:^\\s*%s\\s*:", VSL_tags[i], incl->hdr);
+                VSB_finish(scratch);
+                incl_arg[*incl_idx] = strdup(VSB_data(scratch));
                 *incl_idx += 1;
             }
         }
@@ -1201,14 +1211,11 @@ fmt_build_include_args(const includehead_t *inclhead, int *incl_idx)
 int
 FMT_Init(char *err)
 {
-    scratch = (char *) malloc(config.max_reclen + 1);
-    if (scratch == NULL)
-        return errno;
-
     AN(VSB_new(payload, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
-    AN(VSB_new(bintag, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
     i_arg = VSB_new_auto();
     AN(i_arg);
+    scratch = VSB_new_auto();
+    AN(scratch);
 
     includes = 0;
     include_rx = 0;
@@ -1369,9 +1376,8 @@ free_incl(includehead_t inclhead[])
 void
 FMT_Fini(void)
 {
-    free(scratch);
+    VSB_delete(scratch);
     VSB_delete(payload);
-    VSB_delete(bintag);
     VSB_delete(i_arg);
 
     if (include_rx > 0) {
