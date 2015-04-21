@@ -179,6 +179,7 @@ struct config {
 
 /* varnishevent.c */
 void RDR_Stats(void);
+int RDR_Exhausted(void);
 
 /* config.c */
 void CONF_Init(void);

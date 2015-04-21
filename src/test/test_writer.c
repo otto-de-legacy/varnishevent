@@ -42,6 +42,12 @@ void
 RDR_Stats(void)
 {}
 
+int
+RDR_Exhausted(void)
+{
+    return 0;
+}
+
 static char
 *test_timeout(void)
 {

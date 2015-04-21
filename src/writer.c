@@ -237,8 +237,7 @@ wrt_write(tx_t *tx)
     DATA_Clear_Tx(tx, &wrt_freetx, &wrt_freerecs, &wrt_freechunks,
                   &wrt_nfree_tx, &wrt_nfree_recs, &wrt_nfree_chunks);
 
-    /* XXX: also if the reader is running low */
-    if (global_nfree_tx < (config.max_data >> 1))
+    if (RDR_Exhausted())
         wrt_return_freelist();
 }
 
