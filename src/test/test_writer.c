@@ -58,7 +58,7 @@ static char
     printf("... testing write timeouts\n");
 
     CONF_Init();
-    strcpy(config.cformat, "");
+    VSB_clear(config.cformat);
     MAZ(FMT_Init(&errmsg[0]));
 
     strcpy(config.log_file, "-");

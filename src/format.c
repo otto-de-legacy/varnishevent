@@ -1218,17 +1218,17 @@ FMT_Init(char *err)
         VSTAILQ_INIT(&rincl[i]);
     }
 
-    if (!EMPTY(config.cformat))
-        if (compile_fmt(config.cformat, &cformat, VSL_t_req, err) != 0)
-            return EINVAL;
+    if (!VSB_EMPTY(config.cformat) &&
+        compile_fmt(VSB_data(config.cformat), &cformat, VSL_t_req, err) != 0)
+        return EINVAL;
 
-    if (!EMPTY(config.bformat))
-        if (compile_fmt(config.bformat, &bformat, VSL_t_bereq, err) != 0)
-            return EINVAL;
+    if (!VSB_EMPTY(config.bformat) &&
+        compile_fmt(VSB_data(config.bformat), &bformat, VSL_t_bereq, err) != 0)
+        return EINVAL;
 
-    if (!EMPTY(config.rformat))
-        if (compile_fmt(config.rformat, &rformat, VSL_t_raw, err) != 0)
-            return EINVAL;
+    if (!VSB_EMPTY(config.rformat) &&
+        compile_fmt(VSB_data(config.rformat), &rformat, VSL_t_raw, err) != 0)
+        return EINVAL;
 
     if (includes > 0) {
         incl_arg = calloc(include_rx + 1, sizeof(char *));
@@ -1387,10 +1387,10 @@ FMT_Fini(void)
         free_incl(rincl);
     }
 
-    if (!EMPTY(config.cformat))
+    if (!VSB_EMPTY(config.cformat))
         free_format(&cformat);
-    if (!EMPTY(config.bformat))
+    if (!VSB_EMPTY(config.bformat))
         free_format(&bformat);
-    if (!EMPTY(config.rformat))
+    if (!VSB_EMPTY(config.rformat))
         free_format(&rformat);
 }

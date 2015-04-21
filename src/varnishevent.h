@@ -48,13 +48,15 @@
 #define B(txtype) ((txtype) == VSL_t_bereq)
 #define R(txtype) ((txtype) == VSL_t_raw)
 
+#define EMPTY(s) (s[0] == '\0')
+#define VSB_EMPTY(vsb) (VSB_len((vsb)) == 0)
+
 /* Defaults from Varnish 4.0.3 */
 #define DEFAULT_MAX_RECLEN 255	/* shm_reclen */
 #define DEFAULT_MAX_HEADERS 64	/* http_max_hdr */
 
 #define DEFAULT_MAX_VCL_CALL 10
 #define DEFAULT_MAX_VCL_LOG 10
-#define DEFAULT_MAX_TIMESTAMP 8
 
 #define DEFAULT_CHUNK_SIZE 64
 #define DEFAULT_MAX_DATA 4096
@@ -127,34 +129,30 @@ pthread_cond_t  spscq_ready_cond;
 pthread_mutex_t spscq_ready_lock;
 
 struct config {
-    char        pid_file[BUFSIZ];
+    char	pid_file[PATH_MAX + 1];
     
     /* VSL 'n' argument */
-    char        varnish_name[BUFSIZ];
+    struct vsb  *varnish_name;
     
-    char        log_file[BUFSIZ];
+    char	log_file[PATH_MAX + 1];
 
-    char	output_file[PATH_MAX];
+    char	output_file[PATH_MAX + 1];
     unsigned	append;
     struct timeval output_timeout;
 
     double	idle_pause;
 
     /* VSL 'r' argument */
-    char        varnish_bindump[BUFSIZ];
+    char	varnish_bindump[PATH_MAX + 1];
 
     /* rformat is for raw transactions */
-    /* XXX: better if these weren't limited to fixed buffer sizes, but the
-     * length of a configurable string is limited by the length of lines
-     * read by CONF_ReadFile(), currently BUFSIZ
-     */
-    char	cformat[BUFSIZ];
-    char	bformat[BUFSIZ];
-    char	rformat[BUFSIZ];
-    
+    struct vsb	*cformat;
+    struct vsb	*bformat;
+    struct vsb	*rformat;
+
     int         syslog_facility;
-    char        syslog_facility_name[BUFSIZ];
-    char	syslog_ident[BUFSIZ];
+    char	syslog_facility_name[sizeof("LOCAL0")];
+    struct vsb	*syslog_ident;
     unsigned    monitor_interval;
     
     /* varnishd param shm_reclen */
@@ -166,13 +164,12 @@ struct config {
     unsigned	max_headers;
     unsigned	max_vcl_log;
     unsigned	max_vcl_call;
-    unsigned	max_timestamp;
 
     unsigned	max_data;    
 
     size_t	output_bufsiz;
     
-    char        user_name[BUFSIZ];
+    char        user_name[LOGIN_NAME_MAX + 1];
     uid_t       uid;
     gid_t       gid;
 } config;
@@ -188,7 +185,6 @@ int CONF_ReadFile(const char *file);
 void CONF_Dump(void);
 
 /* log.c */
-#define EMPTY(s) (s[0] == '\0')
 
 typedef void log_log_t(int level, const char *msg, ...);
 typedef void log_setlevel_t(int level);

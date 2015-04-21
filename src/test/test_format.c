@@ -1476,7 +1476,9 @@ static const char
         "%{Varnish:hitmiss}x %{Varnish:handling}x %{VCL_Log:baz}x "\
         "%{tag:VCL_acl}x %{tag:Debug}x %{tag:Timestamp:Req}x "\
         "%{tag:ReqAcct[0]}x %{tag:Timestamp:Resp[2]}x %{vxid}x %{pvxid}x"
-    strcpy(config.cformat, FULL_CLIENT_FMT);
+    VSB_clear(config.cformat);
+    VSB_cpy(config.cformat, FULL_CLIENT_FMT);
+    VSB_finish(config.cformat);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
@@ -1542,8 +1544,10 @@ static const char
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x %{VCL_Log:baz}x "\
         "%{tag:Fetch_Body}x %{tag:Debug}x %{tag:Timestamp:Bereq}x "\
         "%{tag:BereqAcct[5]}x %{tag:Timestamp:Bereq[1]}x %{vxid}x %{pvxid}x"
-    strcpy(config.bformat, FULL_BACKEND_FMT);
-    config.cformat[0] = '\0';
+    VSB_clear(config.bformat);
+    VSB_cpy(config.bformat, FULL_BACKEND_FMT);
+    VSB_finish(config.bformat);
+    VSB_clear(config.cformat);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
@@ -1611,8 +1615,10 @@ static const char
     VSB_clear(os);
 
 #define FULL_RAW_FMT "%t %{%F-%T.%i}t %{tag:Backend_health}x %{vxid}x"
-    strcpy(config.rformat, FULL_RAW_FMT);
-    config.bformat[0] = '\0';
+    VSB_clear(config.rformat);
+    VSB_cpy(config.rformat, FULL_RAW_FMT);
+    VSB_finish(config.rformat);
+    VSB_clear(config.bformat);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
@@ -1647,15 +1653,19 @@ static const char
 
     /* Illegal backend formats */
     FMT_Fini();
-    strcpy(config.bformat, "%{Varnish:hitmiss}x");
-    config.rformat[0] = '\0';
+    VSB_clear(config.bformat);
+    VSB_cpy(config.bformat, "%{Varnish:hitmiss}x");
+    VSB_finish(config.bformat);
+    VSB_clear(config.rformat);
     status = FMT_Init(err);
     MAN(status);
     MASSERT(strcmp(err,
                    "Varnish:hitmiss only permitted for client formats") == 0);
 
     FMT_Fini();
-    strcpy(config.bformat, "%{Varnish:handling}x");
+    VSB_clear(config.bformat);
+    VSB_cpy(config.bformat, "%{Varnish:handling}x");
+    VSB_finish(config.bformat);
     status = FMT_Init(err);
     MAN(status);
     MASSERT(strcmp(err,
@@ -1663,16 +1673,20 @@ static const char
 
     /* Illegal raw formats */
     FMT_Fini();
-    strcpy(config.rformat, "%r");
-    config.bformat[0] = '\0';
+    VSB_clear(config.rformat);
+    VSB_cpy(config.rformat, "%r");
+    VSB_finish(config.rformat);
+    VSB_clear(config.bformat);
     status = FMT_Init(err);
     MAN(status);
     MASSERT(strcmp(err, "Unknown format starting at: %r") == 0);
 
     /* Unknown formatters */
     FMT_Fini();
-    strcpy(config.cformat, "%a");
-    config.rformat[0] = '\0';
+    VSB_clear(config.cformat);
+    VSB_cpy(config.cformat, "%a");
+    VSB_finish(config.cformat);
+    VSB_clear(config.rformat);
     status = FMT_Init(err);
     MAN(status);
     MASSERT(strcmp(err, "Unknown format starting at: %a") == 0);

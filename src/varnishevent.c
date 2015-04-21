@@ -65,6 +65,7 @@
 #include "vre.h"
 #include "miniobj.h"
 #include "vas.h"
+#include "vdef.h"
 
 #include "varnishevent.h"
 #include "vtim.h"
@@ -476,7 +477,9 @@ main(int argc, char *argv[])
             d_flag = 1;
             break;
         case 'F':
-            strcpy(config.cformat, optarg);
+            VSB_clear(config.cformat);
+            VSB_cpy(config.cformat, optarg);
+            VSB_finish(config.cformat);
             break;
         case 'D':
 #ifdef HAVE_DAEMON
@@ -521,7 +524,7 @@ main(int argc, char *argv[])
             d_flag = 1;
             break;
         case 'r':
-            strcpy(config.varnish_bindump, optarg);
+            bprintf(config.varnish_bindump, "%s", optarg);
             break;
         case 'L':
         case 'T':
@@ -575,7 +578,7 @@ main(int argc, char *argv[])
     }
 #endif
 
-    if (LOG_Open(config.syslog_ident) != 0) {
+    if (LOG_Open(VSB_data(config.syslog_ident)) != 0) {
         exit(EXIT_FAILURE);
     }
     if (v_flag) {
@@ -607,7 +610,7 @@ main(int argc, char *argv[])
             LOG_Log0(LOG_CRIT, "Session grouping not permitted");
             exit(EXIT_FAILURE);
         case VSL_g_raw:
-            if (!EMPTY(config.cformat) || !EMPTY(config.bformat)) {
+            if (!VSB_EMPTY(config.cformat) || !VSB_EMPTY(config.bformat)) {
                 /* XXX: this can be allowed with multi-threaded readers */
                 LOG_Log0(LOG_CRIT, "Raw grouping cannot be used with client "
                          "or backend logging");
@@ -622,8 +625,8 @@ main(int argc, char *argv[])
         }
     }
 
-    if (!EMPTY(config.rformat)) {
-        if (!EMPTY(config.cformat) || !EMPTY(config.bformat)) {
+    if (!VSB_EMPTY(config.rformat)) {
+        if (!VSB_EMPTY(config.cformat) || !VSB_EMPTY(config.bformat)) {
             /* XXX: this can be allowed with multi-threaded readers */
             LOG_Log0(LOG_CRIT, "Raw logging cannot be combined with client "
                      "or backend logging");
@@ -692,7 +695,7 @@ main(int argc, char *argv[])
 #include "signals.h"
 
     if (w_arg)
-        strcpy(config.output_file, w_arg);
+        bprintf(config.output_file, "%s", w_arg);
     if (!EMPTY(config.output_file))
         SIGDISP(SIGHUP, reopen_action);
     else
@@ -731,9 +734,9 @@ main(int argc, char *argv[])
         assert(VSL_Arg(vsl, 'i', scratch) > 0);
     }
 
-    if (!EMPTY(config.cformat) && EMPTY(config.bformat))
+    if (!VSB_EMPTY(config.cformat) && VSB_EMPTY(config.bformat))
         assert(VSL_Arg(vsl, 'c', scratch) > 0);
-    else if (!EMPTY(config.bformat) && EMPTY(config.cformat))
+    else if (!VSB_EMPTY(config.bformat) && VSB_EMPTY(config.cformat))
         assert(VSL_Arg(vsl, 'b', scratch) > 0);
 
     if ((errnum = DATA_Init()) != 0) {
@@ -767,11 +770,11 @@ main(int argc, char *argv[])
         tx_type_log[i] = 0;
         tx_type_name[i] = 'X';
     }
-    if (!EMPTY(config.cformat))
+    if (!VSB_EMPTY(config.cformat))
         tx_type_log[VSL_t_req] = 1;
-    if (!EMPTY(config.bformat))
+    if (!VSB_EMPTY(config.bformat))
         tx_type_log[VSL_t_bereq] = 1;
-    if (!EMPTY(config.rformat))
+    if (!VSB_EMPTY(config.rformat))
         tx_type_log[VSL_t_raw] = 1;
     tx_type_name[VSL_t_req] = 'c';
     tx_type_name[VSL_t_bereq] = 'b';

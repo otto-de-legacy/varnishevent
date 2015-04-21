@@ -47,6 +47,7 @@
 #include "vtim.h"
 
 #include "vas.h"
+#include "vdef.h"
 
 #define DEFAULT_USER "nobody"
 
@@ -57,7 +58,7 @@ static const int facilitynum[8] =
 static int
 conf_getFacility(const char *facility) {
     int localnum;
-    
+
     if (strcasecmp(facility, "USER") == 0)
         return LOG_USER;
     if (strlen(facility) != 6
@@ -102,13 +103,24 @@ conf_getDouble(const char *rval, double *d)
     return 0;
 }
 
-#define confString(name,fld)         \
-    if (strcmp(lval, (name)) == 0) { \
-        strcpy((config.fld), rval);  \
-        return(0);                   \
+/* For char fields with fixed-size buffers */
+#define confString(name,fld)                    \
+    if (strcmp(lval, (name)) == 0) {            \
+        if (strlen(rval) > sizeof(config.fld))  \
+            return EINVAL;                      \
+        bprintf((config.fld), "%s", rval);      \
+        return(0);                              \
     }
 
-/* XXX: need confNonNegative for chunk.size */
+#define confVSB(name,fld)                       \
+    if (strcmp(lval, (name)) == 0) {            \
+        VSB_clear(config.fld);                  \
+        VSB_cpy(config.fld, rval);              \
+        VSB_finish(config.fld);                 \
+        return(0);                              \
+    }
+
+/* XXX: need confNonNegative? */
 
 #define confUnsigned(name,fld)                   \
     if (strcmp(lval, name) == 0) {               \
@@ -126,20 +138,21 @@ CONF_Add(const char *lval, const char *rval)
     int ret;
     
     confString("pid.file", pid_file);
-    confString("varnish.name", varnish_name);
     confString("log.file", log_file);
-    confString("varnish.bindump", varnish_bindump);
-    confString("cformat", cformat);
-    confString("bformat", bformat);
-    confString("rformat", rformat);
     confString("output.file", output_file);
-    confString("syslog.ident", syslog_ident);
-    
+    confString("varnish.bindump", varnish_bindump);
+
+    confVSB("varnish.name", varnish_name);
+    confVSB("cformat", cformat);
+    confVSB("bformat", bformat);
+    confVSB("rformat", rformat);
+    confVSB("syslog.ident", syslog_ident);
+
     confUnsigned("max.reclen", max_reclen);
     confUnsigned("max.headers", max_headers);
     confUnsigned("max.vcl_log", max_vcl_log);
     confUnsigned("max.vcl_call", max_vcl_call);
-    confUnsigned("max.timestamp", max_vcl_call);
+    confUnsigned("chunk_size", chunk_size);
     confUnsigned("max.data", max_data);
     confUnsigned("monitor.interval", monitor_interval);
     confUnsigned("output.bufsiz", output_bufsiz);
@@ -149,7 +162,7 @@ CONF_Add(const char *lval, const char *rval)
         if ((ret = conf_getFacility(rval)) < 0)
             return EINVAL;
         config.syslog_facility = ret;
-        strcpy(config.syslog_facility_name, rval);
+        bprintf(config.syslog_facility_name, "%s", rval);
         char *p = &config.syslog_facility_name[0];
         do { *p = toupper(*p); } while (*++p);
         return(0);
@@ -161,7 +174,7 @@ CONF_Add(const char *lval, const char *rval)
         pw = getpwnam(rval);
         if (pw == NULL)
             return(EINVAL);
-        strcpy(config.user_name, pw->pw_name);
+        bprintf(config.user_name, "%s", pw->pw_name);
         config.uid = pw->pw_uid;
         config.gid = pw->pw_gid;
         return(0);
@@ -217,16 +230,25 @@ CONF_Init(void)
 {
     struct passwd *pw;
 
-    strcpy(config.pid_file, DEFAULT_PID_FILE);
-    strcpy(config.cformat, DEFAULT_CFORMAT);
-    strcpy(config.syslog_ident, "varnishevent");
-    config.bformat[0] = '\0';
-    config.rformat[0] = '\0';
-    config.varnish_name[0] = '\0';
+    bprintf(config.pid_file, "%s", DEFAULT_PID_FILE);
     config.log_file[0] = '\0';
+    /* Default is stdout */
+    config.output_file[0] = '\0';
     config.varnish_bindump[0] = '\0';
+    bprintf(config.syslog_facility_name, "%s", "LOCAL0");
+
+    config.varnish_name = VSB_new_auto();
+    config.cformat = VSB_new_auto();
+    VSB_cpy(config.cformat, DEFAULT_CFORMAT);
+    VSB_finish(config.cformat);
+    config.bformat = VSB_new_auto();
+    config.rformat = VSB_new_auto();
+    config.syslog_ident = VSB_new_auto();
+    VSB_cpy(config.syslog_ident, "varnishevent");
+    VSB_finish(config.syslog_ident);
+
     config.syslog_facility = LOG_LOCAL0;
-    strcpy(config.syslog_facility_name, "LOCAL0");
+
     config.monitor_interval = 30;
     config.output_bufsiz = BUFSIZ;
 
@@ -234,13 +256,10 @@ CONF_Init(void)
     config.max_headers = DEFAULT_MAX_HEADERS;
     config.max_vcl_log = DEFAULT_MAX_VCL_LOG;
     config.max_vcl_call = DEFAULT_MAX_VCL_CALL;
-    config.max_timestamp = DEFAULT_MAX_TIMESTAMP;
     config.max_data = DEFAULT_MAX_DATA;
     config.chunk_size = DEFAULT_CHUNK_SIZE;
     config.idle_pause = DEFAULT_IDLE_PAUSE;
 
-    /* Default is stdout */
-    config.output_file[0] = '\0';
     config.append = 0;
     config.output_timeout.tv_sec = 0;
     config.output_timeout.tv_usec = 0;
@@ -249,7 +268,7 @@ CONF_Init(void)
     if (pw == NULL)
         pw = getpwuid(getuid());
     AN(pw);
-    strcpy(config.user_name, pw->pw_name);
+    bprintf(config.user_name, "%s", pw->pw_name);
     config.uid = pw->pw_uid;
     config.gid = pw->pw_gid;
 }
@@ -273,6 +292,7 @@ CONF_ReadFile(const char *file) {
     FILE *in;
     char *line;
     int linenum = 0;
+    struct vsb *orig;
 
     in = fopen(file, "r");
     if (in == NULL) {
@@ -282,9 +302,8 @@ CONF_ReadFile(const char *file) {
 
     line = (char *) malloc(BUFSIZ);
     AN(line);
+    orig = VSB_new_auto();
     while (conf_get_line(line, in) != -1) {
-        char orig[BUFSIZ];
-
         linenum++;
         char *comment = strchr(line, '#');
         if (comment != NULL)
@@ -302,18 +321,22 @@ CONF_ReadFile(const char *file) {
         ptr = line;
         while (isspace(*ptr) && *++ptr)
             ;
-        strcpy(orig, ptr);
+
+        VSB_clear(orig);
+        VSB_cpy(orig, ptr);
+        VSB_finish(orig);
+
         char *lval, *rval;
         if (conf_ParseLine(ptr, &lval, &rval) != 0) {
             fprintf(stderr, "Cannot parse %s line %d: '%s'\n", file, linenum,
-                    orig);
+                    VSB_data(orig));
             return(-1);
         }
 
         int ret;
         if ((ret = CONF_Add((const char *) lval, (const char *) rval)) != 0) {
             fprintf(stderr, "Error in %s line %d (%s): '%s'\n", file, linenum,
-                strerror(ret), orig);
+                    strerror(ret), VSB_data(orig));
             return(-1);
         }
     }
@@ -328,6 +351,7 @@ CONF_ReadFile(const char *file) {
         fprintf(stderr, "Error closing file %s: %s)\n", file,  strerror(errno));
         ret = -1;
     }
+    free(line);
     return(ret);
 }
 
@@ -338,29 +362,29 @@ void
 CONF_Dump(void)
 {
     confdump("pid.file = %s", config.pid_file);
-    confdump("varnish.name = %s", config.varnish_name);
+    confdump("varnish.name = %s", VSB_data(config.varnish_name));
     confdump("log.file = %s",
-        strcmp(config.log_file,"-") == 0 ? "stdout" : config.log_file);
+             strcmp(config.log_file,"-") == 0 ? "stdout" : config.log_file);
     confdump("varnish.bindump = %s", config.varnish_bindump);
     confdump("output.file = %s",
-        EMPTY(config.output_file) ? "stdout" : config.output_file);
+             EMPTY(config.output_file) ? "stdout" : config.output_file);
     confdump("append = %u", config.append);
     confdump("output.timeout = %f",
-        config.output_timeout.tv_sec
-        + (double) config.output_timeout.tv_usec / 1e-6);
-    confdump("cformat = %s", config.cformat);
-    confdump("bformat = %s", config.bformat);
-    confdump("rformat = %s", config.rformat);
+             config.output_timeout.tv_sec
+             + (double) config.output_timeout.tv_usec / 1e-6);
+    confdump("cformat = %s", VSB_data(config.cformat));
+    confdump("bformat = %s", VSB_data(config.bformat));
+    confdump("rformat = %s", VSB_data(config.rformat));
     confdump("syslog.facility = %s", config.syslog_facility_name);
-    confdump("syslog.ident = %s", config.syslog_ident);
+    confdump("syslog.ident = %s", VSB_data(config.syslog_ident));
     confdump("monitor.interval = %u", config.monitor_interval);
     confdump("max.reclen = %u", config.max_reclen);
     confdump("max.headers = %u", config.max_headers);
     confdump("max.vcl_log = %u", config.max_vcl_log);
     confdump("max.vcl_call = %u", config.max_vcl_call);
-    confdump("max.timestamp = %u", config.max_timestamp);
     confdump("max.data = %u", config.max_data);
-    confdump("idle.pause = %d", config.idle_pause);
+    confdump("chunk.size = %u", config.chunk_size);
+    confdump("idle.pause = %f", config.idle_pause);
     confdump("output.bufsiz = %u", config.output_bufsiz);
     confdump("user = %s", config.user_name);
 }
