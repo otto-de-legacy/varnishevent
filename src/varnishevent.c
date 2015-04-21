@@ -117,7 +117,7 @@ static chunkhead_t rdr_chunk_freelist
     = VSTAILQ_HEAD_INITIALIZER(rdr_chunk_freelist);
 static unsigned rdr_chunk_free = 0;
 
-static linehead_t rdr_rec_freelist = VSTAILQ_HEAD_INITIALIZER(rdr_rec_freelist);
+static rechead_t rdr_rec_freelist = VSTAILQ_HEAD_INITIALIZER(rdr_rec_freelist);
 static unsigned rdr_rec_free = 0;
 
 static txhead_t rdr_tx_freelist = VSTAILQ_HEAD_INITIALIZER(rdr_tx_freelist);
@@ -177,14 +177,14 @@ static inline chunk_t
     return (chunk);
 }
 
-static inline logline_t
+static inline rec_t
 *take_rec(void)
 {
-    logline_t *rec;
+    rec_t *rec;
 
     if (VSTAILQ_EMPTY(&rdr_rec_freelist)) {
         signal_spscq_ready();
-        rdr_rec_free = DATA_Take_Freeline(&rdr_rec_freelist);
+        rdr_rec_free = DATA_Take_Freerec(&rdr_rec_freelist);
         if (VSTAILQ_EMPTY(&rdr_rec_freelist)) {
             rec_exhausted = 1;
             return NULL;
@@ -227,7 +227,7 @@ static inline void
 take_free(void)
 {
     rdr_tx_free += DATA_Take_Freetx(&rdr_tx_freelist);
-    rdr_rec_free += DATA_Take_Freeline(&rdr_rec_freelist);
+    rdr_rec_free += DATA_Take_Freerec(&rdr_rec_freelist);
     rdr_chunk_free += DATA_Take_Freechunk(&rdr_chunk_freelist);
 }
 
@@ -270,7 +270,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         }
         CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
         assert(!OCCUPIED(tx));
-        assert(VSTAILQ_EMPTY(&tx->lines));
+        assert(VSTAILQ_EMPTY(&tx->recs));
         tx->type = t->type;
         tx->vxid = t->vxid;
         tx->pvxid = t->vxid_parent;
@@ -279,7 +279,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 
         while ((status = VSL_Next(t->c)) > 0) {
             int len, n, nchunk;
-            logline_t *rec;
+            rec_t *rec;
             chunk_t *chunk;
             const char *p;
 
@@ -288,9 +288,9 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 
             len = VSL_LEN(t->c->rec.ptr);
             if (debug)
-                LOG_Log(LOG_DEBUG, "Line: [%u %s %.*s]", VSL_ID(t->c->rec.ptr),
-                        VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
-                        VSL_CDATA(t->c->rec.ptr));
+                LOG_Log(LOG_DEBUG, "Record: [%u %s %.*s]",
+                        VSL_ID(t->c->rec.ptr), VSL_tags[VSL_TAG(t->c->rec.ptr)],
+                        len, VSL_CDATA(t->c->rec.ptr));
 
             rec = take_rec();
             if (rec == NULL) {
@@ -301,7 +301,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                         VSL_CDATA(t->c->rec.ptr));
                 continue;
             }
-            CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+            CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
             assert(!OCCUPIED(rec));
             assert(VSTAILQ_EMPTY(&rec->chunks));
 
@@ -343,7 +343,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 total_chunks++;
             }
             rec->occupied = 1;
-            VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
+            VSTAILQ_INSERT_TAIL(&tx->recs, rec, reclist);
             nrec++;
         }
 
@@ -763,7 +763,7 @@ main(int argc, char *argv[])
     rdr_tx_free = DATA_Take_Freetx(&rdr_tx_freelist);
     assert(!VSTAILQ_EMPTY(&rdr_tx_freelist));
     assert(rdr_tx_free == config.max_data);
-    rdr_rec_free = DATA_Take_Freeline(&rdr_rec_freelist);
+    rdr_rec_free = DATA_Take_Freerec(&rdr_rec_freelist);
     assert(!VSTAILQ_EMPTY(&rdr_rec_freelist));
     rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
     assert(!VSTAILQ_EMPTY(&rdr_chunk_freelist));

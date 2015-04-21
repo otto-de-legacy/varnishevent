@@ -85,28 +85,28 @@ typedef VSTAILQ_HEAD(chunkhead_s, chunk_t) chunkhead_t;
 chunk_t *chunks;
 unsigned nchunks;                                          
 
-typedef struct logline_t {
+typedef struct rec_t {
     unsigned magic;
-#define LOGLINE_MAGIC 0xf427a374
+#define RECORD_MAGIC 0xf427a374
     unsigned len;
     chunkhead_t chunks;
-    VSTAILQ_ENTRY(logline_t) freelist;
-    VSTAILQ_ENTRY(logline_t) linelist;
+    VSTAILQ_ENTRY(rec_t) freelist;
+    VSTAILQ_ENTRY(rec_t) reclist;
     enum VSL_tag_e tag;
     unsigned int occupied:1;
-} logline_t;
+} rec_t;
 
-logline_t *lines;
+rec_t *records;
 unsigned nrecords;
 
-typedef VSTAILQ_HEAD(linehead_s, logline_t) linehead_t;
+typedef VSTAILQ_HEAD(rechead_s, rec_t) rechead_t;
 
 typedef struct tx_t {
     unsigned magic;
 #define TX_MAGIC 0xff463e42
     int32_t vxid;
     int32_t pvxid;
-    linehead_t lines;
+    rechead_t recs;
     VSTAILQ_ENTRY(tx_t) freelist;
     VSTAILQ_ENTRY(tx_t) spscq;
     double t;
@@ -121,7 +121,7 @@ typedef VSTAILQ_HEAD(txhead_s, tx_t) txhead_t;
 #define OCCUPIED(p) ((p)->occupied == 1)
 
 unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi,
-    global_nfree_tx, global_nfree_line, global_nfree_chunk;
+    global_nfree_tx, global_nfree_rec, global_nfree_chunk;
 
 /* Writer (consumer) waits for this condition when the SPSC queue is empty.
    Reader (producer) signals the condition after enqueue. */
@@ -208,15 +208,15 @@ int LOG_Open(const char *progname);
 /* data.c */
 int DATA_Init(void);
 void DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
-                   linehead_t * const freerec, chunkhead_t * const freechunk,
+                   rechead_t * const freerec, chunkhead_t * const freechunk,
                    unsigned * restrict const nfree_tx,
                    unsigned * restrict const nfree_rec,
                    unsigned * restrict const nfree_chunk);
 unsigned DATA_Take_Freetx(struct txhead_s *dst);
-unsigned DATA_Take_Freeline(struct linehead_s *dst);
+unsigned DATA_Take_Freerec(struct rechead_s *dst);
 unsigned DATA_Take_Freechunk(struct chunkhead_s *dst);
 void DATA_Return_Freetx(struct txhead_s *returned, unsigned nreturned);
-void DATA_Return_Freeline(struct linehead_s *returned, unsigned nreturned);
+void DATA_Return_Freerec(struct rechead_s *returned, unsigned nreturned);
 void DATA_Return_Freechunk(struct chunkhead_s *returned, unsigned nreturned);
 void DATA_Dump(void);
 
@@ -241,7 +241,7 @@ void SPSCQ_Shutdown(void);
 typedef enum {
     /* Transaction read */
     STATS_DONE,
-    /* Log line written */
+    /* Transaction written */
     STATS_WRITTEN,
 } stats_update_t;
 

@@ -77,9 +77,9 @@ static unsigned includes, include_rx;
 static char **incl_arg = NULL;
 
 char *
-get_payload(const logline_t *rec)
+get_payload(const rec_t *rec)
 {
-    CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+    CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
     assert(OCCUPIED(rec));
 
     if (!rec->len)
@@ -110,14 +110,14 @@ get_payload(const logline_t *rec)
 /*
  * Return the *last* record in tx that matches the tag
  */
-logline_t *
+rec_t *
 get_tag(const tx_t *tx, enum VSL_tag_e tag)
 {
-    logline_t *rec, *tagrec = NULL;
+    rec_t *rec, *tagrec = NULL;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
-        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+    VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
+        CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         assert(OCCUPIED(rec));
         if (rec->tag == tag)
             tagrec = rec;
@@ -132,14 +132,14 @@ get_tag(const tx_t *tx, enum VSL_tag_e tag)
 char *
 get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr)
 {
-    logline_t *rec;
+    rec_t *rec;
     char *hdr_payload = NULL;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
+    VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
         char *c;
 
-        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+        CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         assert(OCCUPIED(rec));
         if (rec->tag != tag)
             continue;
@@ -185,7 +185,7 @@ get_fld(char *str, int n, size_t *len)
 }
 
 char *
-get_rec_fld(const logline_t *rec, int n, size_t *len)
+get_rec_fld(const rec_t *rec, int n, size_t *len)
 {
     return get_fld(get_payload(rec), n, len);
 }
@@ -194,7 +194,7 @@ static inline void
 format_slt(const tx_t *tx, enum VSL_tag_e tag, char *hdr, int fld, char **s,
            size_t *len)
 {
-    logline_t *rec;
+    rec_t *rec;
 
     if (hdr == NULL) {
         rec = get_tag(tx, tag);
@@ -221,7 +221,7 @@ format_slt(const tx_t *tx, enum VSL_tag_e tag, char *hdr, int fld, char **s,
 static inline void
 format_b(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
-    logline_t *rec = get_tag(tx, tag);
+    rec_t *rec = get_tag(tx, tag);
     if (rec != NULL)
         *s = get_rec_fld(rec, 4, len);
 }
@@ -292,7 +292,7 @@ format_H_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 static inline void
 format_h(const tx_t *tx, enum VSL_tag_e tag, int fld_nr, char **s, size_t *len)
 {
-    logline_t *rec = get_tag(tx, tag);
+    rec_t *rec = get_tag(tx, tag);
     if (rec != NULL)
         *s = get_rec_fld(rec, fld_nr, len);
 }
@@ -317,7 +317,7 @@ format_IO_client(const tx_t *tx, int req_fld, int pipe_fld, char **s,
 {
     int field;
 
-    logline_t *rec = get_tag(tx, SLT_ReqAcct);
+    rec_t *rec = get_tag(tx, SLT_ReqAcct);
     if (rec != NULL)
         field = req_fld;
     else {
@@ -331,7 +331,7 @@ format_IO_client(const tx_t *tx, int req_fld, int pipe_fld, char **s,
 static inline void
 format_IO_backend(const tx_t *tx, int field, char **s, size_t *len)
 {
-    logline_t *rec = get_tag(tx, SLT_BereqAcct);
+    rec_t *rec = get_tag(tx, SLT_BereqAcct);
     if (rec != NULL)
         *s = get_rec_fld(rec, field, len);
 }
@@ -382,7 +382,7 @@ static inline void
 format_q(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *qs = NULL;
-    logline_t *rec = get_tag(tx, tag);
+    rec_t *rec = get_tag(tx, tag);
     if (rec == NULL)
         return;
     char *p = get_payload(rec);
@@ -416,7 +416,7 @@ format_r(const tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
     char *str;
 
     VSB_clear(scratch);
-    logline_t *rec = get_tag(tx, mtag);
+    rec_t *rec = get_tag(tx, mtag);
     if (rec != NULL)
         VSB_cpy(scratch, get_payload(rec));
     else
@@ -538,7 +538,7 @@ format_U(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *qs = NULL;
 
-    logline_t *rec = get_tag(tx, tag);
+    rec_t *rec = get_tag(tx, tag);
     if (rec == NULL)
         return;
     *s = get_payload(rec);
@@ -669,11 +669,11 @@ format_Xttfb_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 void
 format_VCL_disp(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    logline_t *rec;
+    rec_t *rec;
 
     *s = dash;
-    VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
-        CHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+    VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
+        CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         if (rec->tag != SLT_VCL_call && rec->tag != SLT_VCL_return)
             continue;
         char *data = get_payload(rec);

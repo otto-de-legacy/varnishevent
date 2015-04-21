@@ -40,11 +40,11 @@ typedef struct arg_t {
 typedef void formatter_f(const tx_t *tx, const arg_t *args, char **s,
                          size_t *len);
 
-char *get_payload(const logline_t *rec);
-logline_t *get_tag(const tx_t *tx, enum VSL_tag_e tag);
+char *get_payload(const rec_t *rec);
+rec_t *get_tag(const tx_t *tx, enum VSL_tag_e tag);
 char *get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr);
 char *get_fld(char *str, int n, size_t *len);
-char *get_rec_fld(const logline_t *rec, int n, size_t *len);
+char *get_rec_fld(const rec_t *rec, int n, size_t *len);
 
 formatter_f format_b_client;
 formatter_f format_b_backend;

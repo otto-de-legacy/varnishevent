@@ -68,7 +68,7 @@ static const char* statename[WRT_STATE_E_LIMIT] = {
 /* Single writer thread, consumer for the SPSC queue. */
 static pthread_t writer;
 
-linehead_t wrt_freerecs;
+rechead_t wrt_freerecs;
 chunkhead_t wrt_freechunks;
 
 static unsigned	wrt_nfree_tx, wrt_nfree_recs, wrt_nfree_chunks;
@@ -147,7 +147,7 @@ wrt_return_freelist(void)
         assert(VSTAILQ_EMPTY(&wrt_freetx));
     }
     if (wrt_nfree_recs > 0) {
-        DATA_Return_Freeline(&wrt_freerecs, wrt_nfree_recs);
+        DATA_Return_Freerec(&wrt_freerecs, wrt_nfree_recs);
         LOG_Log(LOG_DEBUG, "Writer: returned %u records to free list",
                 wrt_nfree_recs);
         wrt_nfree_recs = 0;

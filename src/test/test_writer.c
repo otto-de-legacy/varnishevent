@@ -52,7 +52,7 @@ static char
 *test_timeout(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
 
     printf("... testing write timeouts\n");
@@ -74,9 +74,9 @@ static char
 
     /* XXX: common helper functions with test_format */
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
-    VSTAILQ_INSERT_TAIL(&tx.lines, &rec, linelist);
-    rec.magic = LOGLINE_MAGIC;
+    VSTAILQ_INIT(&tx.recs);
+    VSTAILQ_INSERT_TAIL(&tx.recs, &rec, reclist);
+    rec.magic = RECORD_MAGIC;
     VSTAILQ_INIT(&rec.chunks);
     VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
     chunk.magic = CHUNK_MAGIC;

@@ -52,7 +52,7 @@ log_output(void)
             "global_free_chunk=%u",
             config.max_data, nrecords, nchunks, tx_occ, rec_occ, chunk_occ,
             tx_occ_hi, rec_occ_hi, chunk_occ_hi, global_nfree_tx,
-            global_nfree_line, global_nfree_chunk);
+            global_nfree_rec, global_nfree_chunk);
 
     RDR_Stats();
 

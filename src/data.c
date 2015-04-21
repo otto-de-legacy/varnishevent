@@ -55,33 +55,33 @@
 static const char *statename[3] = { "EMPTY", "OCCUPIED" };
 
 static pthread_mutex_t freetx_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t freeline_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t freerec_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t freechunk_lock = PTHREAD_MUTEX_INITIALIZER;
 static char *bufptr;
 static txhead_t freetxhead;
-static linehead_t freelinehead;
+static rechead_t freerechead;
 static chunkhead_t freechunkhead;
 
 static void
 data_Cleanup(void)
 {
     free(txn);
-    free(lines);
+    free(records);
     free(chunks);
     free(bufptr);
     AZ(pthread_mutex_destroy(&freetx_lock));
-    AZ(pthread_mutex_destroy(&freeline_lock));
+    AZ(pthread_mutex_destroy(&freerec_lock));
     AZ(pthread_mutex_destroy(&freechunk_lock));
 }
 
 void
 DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
-              linehead_t * const freerec, chunkhead_t * const freechunk,
+              rechead_t * const freerec, chunkhead_t * const freechunk,
               unsigned * restrict const nfree_tx,
               unsigned * restrict const nfree_rec,
               unsigned * restrict const nfree_chunk)
 {
-    logline_t *rec;
+    rec_t *rec;
     chunk_t *chunk;
     unsigned nchunk = 0, nrec = 0;
 
@@ -93,8 +93,8 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
     tx->type = VSL_t_unknown;
     tx->t = 0.;
 
-    while ((rec = VSTAILQ_FIRST(&tx->lines)) != NULL) {
-        CHECK_OBJ(rec, LOGLINE_MAGIC);
+    while ((rec = VSTAILQ_FIRST(&tx->recs)) != NULL) {
+        CHECK_OBJ(rec, RECORD_MAGIC);
         rec->occupied = 0;
         rec->tag = SLT__Bogus;
         rec->len = 0;
@@ -107,11 +107,11 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
             nchunk++;
         }
         assert(VSTAILQ_EMPTY(&rec->chunks));
-        VSTAILQ_REMOVE_HEAD(&tx->lines, linelist);
+        VSTAILQ_REMOVE_HEAD(&tx->recs, reclist);
         VSTAILQ_INSERT_HEAD(freerec, rec, freelist);
         nrec++;
     }
-    assert(VSTAILQ_EMPTY(&tx->lines));
+    assert(VSTAILQ_EMPTY(&tx->recs));
     VSTAILQ_INSERT_HEAD(freetx, tx, freelist);
     *nfree_tx += 1;
     *nfree_rec += nrec;
@@ -122,10 +122,10 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
 int
 DATA_Init(void)
 {
-    int bufidx = 0, chunks_per_rec, lines_per_tx = FMT_Estimate_RecsPerTx();
+    int bufidx = 0, chunks_per_rec, recs_per_tx = FMT_Estimate_RecsPerTx();
 
-    LOG_Log(LOG_DEBUG, "Estimated %d records per transaction", lines_per_tx);
-    nrecords = config.max_data * lines_per_tx;
+    LOG_Log(LOG_DEBUG, "Estimated %d records per transaction", recs_per_tx);
+    nrecords = config.max_data * recs_per_tx;
     AN(config.chunk_size);
     chunks_per_rec
         = (config.max_reclen + config.chunk_size - 1) / config.chunk_size;
@@ -154,21 +154,21 @@ DATA_Init(void)
     assert(bufidx == nchunks);
 
     LOG_Log(LOG_DEBUG, "Allocating table for %d records (%d bytes)", nrecords,
-            nrecords * sizeof(logline_t));
-    lines = (logline_t *) calloc(nrecords, sizeof(logline_t));
-    if (lines == NULL) {
+            nrecords * sizeof(rec_t));
+    records = (rec_t *) calloc(nrecords, sizeof(rec_t));
+    if (records == NULL) {
         free(bufptr);
         free(chunks);
         return errno;
     }
-    VSTAILQ_INIT(&freelinehead);
+    VSTAILQ_INIT(&freerechead);
     for (int i = 0; i < nrecords; i++) {
-        lines[i].magic = LOGLINE_MAGIC;
-        lines[i].occupied = 0;
-        lines[i].tag = SLT__Bogus;
-        lines[i].len = 0;
-        VSTAILQ_INIT(&lines[i].chunks);
-        VSTAILQ_INSERT_TAIL(&freelinehead, &lines[i], freelist);
+        records[i].magic = RECORD_MAGIC;
+        records[i].occupied = 0;
+        records[i].tag = SLT__Bogus;
+        records[i].len = 0;
+        VSTAILQ_INIT(&records[i].chunks);
+        VSTAILQ_INSERT_TAIL(&freerechead, &records[i], freelist);
     }
 
     LOG_Log(LOG_DEBUG, "Allocating table for %d transactions (%d bytes)",
@@ -177,7 +177,7 @@ DATA_Init(void)
     if (txn == NULL) {
         free(bufptr);
         free(chunks);
-        free(lines);
+        free(records);
         return errno;
     }
     VSTAILQ_INIT(&freetxhead);
@@ -188,13 +188,13 @@ DATA_Init(void)
         txn[i].pvxid = -1;
         txn[i].type = VSL_t_unknown;
         txn[i].t = 0.;
-        VSTAILQ_INIT(&txn[i].lines);
+        VSTAILQ_INIT(&txn[i].recs);
 	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
     }
 
     tx_occ = rec_occ = chunk_occ = tx_occ_hi = rec_occ_hi = chunk_occ_hi = 0;
     global_nfree_tx = config.max_data;
-    global_nfree_line = nrecords;
+    global_nfree_rec = nrecords;
     global_nfree_chunk = nchunks;
 
     atexit(data_Cleanup);
@@ -220,7 +220,7 @@ DATA_Take_Free##type(struct type##head_s *dst)          \
 }
 
 DATA_Take_Free(tx)
-DATA_Take_Free(line)
+DATA_Take_Free(rec)
 DATA_Take_Free(chunk)
 
 /*
@@ -238,7 +238,7 @@ DATA_Return_Free##type(struct type##head_s *returned, unsigned nreturned) \
 }
 
 DATA_Return_Free(tx)
-DATA_Return_Free(line)
+DATA_Return_Free(rec)
 DATA_Return_Free(chunk)
 
 void
@@ -253,7 +253,7 @@ DATA_Dump(void)
     
     for (int i = 0; i < config.max_data; i++) {
         tx_t *tx;
-        logline_t *rec;
+        rec_t *rec;
 
         if (txn[i].magic != TX_MAGIC) {
             LOG_Log(LOG_ERR,
@@ -273,13 +273,13 @@ DATA_Dump(void)
                    i, tx->vxid, tx->pvxid, statename[tx->occupied],
                    C(tx->type) ? 'c' : B(tx->type) ? 'b' : '-');
 
-        VSTAILQ_FOREACH(rec, &tx->lines, linelist) {
+        VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
             if (rec == NULL)
                 continue;
-            if (rec->magic != LOGLINE_MAGIC) {
+            if (rec->magic != RECORD_MAGIC) {
                 LOG_Log(LOG_ERR,
                     "Invalid record at tx %d, magic = 0x%08x, expected 0x%08x",
-                    i, rec->magic, LOGLINE_MAGIC);
+                    i, rec->magic, RECORD_MAGIC);
                 continue;
             }
             VSB_printf(data, "%s ", VSL_tags[rec->tag]);

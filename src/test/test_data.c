@@ -38,7 +38,7 @@
 int tests_run = 0;
 
 static txhead_t local_freetx = VSTAILQ_HEAD_INITIALIZER(local_freetx);
-static linehead_t local_freeline = VSTAILQ_HEAD_INITIALIZER(local_freeline);
+static rechead_t local_freerec = VSTAILQ_HEAD_INITIALIZER(local_freerec);
 static chunkhead_t local_freechunk = VSTAILQ_HEAD_INITIALIZER(local_freechunk);
 
 /* So that we don't have to link monitor.o, and hence varnishevent.o */
@@ -74,22 +74,22 @@ static char
         MASSERT(txn[i].pvxid == -1);
         MASSERT(txn[i].type == VSL_t_unknown);
         MAZ(txn[i].t);
-        MASSERT(VSTAILQ_EMPTY(&txn[i].lines));
+        MASSERT(VSTAILQ_EMPTY(&txn[i].recs));
         if (VSTAILQ_NEXT(&txn[i], freelist) != NULL)
             tx_free++;
     }
     MASSERT(global_nfree_tx == config.max_data);
 
     for (int i = 0; i < nrecords; i++) {
-        MCHECK_OBJ(&lines[i], LOGLINE_MAGIC);
-        MASSERT(!OCCUPIED(&lines[i]));
-        MASSERT(lines[i].tag == SLT__Bogus);
-        MASSERT(lines[i].len == 0);
-        MASSERT(VSTAILQ_EMPTY(&lines[i].chunks));
-        if (VSTAILQ_NEXT(&lines[i], freelist) != NULL)
+        MCHECK_OBJ(&records[i], RECORD_MAGIC);
+        MASSERT(!OCCUPIED(&records[i]));
+        MASSERT(records[i].tag == SLT__Bogus);
+        MASSERT(records[i].len == 0);
+        MASSERT(VSTAILQ_EMPTY(&records[i].chunks));
+        if (VSTAILQ_NEXT(&records[i], freelist) != NULL)
             rec_free++;
     }
-    MASSERT(global_nfree_line == nrecords);
+    MASSERT(global_nfree_rec == nrecords);
 
     for (int i = 0; i < nchunks; i++) {
         MCHECK_OBJ(&chunks[i], CHUNK_MAGIC);
@@ -133,17 +133,17 @@ static const char
 *test_data_take_rec(void)
 {
     unsigned nfree, cfree = 0;
-    logline_t *rec;
+    rec_t *rec;
 
     printf("... testing record freelist take\n");
 
-    nfree = DATA_Take_Freeline(&local_freeline);
+    nfree = DATA_Take_Freerec(&local_freerec);
    
-    MAZ(global_nfree_line);
+    MAZ(global_nfree_rec);
     MASSERT(nfree == nrecords);
-    MASSERT(!VSTAILQ_EMPTY(&local_freeline));
-    VSTAILQ_FOREACH(rec, &local_freeline, freelist) {
-        MCHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+    MASSERT(!VSTAILQ_EMPTY(&local_freerec));
+    VSTAILQ_FOREACH(rec, &local_freerec, freelist) {
+        MCHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         cfree++;
     }
     MASSERT(nfree == cfree);
@@ -191,10 +191,10 @@ static const char
 {
     printf("... testing record freelist return\n");
 
-    DATA_Return_Freeline(&local_freeline, nrecords);
+    DATA_Return_Freerec(&local_freerec, nrecords);
 
-    MASSERT(VSTAILQ_EMPTY(&local_freeline));
-    MASSERT(global_nfree_line == nrecords);
+    MASSERT(VSTAILQ_EMPTY(&local_freerec));
+    MASSERT(global_nfree_rec == nrecords);
 
     return NULL;
 }
@@ -262,7 +262,7 @@ static const char
 #define NRECS 10
 #define CHUNKS_PER_REC 3
     tx_t tx;
-    logline_t r[NRECS], *rec;
+    rec_t r[NRECS], *rec;
     chunk_t c[NRECS * CHUNKS_PER_REC], *chunk;
     int n = 0;
     unsigned nfree_tx = 4711, nfree_recs = 815, nfree_chunks = 1147;
@@ -270,14 +270,14 @@ static const char
     printf("... testing transaction clear\n");
 
     VSTAILQ_INIT(&local_freetx);
-    VSTAILQ_INIT(&local_freeline);
+    VSTAILQ_INIT(&local_freerec);
     VSTAILQ_INIT(&local_freechunk);
 
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INIT(&tx.recs);
     for (int i = 0; i < NRECS; i++) {
-        VSTAILQ_INSERT_TAIL(&tx.lines, &r[i], linelist);
-        r[i].magic = LOGLINE_MAGIC;
+        VSTAILQ_INSERT_TAIL(&tx.recs, &r[i], reclist);
+        r[i].magic = RECORD_MAGIC;
         VSTAILQ_INIT(&r[i].chunks);
         for (int j = 0; j < CHUNKS_PER_REC; j++) {
             chunk = &c[i*CHUNKS_PER_REC + j];
@@ -287,7 +287,7 @@ static const char
         }
     }
 
-    DATA_Clear_Tx(&tx, &local_freetx, &local_freeline, &local_freechunk,
+    DATA_Clear_Tx(&tx, &local_freetx, &local_freerec, &local_freechunk,
                   &nfree_tx, &nfree_recs, &nfree_chunks);
 
     MASSERT(nfree_tx == 4712);
@@ -300,19 +300,19 @@ static const char
     MASSERT(tx.pvxid == -1);
     MASSERT(tx.type == VSL_t_unknown);
     MAZ(tx.t);
-    MASSERT(VSTAILQ_EMPTY(&tx.lines));
+    MASSERT(VSTAILQ_EMPTY(&tx.recs));
 
     MASSERT(!VSTAILQ_EMPTY(&local_freetx));
     MASSERT(VSTAILQ_FIRST(&local_freetx) == &tx);
     MAZ(VSTAILQ_NEXT(&tx, freelist));
 
-    MASSERT(!VSTAILQ_EMPTY(&local_freeline));
-    VSTAILQ_FOREACH(rec, &local_freeline, freelist) {
-        MCHECK_OBJ_NOTNULL(rec, LOGLINE_MAGIC);
+    MASSERT(!VSTAILQ_EMPTY(&local_freerec));
+    VSTAILQ_FOREACH(rec, &local_freerec, freelist) {
+        MCHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         MASSERT(!OCCUPIED(rec));
         MASSERT(rec->tag == SLT__Bogus);
         MAZ(rec->len);
-        MASSERT(VSTAILQ_EMPTY(&tx.lines));
+        MASSERT(VSTAILQ_EMPTY(&tx.recs));
         n++;
     }
     MASSERT(n == NRECS);

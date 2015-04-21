@@ -44,10 +44,10 @@
 int tests_run = 0;
 
 static void
-add_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
+add_rec_chunk(tx_t *tx, rec_t *rec, chunk_t *chunk)
 {
-    VSTAILQ_INSERT_TAIL(&tx->lines, rec, linelist);
-    rec->magic = LOGLINE_MAGIC;
+    VSTAILQ_INSERT_TAIL(&tx->recs, rec, reclist);
+    rec->magic = RECORD_MAGIC;
     rec->occupied = 1;
     VSTAILQ_INIT(&rec->chunks);
     VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
@@ -56,17 +56,17 @@ add_rec_chunk(tx_t *tx, logline_t *rec, chunk_t *chunk)
 }
 
 static void
-init_tx_rec_chunk_arg(tx_t *tx, logline_t *rec, chunk_t *chunk, arg_t *args)
+init_tx_rec_chunk_arg(tx_t *tx, rec_t *rec, chunk_t *chunk, arg_t *args)
 {
     tx->magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx->lines);
+    VSTAILQ_INIT(&tx->recs);
     add_rec_chunk(tx, rec, chunk);
     args->name = NULL;
     args->tag = SLT__Bogus;
 }
 
 static void
-set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
+set_record_data(rec_t *rec, chunk_t *chunk, const char *data,
                 enum VSL_tag_e tag)
 {
     rec->len = strlen(data) + 1;
@@ -77,7 +77,7 @@ set_record_data(logline_t *rec, chunk_t *chunk, const char *data,
 }
 
 static void
-add_record_data(tx_t *tx, logline_t *rec, chunk_t *chunk, const char *data,
+add_record_data(tx_t *tx, rec_t *rec, chunk_t *chunk, const char *data,
                 enum VSL_tag_e tag)
 {
     add_rec_chunk(tx, rec, chunk);
@@ -103,14 +103,14 @@ static const char
 static const char
 *test_format_get_payload(void)
 {
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     char *p;
 
     printf("... testing get_payload()\n");
 
-    memset(&rec, 0, sizeof(logline_t));
-    rec.magic = LOGLINE_MAGIC;
+    memset(&rec, 0, sizeof(rec_t));
+    rec.magic = RECORD_MAGIC;
     rec.occupied = 1;
     VSTAILQ_INIT(&rec.chunks);
     memset(&chunk, 0, sizeof(chunk_t));
@@ -173,18 +173,18 @@ static const char
 *test_format_get_tag(void)
 {
     tx_t tx;
-    logline_t recs[NRECORDS], *rec;
+    rec_t recs[NRECORDS], *rec;
 
     printf("... testing get_tag()\n");
 
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INIT(&tx.recs);
     for (int i = 0; i < NRECORDS; i++) {
-        memset(&recs[i], 0, sizeof(logline_t));
-        recs[i].magic = LOGLINE_MAGIC;
+        memset(&recs[i], 0, sizeof(rec_t));
+        recs[i].magic = RECORD_MAGIC;
         recs[i].tag = SLT_ReqHeader;
         recs[i].occupied = 1;
-        VSTAILQ_INSERT_TAIL(&tx.lines, &recs[i], linelist);
+        VSTAILQ_INSERT_TAIL(&tx.recs, &recs[i], reclist);
     }
     recs[NRECORDS / 2].tag = SLT_RespHeader;
     recs[NRECORDS - 1].tag = SLT_RespHeader;
@@ -198,7 +198,7 @@ static const char
     MAZ(rec);
 
     /* Empty line list */
-    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INIT(&tx.recs);
     rec = get_tag(&tx, SLT_ReqHeader);
     MAZ(rec);
 
@@ -209,21 +209,21 @@ static const char
 *test_format_get_hdr(void)
 {
     tx_t tx;
-    logline_t recs[NRECORDS];
+    rec_t recs[NRECORDS];
     chunk_t c[NRECORDS];
     char *hdr;
 
     printf("... testing get_hdr()\n");
 
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INIT(&tx.recs);
     for (int i = 0; i < NRECORDS; i++) {
-        memset(&recs[i], 0, sizeof(logline_t));
-        recs[i].magic = LOGLINE_MAGIC;
+        memset(&recs[i], 0, sizeof(rec_t));
+        recs[i].magic = RECORD_MAGIC;
         recs[i].tag = SLT_ReqHeader;
         recs[i].len = strlen("Bar: baz");
         recs[i].occupied = 1;
-        VSTAILQ_INSERT_TAIL(&tx.lines, &recs[i], linelist);
+        VSTAILQ_INSERT_TAIL(&tx.recs, &recs[i], reclist);
         VSTAILQ_INIT(&recs[i].chunks);
         memset(&c[i], 0, sizeof(chunk_t));
         c[i].magic = CHUNK_MAGIC;
@@ -259,7 +259,7 @@ static const char
     MAZ(hdr);
 
     /* Empty line list */
-    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INIT(&tx.recs);
     hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAZ(hdr);
 
@@ -312,17 +312,17 @@ static const char
 static const char
 *test_format_get_rec_fld(void)
 {
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     char *fld;
     size_t len;
 
     printf("... testing get_rec_fld()\n");
 
-    memset(&rec, 0, sizeof(logline_t));
+    memset(&rec, 0, sizeof(rec_t));
     memset(&chunk, 0, sizeof(chunk_t));
 
-    rec.magic = LOGLINE_MAGIC;
+    rec.magic = RECORD_MAGIC;
     VSTAILQ_INIT(&rec.chunks);
     rec.occupied = 1;
     chunk.magic = CHUNK_MAGIC;
@@ -372,7 +372,7 @@ static const char
 *test_format_H(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -402,7 +402,7 @@ static const char
 *test_format_b(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -431,7 +431,7 @@ static const char
 *test_format_D(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -461,7 +461,7 @@ static const char
 *test_format_h(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -491,7 +491,7 @@ static const char
 *test_format_I(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -525,7 +525,7 @@ static const char
 *test_format_m(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -554,7 +554,7 @@ static const char
 *test_format_O(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -587,7 +587,7 @@ static const char
 *test_format_q(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -629,7 +629,7 @@ static const char
 *test_format_r(void)
 {
     tx_t tx;
-    logline_t rec_method, rec_host, rec_url, rec_proto;
+    rec_t rec_method, rec_host, rec_url, rec_proto;
     chunk_t chunk_method, chunk_host, chunk_url, chunk_proto;
     arg_t args;
     char *str;
@@ -758,7 +758,7 @@ static const char
 *test_format_s(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -787,7 +787,7 @@ static const char
 *test_format_t(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str = NULL, strftime_s[BUFSIZ], fmt[] = "[%d/%b/%Y:%T %z]";
@@ -818,7 +818,7 @@ static const char
 *test_format_T(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -846,7 +846,7 @@ static const char
 *test_format_U(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -884,7 +884,7 @@ static const char
 *test_format_u(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -950,7 +950,7 @@ static const char
 *test_format_Xi(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str, hdr[] = "Foo";
@@ -979,7 +979,7 @@ static const char
 *test_format_Xo(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str, hdr[] = "Baz";
@@ -1008,7 +1008,7 @@ static const char
 *test_format_Xt(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str = NULL, strftime_s[BUFSIZ];
@@ -1064,7 +1064,7 @@ static const char
 *test_format_Xttfb(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str;
@@ -1094,7 +1094,7 @@ static const char
 *test_format_VCL_disp(void)
 {
     tx_t tx;
-    logline_t *recs[NRECORDS];
+    rec_t *recs[NRECORDS];
     chunk_t *c[NRECORDS];
     arg_t args;
     char *str, hitmiss[] = "m", handling[] = "n";
@@ -1103,9 +1103,9 @@ static const char
     printf("... testing format_VCL_disp()\n");
 
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INIT(&tx.recs);
     for (int i = 0; i < NRECORDS; i++) {
-        recs[i] = (logline_t *) calloc(1, sizeof(logline_t));
+        recs[i] = (rec_t *) calloc(1, sizeof(rec_t));
         MAN(recs[i]);
         c[i] = (chunk_t *) calloc(1, sizeof(chunk_t));
         MAN(c[i]);
@@ -1216,7 +1216,7 @@ static const char
 *test_format_VCL_Log(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str, hdr[] = "foo";
@@ -1254,7 +1254,7 @@ static const char
 *test_format_SLT(void)
 {
     tx_t tx;
-    logline_t rec;
+    rec_t rec;
     chunk_t chunk;
     arg_t args;
     char *str, *substr;
@@ -1391,7 +1391,7 @@ static const char
     char err[BUFSIZ], **i_args, *i_arg, strftime_s[BUFSIZ];
     int status, recs_per_tx;
     tx_t tx;
-    logline_t *recs[NRECS];
+    rec_t *recs[NRECS];
     chunk_t *c[NRECS];
     struct vsb *os;
     struct tm *tm;
@@ -1410,9 +1410,9 @@ static const char
     tx.occupied = 1;
     tx.vxid = 4711;
     tx.pvxid = 1147;
-    VSTAILQ_INIT(&tx.lines);
+    VSTAILQ_INIT(&tx.recs);
     for (int i = 0; i < NRECS; i++) {
-        recs[i] = (logline_t *) calloc(1, sizeof(logline_t));
+        recs[i] = (rec_t *) calloc(1, sizeof(rec_t));
         MAN(recs[i]);
         c[i] = (chunk_t *) calloc(1, sizeof(chunk_t));
         MAN(c[i]);
