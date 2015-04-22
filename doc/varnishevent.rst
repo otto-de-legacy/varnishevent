@@ -7,17 +7,17 @@ Display Varnish log contents in formats for client, backend and other events
 ----------------------------------------------------------------------------
 
 :Author: Geoffrey Simmons
-:Date:   2013-12-03
-:Version: 1.0
+:Date:   2015-04-22
+:Version: 4.0
 :Manual section: 1
 
 
 SYNOPSIS
 ========
 
-varnishevent [-a] [-C] [-D] [-d] [-f] [-F format] [-g] [-G configfile]
-             [-I regex] [-i tag] [-n varnish_name] [-m tag:regex ...] [-P file]
-             [-r file] [-V] [-w file] [-X regex] [-x tag]
+varnishevent [-a] [-d] [-D] [-f configfile] [-F format] [-g grouping]
+             [-L txlimit] [-n varnish_name] [-N vsmfile] [-P file]
+             [-q query] [-r file] [-T txtimeout] [-v] [-V] [-w file]
 
 
 DESCRIPTION
@@ -25,169 +25,310 @@ DESCRIPTION
 
 The varnishevent utility reads varnishd(1) shared memory logs and
 presents them one line per event, where an event is one or more of a
-client transaction (request/response), backend transaction, or an
-event logged with the pseudo file descriptor 0, such as a backend
-health check. By specifying output formats in the configuration,
-you decide which of the three kinds of transactions are logged.
+client transaction (request/response), backend transaction, or a raw
+transaction, such as a backend health check. By specifying output
+formats in the configuration, you decide which of the three kinds of
+transactions are logged.
 
 By default, varnishevent functions almost exactly as varnishncsa(1) --
-it outputs client transaction events in the default format shown below
-for the ``-F`` option.
+it outputs client transaction events in the default format shown
+below.
 
-Differences between varnishevent and varnishncsa(1) are noted in the
-following.  In most cases, the difference is that varnishevent emits
-an empty string for data that are absent or unknown, whereas
-varnishncsa emits a '-'.
+The main differences between varnishevent and varnishncsa(1) are:
+
+* Outputs differ in a few cases where varnishevent emits an empty
+  string for data that are absent or unknown, while varnishncsa emits a
+  '-'.
+* varnishncsa only logs client transactions, while varnishevent may
+  also log backend or raw transactions.
+* Some additional output formatters are available.
+* varnishevent is designed to keep pace reading the Varnish shared
+  memory log while varnishd is writing to it rapidly under heavy load,
+  and output channels are slow.
 
 OPTIONS
 =======
 
--a          When writing to a file, append to it rather than overwrite it.
+-a
 
--C          Ignore case when matching regular expressions.
+	When writing to a file, append to it rather than overwrite it.
 
--D          Daemonize.
+-d
 
--d          Process old log entries on startup.  Normally, varnishevent 
-	    will only process entries which are written to the log 
-	    after it starts.
+	Start processing log records at the head of the log instead of the tail.
 
--f          Prefer the X-Forwarded-For HTTP header over client.ip in 
-	    the default format for client transactions.
+-D
 
--F format   Specify the format for client transactions. By default,
-            varnishevent presents client transactions in this format:
+	Daemonize.
 
-            %h %l %u %t "%r" %s %b "%{Referer}i" "%{User-agent}i"
+-f file
 
-	    Escape sequences \\n and \\t are supported.
+	Read the configuration from the specified file.
 
-	    These formatters can be used, for the ``-F`` option or
-            any of the format specifications in the configuration
-            file.
+-F format
 
-	      %b 
-	         Size of response in bytes, excluding HTTP headers.
-   	         The value is 0 when no bytes are sent (whereas 
-                 varnishncsa emits a '-').
+	Set the output format string for client transactions.
 
-              %d
-                 The 'direction' of logged event: ``c`` for client
-                 transactions, ``b`` for backend transactions, and
-                 the empty string otherwise.
+-g <request|vxid|raw>
 
-	      %H 
-	         The request protocol. Empty string if unknown.
-                 (varnishncsa defaults to HTTP/1.0 if not known.)
+	The grouping of the log records. The default is to group by vxid.
 
-              %h
-	         Remote host. Empty string if unknown.
-                 (varnishnsa defaults to '-' or 127.0.0.1)
+-h
 
-	      %{X}i
-	         The contents of request header X.
+	Print program usage and exit
 
-	      %l
-	         Remote logname (always '-')
+-L limit
 
-	      %m
-	         Request method. Empty string if unknown
-                 (varnishncsa defaults to '-'.)
+	Sets the upper limit of incomplete transactions kept before
+	the oldest transaction is force completed. A warning record is
+	synthesized when this happens. This setting keeps an upper
+	bound on the memory usage of running queries. Defaults to 1000
+	transactions.
 
-	      %q
-	         The query string, if no query string exists, an
-                 empty string.
+-n name
 
-	      %{X}o
-	         The contents of response header X.
+	Specify the name of the varnishd instance to get logs
+	from. If -n is not specified, the host name is used.
 
-	      %r
-	         The first line of the request. Synthesized from other
-                 fields, so it may not be the request verbatim.
+-N filename
 
-	      %s
-	         Status sent to the client or received from the
-	         backend.
+	Specify the filename of a stale VSM instance. When using this
+	option the abandonment checking is disabled.
 
-	      %t
-	         Time when the request was received, in HTTP date/time
-	         format.
+-P file
 
-	      %{X}t
-	         Time when the request was received, in the format
-		 specified by X.  The time specification format is the
-		 same as for strftime(3).
+	Write the process' PID to the specified file.
 
-	      %U
-	         The request URL without any query string. Empty if
-                 unknown. (varnishncsa defaults to '-'.)
+-q query
 
-	      %u
-	         Remote user from auth
+	Specifies the VSL query to use.
 
-	      %{X}x
-	         Extended variables.  Supported variables are:
+-r filename
 
-		   Varnish:time_firstbyte
-		     Time to the first byte from the backend arrived
+	Read log in binary file format from this file.
 
-		   Varnish:hitmiss
-		     Whether the request was a cache hit or miss. Pipe
-		     and pass are considered misses.
+-T seconds
 
-		   Varnish:handling
-		     How the request was handled, whether it was a
-		     cache hit, miss, pass, pipe or error.
+	Sets the transaction timeout in seconds. This defines the
+	maximum number of seconds elapsed between a Begin tag and the
+	End tag. If the timeout expires, a warning record is
+	synthesized and the transaction is force completed. Defaults
+	to 120 seconds.
+
+-v
+
+	Set the log level to DEBUG.
+
+-V
+
+	Print version information and exit.
+
+-w filename
+
+	Redirect output to file. The file will be overwritten unless
+	the -a option was specified. If the application receives a
+	SIGHUP the file will be reopened allowing the old one to be
+	rotated away.
+
+FORMAT
+======
+
+The ``-F`` option specifies the format for client transactions, and
+the configuration parameters ``cformat``, ``bformat`` and ``rformat``
+specify formats for client, backend and raw transactions,
+respectively. Both of the ``cformat`` and ``bformat`` parameters may
+be specified to log both client and backend transactions; but if the
+``rformat`` parameter is set, only raw transactions are logged, and
+the other two parameters may not be set.
+
+By default, varnishevent presents client transactions in this format::
+
+  %h %l %u %t "%r" %s %b "%{Referer}i" "%{User-agent}i"
+
+The ``cformat`` parameter has this value by default. If client
+transactions should not be logged, set ``cformat`` to empty
+(``cformat=`` in the configuration file, with no value).
+
+Escape sequences \\n and \\t are supported.
+
+The following formatters can be used, for the ``-F`` option or the
+config values for client or backend transactions. For raw
+transactions, only the formatters ``%t``, ``%{X}t``, ``%{tag}x`` and
+``%{vxid}x`` are permitted.
+
+%b 
+  Size of response in bytes, excluding HTTP headers.  The value is 0
+  when no bytes are sent (whereas varnishncsa emits a '-').
+
+%D
+  Time taken to serve the request, in microseconds.
+
+%d
+  The 'direction' of the logged event: ``c`` for client transactions,
+  ``b`` for backend transactions, and the empty string otherwise.
+
+%H 
+  The request protocol. Defaults to HTTP/1.0 if not known.
+
+%h
+  Remote host. Empty string if unknown. (varnishncsa defaults to '-'
+  or 127.0.0.1)
+
+%I
+  Total bytes received in the request.
+
+%{X}i
+  The contents of request header X.
+
+%l
+  Remote logname (always '-')
+
+%m
+  Request method. Empty string if unknown (varnishncsa defaults to
+  '-'.)
+
+%{X}o
+  The contents of response header X.
+
+%O
+  Total bytes sent in the response.
+
+%q
+  The query string, if no query string exists, an empty string.
+
+%r
+  The first line of the request. Synthesized from other fields, so it
+  may not be the request verbatim.
+
+%s
+  Status sent in the response.
+
+%t
+  Time when the request was received, in HTTP date/time format. For
+  raw transactions, the time at which the transaction was read from
+  the Varnish log.
+
+%{X}t
+  Time when the request was received, or the log read time for raw
+  transactions, in the format specified by X.  The time specification
+  format is the same as for strftime(3), with the addition of the
+  formatter ``%i`` for the subsecond in microseconds.
+
+%T
+  Time taken to serve the request, in seconds.
+
+%U
+  The request URL without any query string. Empty if
+  unknown. (varnishncsa defaults to '-'.)
+
+%u
+  Remote user from auth
+
+%{X}x
+  Extended variables.  Supported variables are:
+
+  Varnish:time_firstbyte
+    Time from when the request processing starts until the first byte
+    of the response is sent.
+
+  Varnish:hitmiss
+    Whether the request was a cache hit or miss. Pipe and pass are
+    considered misses. This formatter is only permitted for client
+    transactions.
+
+  Varnish:handling
+    How the request was handled, whether it was a cache hit, miss,
+    pass, pipe or error. This formatter is only permitted for client
+    transactions.
 	
-		   VCL_Log:key
-		     Output value set by std.log("key: value") in VCL.
-                     varnishevent requires the space after the colon,
-                     so that the log entries have the same syntax as
-                     a header.
+  VCL_Log:key
+    Output value set by std.log("key: value") in VCL.
 
-		   tag:tagname
-		     The raw payload in the log for any entry with
-                     the tag ``tagname``; e.g. ``%{tag:ReqEnd}x``.
+  tag:tagname{:header}{[field]}
+    The raw payload in the log for any entry with the tag ``tagname``;
+    e.g. ``%{tag:ReqEnd}x``.  The contents of the payload may be
+    restricted by header or field specifiers, as explained below.
 
-		   incomplete:Y:N
-		     Emits the string ``Y`` or ``N``, depending on
-                     whether varnishevent was able to read the entire
-                     transaction before a timeout elapsed.
-                     e.g. ``%{incomplete:true:false}x``
-                     See the config parameter ``ttl`` below
+  vxid
+    The transaction XID (an ID set by Varnish).
+		     
+  pvxid
+    The parent transaction XID. Always 0 except when request grouping
+    is specified.
+		     
+If a header specifier is used with the ``%{tag}x`` formatter, then
+only log payloads including that header (with the header name followed
+by a colon) are formatted, excluding the header.
 
--g          Set the log level for syslog(3) to LOG_DEBUG
+If a field specifier is used with ``%{tag}x``, where the field is a
+number ``n``, then the formatter yields the nth whitespace-separated
+field in the log payload for that tag, counting from 0.
 
--G file     Read configuration from the specified filexs	     
+Header and field specifiers may be combined, to specify a field in the
+log payload prefixed by a header.
 
--m tag:regex  only list records where tag matches regex. Multiple
-              -m options are AND-ed together.
+For example, if a log transaction contains these records::
 
--n          Specifies the name of the varnishd instance to get logs 
-	    from.  If -n is not specified, the host name is used.
+	Timestamp      Resp: 1429726861.731394 0.000195 0.000060
+	Backend        29 foo_d foo_b(127.0.0.1,,80)
 
--P file     Write the process's PID to the specified file.
+then:
 
--r file     Read log entries from file instead of shared memory.
+  ``%{tag:Backend}x`` yields ``29 foo_d foo_b(127.0.0.1,,80)``
 
--V          Display the version number and exit.
+  ``%{tag:Timestamp:Resp}`` yields ``1429726861.731394 0.000195 0.000060``
 
--w file     Write log entries to file instead of displaying them.  
-   	    The file will be overwritten unless the -a
-	    option was specified.
-	    
-	    If varnishevent receives a SIGHUP while writing to a file, 
-	    it will reopen the file, allowing the old one to be 
-	    rotated away.
+  ``%{tag:Backend[2]}x`` yields ``foo_b(127.0.0.1,,80)``
 
--X regex    Exclude log entries which match the specified 
-   	    regular expression.
+  ``%{tag:Timestamp:Resp[1]}`` yields ``0.000195``
 
--x tag      Exclude log entries with the specified tag.
 
-If the -m option was specified, a tag and a regex argument must be given.
-varnishevent will then only log for request groups which include that tag
-and the regular expression matches on that tag.
+DATA BUFFERS
+============
+
+To configure and monitor varnishevent, it is important to understand a
+few of its internals. Log reads and writes are asynchronous -- a
+reader thread reads from the Varnish log and saves data in buffers,
+while a writer thread reads from the buffer and writes formatted
+output.
+
+Objects in the buffer are *transactions*, *records* and *chunks*. A
+transaction is the complete log of an event in Varnish, consisting of
+a number of records. Records are single log entries comprising a tag and
+a payload, corresponding to a line of varnishlog(3) output.
+
+The maximal length of a log payload is set by the config parameter
+``max.reclen``, which should be equal to the varnishd parameter
+``shm_reclen`` (payloads longer than the maximum are truncated). Since
+a large majority of log payloads are typically much shorter than the
+maximum, varnishevent divides them into smaller buffers called
+*chunks*. The reader thread only copies into as many chunks as are
+necessary to contain a log payload.
+
+The ``max.data`` parameter sets the maximum number of transactions
+that can be stored in the buffers; varnishevent computes the maximum
+number of records and chunks necessary for that many transactions, as
+required for the output formats.
+
+Free entries in the buffers for transactions, records and chunks are
+structured in free lists. The reader and writer threads each have
+local free lists, and exchange data with global free lists. That is,
+the reader thread takes free entries from its local free lists, and
+gets new entries from the global lists when the local lists are
+exhausted. The writer thread returns free data to its local free
+lists, and returns its free lists to the global free lists
+periodically.
+
+If the reader thread cannot obtain free data from the buffers --
+meaning that the buffers are full and the writer thread has not yet
+returned free data -- then the reader discards the transaction that is
+currently reading from the Varnish log. No data are buffered from the
+transaction, leading to a loss of data in the varnishevent output.
+
+Thus the configuration determines the memory footprint of
+varnishevent, and whether the buffers are large enough to accomodate
+pending data during load spikes, and when output channels are
+slow. Monitoring statistics expose the state of the buffers.
 
 CONFIGURATION
 =============
@@ -196,13 +337,13 @@ Configuration values are set either from configuration files or
 command-line options, in this hierarchy:
 
 1. ``/etc/varnishevent.conf``, if it exists and is readable
-2. a config file specified with the ``-G`` option
+2. a config file specified with the ``-f`` option
 3. config values specified with other command-line options
 
 If the same config parameter is specified in one or more of these
 sources, then the value at the "higher" level is used. For example, if
 ``varnish.name`` is specified in both ``/etc/varnishevent.conf`` and a
-``-G`` file, then the value from the ``-G`` file is used, unless a
+``-f`` file, then the value from the ``-f`` file is used, unless a
 value is specified with the ``-n`` option, in which case that value is
 used.
 
@@ -232,49 +373,37 @@ Parameter              CLI Option Description                                   
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``output.bufsiz``                 Size of the buffer for output operations, used for setvbuf(3)                             ``BUFSIZ`` at compile time
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``varnish.bindump``    ``-r``     A binary dump of the Varnish shared memory log obtained from ``varnishlog -w``. If a
+``varnish.bindump``    ``-r``     A binary dump of the Varnish shared memory log obtained from ``varnishlog -B -w``. If a   none
                                   value is specified, ``varnishevent`` reads from that file instead of a live Varnish log
                                   (useful for testing, debugging and replaying traffic). This parameter and
                                   ``varnish.name`` are mutually exclusive.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``cformat``            ``-f``     Output format for client transactions, using the formatter syntax shown for the ``-f``    default for ``-f``
+``cformat``            ``-F``     Output format for client transactions, using the formatter syntax shown for the ``-F``    default for ``-F``
                                   option above. By default, client transactions are logged, using the default format
                                   shown above. If you don't want to log client transactions, set ``cformat`` to the empty
                                   string.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``bformat``                       Output format for backend transactions.                                                   empty
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``zformat``                       Output format for entries with the pseudo file descriptor zero in the Varnish log (i.e.   empty
-                                  ``0`` appears in the left column of varnishlog(1)).
+``rformat``                       Output format for raw transactions. May not be combined with ``cformat``, ``bformat`` or  empty
+                                  the ``-F`` option. When this format is specified, the Varnish log is read with raw
+                                  grouping (regardless of any value of the ``-g`` option).
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``max.fd``                        Maximum file descriptor number used in the Varnish log. For best results, set this value  1024
-                                  to the open file descriptor limit (``ulimit -n``) for the varnishd process.
+``max.data``                      Maximum number of transactions. This value should be large enough for the highest number  4096
+                                  transactions that are buffered and waiting for output.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``max.data``                      Maximum number of data records. Data records are opened for each new transaction seen in  4096
-                                  the Varnish log, and closed once their formatted output has been emitted to the ouput
-                                  stream. So this value should be large enough for the highest number of concurrently
-                                  unfinished transactions in the Varnish log, plus the highest number of finished records
-                                  that are buffered and waiting for output.
+``chunk.size``                    The size of chunk buffers in bytes. Only as many chunks as necessary are used to buffer   64
+                                  log payloads.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``max.reclen``                    The maximum length of a Varnish log entry in characters. Should be equal to the Varnish   255 (default ``shm_reclen`` in Varnish 3)
+``max.reclen``                    The maximum length of a Varnish log entry in characters. Should be equal to the Varnish   255 (default ``shm_reclen`` in Varnish 4)
                                   parameter ``shm_reclen``.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``max.headers``                   The maximum number of request or response headers recorded for a transaction in the       64 (default ``http_max_hdr`` in Varnish 3)
-                                  Varnish log. Should be equal to the Varnish parameter ``http_max_hdr``.
+``max.vcl_log``                   The maximum number of VCL_Log entires recorded for a transaction in the Varnish log, used 10
+                                  to estimate the number of records required for transactions when the ``%{VCL_Log}x``
+                                  formatter is specified.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``max.vcl_log``                   The maximum number of VCL_Log entires recorded for a transaction in the Varnish log.      64
----------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``max.vcl_call``                  The maximum number of VCL_call entires recorded for a transaction in the Varnish log      64
-                                  (used to obtain the ``%{Varnish:hitmiss}x`` and ``%{Varnish:handling}x`` results).
----------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``ttl``                           Maximum time to live in seconds for an unfinished record. If the closing tag of a (client 120
-                                  or backend) transaction is not read within this time, then ``varnishevent`` no longer
-                                  waits for it, and schedules the data read thus far to be written to output. If the
-                                  formatter ``%{incomplete:T:F}x`` is specified for the output, the second string (``F``)
-                                  is emitted if ``ttl`` has elapsed, otherwise the first string (``T``). The value should
-                                  be a bit longer than the sum of all timeouts configured for a Varnish request.
----------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``housekeep.interval``            The interval in seconds between checks for data records whose ``ttl`` has expired.        10
+``max.vcl_call``                  The maximum number of VCL_call entires recorded for a transaction in the Varnish log      10
+                                  (used when ``%{Varnish:hitmiss}x`` or ``%{Varnish:handling}x`` are specified).
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``log.file``                      Log file for status, warning, debug and error messages, and monitoring statistics. If '-' ``syslog(3)``
                                   is specified, then log messages are written to stdout.
@@ -287,6 +416,13 @@ Parameter              CLI Option Description                                   
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``syslog.ident``                  See ``syslog(3)``; this parameter is useful to distinguish ``varnishevent`` processes in  ``varnishevent``
                                   the syslog if more than one is running on the system.
+---------------------- ---------- ----------------------------------------------------------------------------------------- -------
+``idle.pause``                    The time in seconds to pause when the reader thread reaches the end of the Varnish log    0.01
+                                  with no further transactions currently to be read.
+---------------------- ---------- ----------------------------------------------------------------------------------------- -------
+``output.timeout``                Output timeout used by the writer thread. If the timeout is set and the output stream     0
+                                  is not ready when it elapses, the transaction to be output is discarded. If 0, the
+                                  writer waits indefinitely.
 ====================== ========== ========================================================================================= =======
 
 LOGGING AND MONITORING
@@ -301,113 +437,107 @@ to the log (as configured with the parameter
 ``info`` log level, with additional formatting of the log lines,
 depending on how syslog is configured)::
 
- Data table: len=10000 open=82 done=0 load=0.82 occ_hi=10000 global_free=7709
- Reader (running): fd_max=10000 seen=559921834 open=82 load=0.82 submitted=247566967 not_logged=312354785 occ_hi=1807 waits=17279 expired=55 free=2209 len_hi=2048 fd_overflows=1 len_overflows=0 hdr_overflows=0 spec_mismatches=0 wrong_tags=0
- Writer (waiting): seen=247566967 writes=247566967 bytes=139367701123 errors=3 waits=17736487 free=0
- Queue: max=10000 len=0 load=0.00 occ_hi=9986
+ Data tables: len_tx=5000 len_rec=70000 len_chunk=4480000 tx_occ=0 rec_occ=0 chunk_occ=0 tx_occ_hi=4 rec_occ_hi=44 chunk_occ_hi=48 global_free_tx=0 global_free_rec=0 global_free_chunk=0
+ Reader: seen=68 submitted=68 free_tx=5000 free_rec=70000 free_chunk=4480000 no_free_tx=0 no_free_rec=0 no_free_chunk=0 len_hi=1712 len_overflows=0 closed=0 overrun=0 ioerr=0 reacquire=0
+ Writer (waiting): seen=68 writes=68 bytes=35881 errors=0 timeouts=0 waits=53 free_tx=0 free_rec=0 free_chunk=0
+ Queue: max=5000 len=0 load=0.00 occ_hi=4
 
-The line prefixed by ``Data table`` describes the table to which data
-is copied from Varnish shared memory. A record is in the state
-``open`` if the opening but not the closing tag for a transaction has
-been read from the log; and in the state ``done`` if the closing tag
-has been read, but the record has not yet been written to output. All
-of the fields in the ``Data table`` line are gauges (expressing a
-current state), except for ``occ_hi``, which is monotonic increasing:
+The line prefixed by ``Data tables`` describes the data buffers. The
+``len_*`` fields are constant, and the ``*_occ_hi`` fields are
+monotonic increasing; all other fields in the ``Data tables`` line are
+gauges (expressing a current state, which may rise and fall).
 
-=============== ============================================================
-Field           Description
-=============== ============================================================
-``len``         Size of the data table (always equal to ``max.data``
---------------- ------------------------------------------------------------
-``open``        Current number of open records in the table
---------------- ------------------------------------------------------------
-``done``        Current number of records in state "done"
---------------- ------------------------------------------------------------
-``load``        Current number of non-empry records in the table as percent
-                (100 * (``open`` + ``done``)/``len``)
---------------- ------------------------------------------------------------
-``occ_hi``      Occupancy high watermark -- highest number of records (open
-                and done) since startup
---------------- ------------------------------------------------------------
-``global_free`` Current number of records in the global free list
-=============== ============================================================
+===================== =============================================
+Field                 Description
+===================== =============================================
+``len_tx``            Size of the transaction table (always equal
+                      to ``max.data``)
+--------------------- ---------------------------------------------
+``len_rec``           Size of the record table
+--------------------- ---------------------------------------------
+``len_chunk``         Size of the chunk table
+--------------------- ---------------------------------------------
+``tx_occ``            Current number of buffered transactions
+--------------------- ---------------------------------------------
+``rec_occ``           Current number of buffered records
+--------------------- ---------------------------------------------
+``chunk_occ``         Current number of buffered chunks
+--------------------- ---------------------------------------------
+``tx_occ_hi``         Transaction occupancy high watermark --
+                      highest number of bufferend transactions
+                      since startup
+--------------------- ---------------------------------------------
+``rec_occ_hi``        Record occupancy high watermark
+--------------------- ---------------------------------------------
+``chunk_occ_hi``      Chunk occupancy high watermark
+--------------------- ---------------------------------------------
+``global_free_tx``    Current length of the global transaction free
+                      list
+--------------------- ---------------------------------------------
+``global_free_rec``   Current length of the global record free list
+--------------------- ---------------------------------------------
+``global_free_chunk`` Current length of the global chunk free list
+===================== =============================================
 
 The line prefixed by ``Reader`` describes the state of the thread that
-reads from Varnish shared memory and writes to the data table. The
-reader thread accesses a file descriptor table (fd table), which maps
-to the data table and is indexed by the file descriptor number in the
-Varnish log entry (the number in the left column of
-``varnishlog(1)``). The reader maintains its own free list for the
-data table, which is replenished from the global free list when
-exhausted. If the reader cannot obtain a free data record, it goes
-into a waiting state (waiting for the writer thread to output data and
-free records). Thus the reader is in one of the states ``running`` or
-``waiting`` after initialization.
+reads from Varnish shared memory and writes to data tables. 
 
-A transaction is ``seen`` if its opening tag has been read. A data
-record is ``submitted`` if the closing tag of the transaction has been
-read and the record has been placed on the queue consumed by the
-writer thread, and ``not_logged`` if its closing tag has been read,
-but it does not contain any data needed for the output formats.  A
-record is ``expired`` if its TTL has elapsed, so that it is placed on
-the queue and considered done.
+A transaction is ``seen`` when it is read from the Varnish log, and
+``submitted`` when it is queued for processing by the writer
+thread. Transactions with no data required for the output formats are
+not submitted.
 
-A ``spec_mismatch`` occurs when the reader thread has detected a
-transaction in the Varnish log as a client or backend transaction, but
-lines later in the log for the same fd indicate that it is the other
-kind. ``wrong_tags`` occur when a tag is read that is not anticipated
-for formatting output.
+When the reader thread is unable to read from the Varnish log, it may
+be because the log was ``closed`` or abandoned (for example when
+varnishd stops); because it was ``overrun`` (varnishd has cycled
+around in its ring buffer and overtaken the read location of
+varnishevent); or due to an I/O error (``ioerr``). When this happens,
+the reader asks the Varnish log API to flush pending transactions,
+which are buffered for writing, and attempts to re-acquire the log
+(``reacquire``).
 
-The fields ``fd_max``, ``open``, ``load`` and ``free`` are gauges;
-``occ_hi`` and ``len_hi`` are monotonic increasing. All of the other
+The ``free_*`` fields are gauges, and ``len_hi`` is monotonic increasing. All of the other
 fields are cumulative counters:
 
 =================== ===========================================================
 Field               Description
 =================== ===========================================================
-``fd_max``          Size of the fd table (always equal to ``max.fd``
+``seen``            Number of transactions read from the Varnish log
 ------------------- -----------------------------------------------------------
-``seen``            Number of transactions seen
+``submitted``       Number of transactions submitted on the queue to the
+                    writer thread
 ------------------- -----------------------------------------------------------
-``open``            Number of open records indexed in the fd table
+``free_tx``         Number of transactions in the reader thread's local free
+                    list
 ------------------- -----------------------------------------------------------
-``load``            Current number of open records in the fd table as percent
-                    (100 * ``open`` / ``len``)
+``free_rec``        Number of records in the reader thread's local free list
 ------------------- -----------------------------------------------------------
-``submitted``       Number of records submitted
+``free_chunk``      Number of chunks in the reader thread's local free list
 ------------------- -----------------------------------------------------------
-``not_logged``      Number of records seen but not submitted
+``no_free_tx``      Number of times that no free transactions were available
 ------------------- -----------------------------------------------------------
-``occ_hi``          Occupancy high watermark of the fd table -- highest number
-                    of open records indexed in the table since startup
+``no_free_rec``     Number of times that no free records were available
 ------------------- -----------------------------------------------------------
-``waits``           How many times the reader thread went into the ``waiting``
-                    state
+``no_free_chunk``   Number of times that no free chunks were available
 ------------------- -----------------------------------------------------------
-``expired``         Number of records for which ``ttl`` expired
+``len_hi``          Length high watermark -- longest log payload since startup
+                    (in bytes)
 ------------------- -----------------------------------------------------------
-``free``            Number of records in the reader threads local free list
-------------------- -----------------------------------------------------------
-``len_hi``          Length high watermark -- longest record since startup (in
-                    bytes)
-------------------- -----------------------------------------------------------
-``fd_overflows``    Number of Varnish log lines seen with an fd greater than
-                    ``max.fd``
-------------------- -----------------------------------------------------------
-``len_overflows``   Number of Varnish log lines seen with a length greater
+``len_overflows``   Number of Varnish log payloads seen with a length greater
                     than ``max.reclen``
 ------------------- -----------------------------------------------------------
-``hdr_overflows``   Number of Varnish log transactions seen with more headers
-                    than ``max.headers``
+``closed``          Number of times the Varnish log was closed or abandoned
 ------------------- -----------------------------------------------------------
-``spec_mismatches`` Number of spec mismatches found in the Varnish log
+``overrun``         Number of times log reads were overrun
 ------------------- -----------------------------------------------------------
-``wrong_tags``      Number of wrong tags found in the Varnish log
+``ioerr``           Number of times log reads failed due to I/O errors
+------------------- -----------------------------------------------------------
+``reacquire``       Number of times the Varnish log was re-acquired
 =================== ===========================================================
 
-The line prefixed by ``Writer`` describes the state of the thread that
-reads from the data table and writes formatted output. The thread is
-any one of these states:
+The line prefixed by ``Writer`` describes the thread that reads from
+the data table and writes formatted output. The thread is any one of
+these states:
 
 * ``not started``
 * ``initializing``
@@ -416,13 +546,11 @@ any one of these states:
 * ``shutting down``
 * ``exited``
 
-The writer is in the waiting state when the queue from which it reads
-data records that are ready for output is exhausted. It maintains a
-free list of records whose output is completed, and the free list is
-returned to the global free list when the writer thread is idle.
+The writer is in the waiting state when there are no transactions
+waiting on the queue from the reader thread.
 
-All of the fields in the ``Writer`` log line are cumulative counters,
-except for the gauge ``free``:
+The ``free_*`` fields are gauges; all of the fields in the ``Writer``
+log line are cumulative counters:
 
 =================== ===========================================================
 Field               Description
@@ -435,15 +563,21 @@ Field               Description
 ------------------- -----------------------------------------------------------
 ``errors``          Number of write errors
 ------------------- -----------------------------------------------------------
+``timeouts``        Number of timeouts waiting for ready output
+------------------- -----------------------------------------------------------
 ``waits``           Number of wait states entered by the writer thread
 ------------------- -----------------------------------------------------------
-``free``            Current number of records in the writer's local free list
+``free_tx``         Current number of transactions in the writer's local free list
+------------------- -----------------------------------------------------------
+``free_rec``        Current number of records in the writer's local free list
+------------------- -----------------------------------------------------------
+``free_chunk``      Current number of chunks in the writer's local free list
 =================== ===========================================================
 
-The line prefixed by ``Queue`` describes the internal queue into which the
-reader thread submits data records ready for output, and from which the
-writer thread consumes records. The fields ``max``, ``len`` and ``load``
-are gauges, and ``occ_hi`` is monotonic increasing:
+The line prefixed by ``Queue`` describes the internal queue into which
+the reader thread submits buffered transactions, and from which the
+writer thread consumes transactions. The fields ``max``, ``len`` and
+``load`` are gauges, and ``occ_hi`` is monotonic increasing:
 
 =================== ===========================================================
 Field               Description
@@ -476,9 +610,10 @@ HUP    Re-open output
 ------ -----------------------
 PIPE   Re-open output
 ------ -----------------------
-USR1   Dump data table to log
+USR1   Flush pending transactions
+       from Varnish
 ------ -----------------------
-USR2   Ignore
+USR2   Dump pending data to log
 ------ -----------------------
 ABRT   Abort with stacktrace
 ------ -----------------------
@@ -491,16 +626,23 @@ The ``HUP`` signal is ignored if ``varnishevent`` is configured to
 write output to ``stdout``; otherwise, it re-opens its output file,
 allowing for log rotation.
 
-On receiving signal ``USR1``, the ``varnishevent`` writes the contents
-of all records in the "open" or "done" states to the log (syslog, or
-log file specified by config), for troubleshooting or debugging.
+On receiving signal ``USR1``, varnishevent requests the Varnish log
+API to flush all transactions that it is currently aggregating, even
+if they are not yet complete (to the ``End`` tag).  These are consumed
+by the reader thread and processed normally (although data may be
+missing).
+
+On receiving signal ``USR2``, varnishevent writes the contents of all
+transactions in the internal buffers to the log (syslog, or log file
+specified by config), for troubleshooting or debugging.
 
 Where "abort with stacktrace" is specified above, ``varnishevent``
 writes a stack trace to the log (syslog or otherwise) before aborting
 execution; in addition, it executes the following actions:
 
 * dump the current configuration
-* dump the current contents of the data table (as for the ``USR1`` signal)
+* dump the contents of pending transactions in the data buffers (as
+  for the ``USR1`` signal)
 * emit the monitoring stats
 
 RETURN VALUES
@@ -523,7 +665,8 @@ Goroll Systemoptimierung, in cooperation with Otto Gmbh & Co KG.
 
 The varnishncsa utility was developed by Poul-Henning Kamp in
 cooperation with Verdens Gang AS and Varnish Software AS.  The manual
-page for varnishncsa was written by Dag-Erling Smørgrav ⟨des@des.no⟩.
+page for varnishncsa was initially written by Dag-Erling Smørgrav
+⟨des@des.no⟩, and later updated by Martin Blix Grydeland.
 
 
 COPYRIGHT AND LICENCE
@@ -532,8 +675,8 @@ COPYRIGHT AND LICENCE
 For both the software and this document are governed by a BSD 2-clause
 licence.
 
-| Copyright (c) 2012-2013 UPLEX Nils Goroll Systemoptimierung
-| Copyright (c) 2012-2013 Otto Gmbh & Co KG
+| Copyright (c) 2012-2015 UPLEX Nils Goroll Systemoptimierung
+| Copyright (c) 2012-2015 Otto Gmbh & Co KG
 | All rights reserved
 
 Redistribution and use in source and binary forms, with or without
@@ -563,4 +706,4 @@ as Varnish itself. See LICENCE in the Varnish distribution for
 details.
 
 * Copyright (c) 2006 Verdens Gang AS
-* Copyright (c) 2006-2011 Varnish Software AS
+* Copyright (c) 2006-2015 Varnish Software AS
