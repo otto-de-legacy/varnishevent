@@ -1289,9 +1289,6 @@ FMT_Estimate_RecsPerTx(void)
             case SLT_VCL_return:
                 recs_per_ctx += config.max_vcl_call;
                 break;
-            case SLT_VCL_Log:
-                recs_per_ctx += config.max_vcl_log;
-                break;
             default:
                 recs_per_ctx++;
             }
@@ -1301,10 +1298,7 @@ FMT_Estimate_RecsPerTx(void)
 
     for (int i = 0; i < MAX_VSL_TAG; i++)
         VSTAILQ_FOREACH(incl, &bincl[i], inclist)
-            if (i == SLT_VCL_Log)
-                recs_per_btx += config.max_vcl_log;
-            else
-                recs_per_btx++;
+            recs_per_btx++;
     if (recs_per_btx > recs_per_tx)
         recs_per_tx = recs_per_btx;
 

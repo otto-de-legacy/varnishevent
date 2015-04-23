@@ -1506,7 +1506,7 @@ static const char
              i_arg);
 
     recs_per_tx = FMT_Estimate_RecsPerTx();
-    VMASSERT(recs_per_tx == 47, "recs_per_tx(%d) != 47", recs_per_tx);
+    VMASSERT(recs_per_tx == 38, "recs_per_tx(%d) != 38", recs_per_tx);
 
 #define TS_REQ_PAYLOAD "Req: 1429213569.602005 0.000000 0.000000"
     set_record_data(recs[3], c[3], URL_QUERY_PAYLOAD, SLT_ReqURL);
@@ -1574,7 +1574,7 @@ static const char
              i_arg);
 
     recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 26);
+    MASSERT(recs_per_tx == 17);
 
 #define TS_BEREQ_PAYLOAD "Bereq: 1429210777.728290 0.000048 0.000048"
     tx.type = VSL_t_bereq;

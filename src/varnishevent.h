@@ -56,7 +56,6 @@
 #define DEFAULT_MAX_HEADERS 64	/* http_max_hdr */
 
 #define DEFAULT_MAX_VCL_CALL 10
-#define DEFAULT_MAX_VCL_LOG 10
 
 #define DEFAULT_CHUNK_SIZE 64
 #define DEFAULT_MAX_DATA 4096
@@ -155,7 +154,6 @@ struct config {
 
     unsigned	chunk_size;
 
-    unsigned	max_vcl_log;
     unsigned	max_vcl_call;
 
     unsigned	max_data;    
