@@ -172,17 +172,18 @@ wrt_write(tx_t *tx)
 
     AZ(pthread_mutex_lock(&reopen_lock));
     if (reopen && fo != stdout) {
+        wrt_return_freelist();
         if (fflush(fo) != 0)
             LOG_Log(LOG_ERR, "Cannot flush to %s, DATA DISCARDED: %s",
-                config.output_file, strerror(errno));
+                    config.output_file, strerror(errno));
         if (fclose(fo) != 0) {
             LOG_Log(LOG_ALERT, "Cannot close %s, exiting: %s",
-                config.output_file, strerror(errno));
+                    config.output_file, strerror(errno));
             exit(EXIT_FAILURE);
         }
         if ((errnum = open_log()) != 0) {
             LOG_Log(LOG_ALERT, "Cannot reopen %s, exiting: %s",
-                config.output_file, strerror(errnum));
+                    config.output_file, strerror(errnum));
             exit(EXIT_FAILURE);
         }
         reopen = 0;
@@ -198,24 +199,25 @@ wrt_write(tx_t *tx)
         to = config.output_timeout;
     if ((errnum = select(fd + 1, NULL, &set, NULL, timeout)) == -1) {
         LOG_Log(LOG_ERR,
-            "Error waiting for ready output %d (%s), DATA DISCARDED: %s",
-            errno, strerror(errno), VSB_data(os));
+                "Error waiting for ready output %d (%s), DATA DISCARDED: %s",
+                errno, strerror(errno), VSB_data(os));
         errors++;
         if (set_fdset() != 0) {
             LOG_Log(LOG_ALERT,
-                "Cannot reset fd set after select() error, exiting: %s",
-                strerror(errno));
+                    "Cannot reset fd set after select() error, exiting: %s",
+                    strerror(errno));
             exit(EXIT_FAILURE);
         }
     }
     else if (errnum == 0) {
+        wrt_return_freelist();
         LOG_Log(LOG_ERR,
-            "Timeout waiting for ready output, DATA DISCARDED: %s",
-            VSB_data(os));
+                "Timeout waiting for ready output, DATA DISCARDED: %s",
+                VSB_data(os));
         timeouts++;
         if (set_fdset() != 0) {
             LOG_Log(LOG_ALERT, "Cannot reset fd set after timeout, exiting: %s",
-                strerror(errno));
+                    strerror(errno));
             exit(EXIT_FAILURE);
         }
     }
@@ -225,7 +227,7 @@ wrt_write(tx_t *tx)
         WRONG("Wrong file descriptor found ready for output");
     else if (fprintf(fo, "%s", VSB_data(os)) < 0) {
         LOG_Log(LOG_ERR, "Output error %d (%s), DATA DISCARDED: %s",
-            errno, strerror(errno), VSB_data(os));
+                errno, strerror(errno), VSB_data(os));
         errors++;
     }
     else {
