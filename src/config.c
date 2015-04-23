@@ -238,11 +238,14 @@ CONF_Init(void)
     bprintf(config.syslog_facility_name, "%s", "LOCAL0");
 
     config.varnish_name = VSB_new_auto();
+    VSB_finish(config.varnish_name);
     config.cformat = VSB_new_auto();
     VSB_cpy(config.cformat, DEFAULT_CFORMAT);
     VSB_finish(config.cformat);
     config.bformat = VSB_new_auto();
+    VSB_finish(config.bformat);
     config.rformat = VSB_new_auto();
+    VSB_finish(config.rformat);
     config.syslog_ident = VSB_new_auto();
     VSB_cpy(config.syslog_ident, "varnishevent");
     VSB_finish(config.syslog_ident);
