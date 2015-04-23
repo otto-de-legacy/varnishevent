@@ -99,7 +99,7 @@ typedef struct writer_data_s {
 
 static writer_data_t wrt_data;
     
-static unsigned run, reopen = 0;
+static unsigned run, reopen = 0, tx_thresh, rec_thresh, chunk_thresh;
 
 static int
 set_fdset(void)
@@ -239,7 +239,8 @@ wrt_write(tx_t *tx)
     DATA_Clear_Tx(tx, &wrt_freetx, &wrt_freerecs, &wrt_freechunks,
                   &wrt_nfree_tx, &wrt_nfree_recs, &wrt_nfree_chunks);
 
-    if (RDR_Exhausted())
+    if (RDR_Exhausted() || wrt_nfree_tx > tx_thresh
+        || wrt_nfree_recs > rec_thresh || wrt_nfree_chunks > chunk_thresh)
         wrt_return_freelist();
 }
 
@@ -331,6 +332,10 @@ WRT_Init(void)
         to = config.output_timeout;
         timeout = &to;
     }
+
+    tx_thresh = config.max_data >> 1;
+    rec_thresh = nrecords >> 1;
+    chunk_thresh = nchunks >> 1;
 
     run = 1;
     return 0;
