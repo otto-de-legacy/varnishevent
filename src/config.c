@@ -39,7 +39,6 @@
 #include <limits.h>
 #include <math.h>
 #include <unistd.h>
-#include <pwd.h>
 
 #include "config.h"
 
@@ -48,8 +47,6 @@
 
 #include "vas.h"
 #include "vdef.h"
-
-#define DEFAULT_USER "nobody"
 
 static const int facilitynum[8] =
     { LOG_LOCAL0, LOG_LOCAL1, LOG_LOCAL2, LOG_LOCAL3, LOG_LOCAL4, LOG_LOCAL5,
@@ -137,19 +134,16 @@ CONF_Add(const char *lval, const char *rval)
 {
     int ret;
     
-    confString("pid.file", pid_file);
     confString("log.file", log_file);
     confString("output.file", output_file);
     confString("varnish.bindump", varnish_bindump);
 
-    confVSB("varnish.name", varnish_name);
     confVSB("cformat", cformat);
     confVSB("bformat", bformat);
     confVSB("rformat", rformat);
     confVSB("syslog.ident", syslog_ident);
 
     confUnsigned("max.reclen", max_reclen);
-    confUnsigned("max.headers", max_headers);
     confUnsigned("max.vcl_log", max_vcl_log);
     confUnsigned("max.vcl_call", max_vcl_call);
     confUnsigned("chunk_size", chunk_size);
@@ -165,18 +159,6 @@ CONF_Add(const char *lval, const char *rval)
         bprintf(config.syslog_facility_name, "%s", rval);
         char *p = &config.syslog_facility_name[0];
         do { *p = toupper(*p); } while (*++p);
-        return(0);
-    }
-
-    if (strcmp(lval, "user") == 0) {
-        struct passwd *pw;
-        
-        pw = getpwnam(rval);
-        if (pw == NULL)
-            return(EINVAL);
-        bprintf(config.user_name, "%s", pw->pw_name);
-        config.uid = pw->pw_uid;
-        config.gid = pw->pw_gid;
         return(0);
     }
 
@@ -228,17 +210,12 @@ conf_ParseLine(char *ptr, char **lval, char **rval)
 void
 CONF_Init(void)
 {
-    struct passwd *pw;
-
-    bprintf(config.pid_file, "%s", DEFAULT_PID_FILE);
     config.log_file[0] = '\0';
     /* Default is stdout */
     config.output_file[0] = '\0';
     config.varnish_bindump[0] = '\0';
     bprintf(config.syslog_facility_name, "%s", "LOCAL0");
 
-    config.varnish_name = VSB_new_auto();
-    VSB_finish(config.varnish_name);
     config.cformat = VSB_new_auto();
     VSB_cpy(config.cformat, DEFAULT_CFORMAT);
     VSB_finish(config.cformat);
@@ -256,7 +233,6 @@ CONF_Init(void)
     config.output_bufsiz = BUFSIZ;
 
     config.max_reclen = DEFAULT_MAX_RECLEN;
-    config.max_headers = DEFAULT_MAX_HEADERS;
     config.max_vcl_log = DEFAULT_MAX_VCL_LOG;
     config.max_vcl_call = DEFAULT_MAX_VCL_CALL;
     config.max_data = DEFAULT_MAX_DATA;
@@ -266,14 +242,6 @@ CONF_Init(void)
     config.append = 0;
     config.output_timeout.tv_sec = 0;
     config.output_timeout.tv_usec = 0;
-    
-    pw = getpwnam(DEFAULT_USER);
-    if (pw == NULL)
-        pw = getpwuid(getuid());
-    AN(pw);
-    bprintf(config.user_name, "%s", pw->pw_name);
-    config.uid = pw->pw_uid;
-    config.gid = pw->pw_gid;
 }
 
 static int
@@ -364,8 +332,6 @@ CONF_ReadFile(const char *file) {
 void
 CONF_Dump(void)
 {
-    confdump("pid.file = %s", config.pid_file);
-    confdump("varnish.name = %s", VSB_data(config.varnish_name));
     confdump("log.file = %s",
              strcmp(config.log_file,"-") == 0 ? "stdout" : config.log_file);
     confdump("varnish.bindump = %s", config.varnish_bindump);
@@ -382,12 +348,10 @@ CONF_Dump(void)
     confdump("syslog.ident = %s", VSB_data(config.syslog_ident));
     confdump("monitor.interval = %u", config.monitor_interval);
     confdump("max.reclen = %u", config.max_reclen);
-    confdump("max.headers = %u", config.max_headers);
     confdump("max.vcl_log = %u", config.max_vcl_log);
     confdump("max.vcl_call = %u", config.max_vcl_call);
     confdump("max.data = %u", config.max_data);
     confdump("chunk.size = %u", config.chunk_size);
     confdump("idle.pause = %f", config.idle_pause);
     confdump("output.bufsiz = %u", config.output_bufsiz);
-    confdump("user = %s", config.user_name);
 }

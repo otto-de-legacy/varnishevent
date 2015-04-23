@@ -129,11 +129,6 @@ pthread_cond_t  spscq_ready_cond;
 pthread_mutex_t spscq_ready_lock;
 
 struct config {
-    char	pid_file[PATH_MAX + 1];
-    
-    /* VSL 'n' argument */
-    struct vsb  *varnish_name;
-    
     char	log_file[PATH_MAX + 1];
 
     char	output_file[PATH_MAX + 1];
@@ -160,18 +155,12 @@ struct config {
 
     unsigned	chunk_size;
 
-    /* varnishd param http_max_hdr */
-    unsigned	max_headers;
     unsigned	max_vcl_log;
     unsigned	max_vcl_call;
 
     unsigned	max_data;    
 
     size_t	output_bufsiz;
-    
-    char        user_name[LOGIN_NAME_MAX + 1];
-    uid_t       uid;
-    gid_t       gid;
 } config;
 
 /* varnishevent.c */

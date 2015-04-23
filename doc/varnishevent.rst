@@ -342,9 +342,9 @@ command-line options, in this hierarchy:
 
 If the same config parameter is specified in one or more of these
 sources, then the value at the "higher" level is used. For example, if
-``varnish.name`` is specified in both ``/etc/varnishevent.conf`` and a
+``output.file`` is specified in both ``/etc/varnishevent.conf`` and a
 ``-f`` file, then the value from the ``-f`` file is used, unless a
-value is specified with the ``-n`` option, in which case that value is
+value is specified with the ``-w`` option, in which case that value is
 used.
 
 The syntax of a configuration file is simply::
@@ -363,10 +363,6 @@ correspond to command-line options, as shown below.
 ====================== ========== ========================================================================================= =======
 Parameter              CLI Option Description                                                                               Default
 ====================== ========== ========================================================================================= =======
-``varnish.name``       ``-n``     Like the ``-n`` option for Varnish, this is the path to the file that is mmap'd to the    default for Varnish (the host name)
-                                  shared memory segment for the Varnish log. This parameter and ``varnish.bindump`` are
-                                  mutually exclusive.
----------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``output.file``        ``-w``     File to which logging output is written.                                                  ``stdout``
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``append``             ``-a``     (Boolean) Whether to append to ``output.file``.                                           false
@@ -375,8 +371,8 @@ Parameter              CLI Option Description                                   
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``varnish.bindump``    ``-r``     A binary dump of the Varnish shared memory log obtained from ``varnishlog -B -w``. If a   none
                                   value is specified, ``varnishevent`` reads from that file instead of a live Varnish log
-                                  (useful for testing, debugging and replaying traffic). This parameter and
-                                  ``varnish.name`` are mutually exclusive.
+                                  (useful for testing, debugging and replaying traffic). This parameter and the ``-n`` or
+                                  ``-N`` options are mutually exclusive.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``cformat``            ``-F``     Output format for client transactions, using the formatter syntax shown for the ``-F``    default for ``-F``
                                   option above. By default, client transactions are logged, using the default format
