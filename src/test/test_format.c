@@ -210,8 +210,8 @@ static const char
 {
     tx_t tx;
     rec_t recs[NRECORDS];
-    chunk_t c[NRECORDS];
-    char *hdr;
+    chunk_t c[NRECORDS], *c1, *c2;
+    char *hdr, *exp;
 
     printf("... testing get_hdr()\n");
 
@@ -251,6 +251,45 @@ static const char
     hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAN(hdr);
     MASSERT(strcmp(hdr, "wilco") == 0);
+
+    /* Different headers after the matching header */
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Bar");
+    MAN(hdr);
+    MASSERT(strcmp(hdr, "baz") == 0);
+
+    /* Different headers spanning more than one chunk after the matching
+     * header */
+    c1 = (chunk_t *) calloc(1, sizeof(chunk_t));
+    MAN(c1);
+    c1->magic = CHUNK_MAGIC;
+    c1->data = (char *) calloc(1, config.chunk_size);
+    MAN(c1->data);
+    c1->occupied = 1;
+    VSTAILQ_INSERT_TAIL(&recs[NRECORDS - 2].chunks, c1, chunklist);
+    recs[NRECORDS - 2].len = config.chunk_size * 2;
+    strcpy(c[NRECORDS - 2].data, "Garply: ");
+    memset(c[NRECORDS - 2].data + strlen("Garply : ") - 1, 'x',
+           config.chunk_size - strlen("Garply: "));
+    memset(c1->data, 'x', config.chunk_size);
+    c2 = (chunk_t *) calloc(1, sizeof(chunk_t));
+    MAN(c2);
+    c2->magic = CHUNK_MAGIC;
+    c2->data = (char *) calloc(1, config.chunk_size);
+    MAN(c2->data);
+    c2->occupied = 1;
+    VSTAILQ_INSERT_TAIL(&recs[NRECORDS - 1].chunks, c2, chunklist);
+    recs[NRECORDS - 1].len = config.chunk_size * 2;
+    strcpy(c[NRECORDS - 1].data, "Xyzzy: ");
+    memset(c[NRECORDS - 1].data + strlen("Xyzzy : ") - 1, 'y',
+           config.chunk_size - strlen("Xyzzy: "));
+    memset(c2->data, 'y', config.chunk_size);
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Garply");
+    MAN(hdr);
+    int len = 2 * config.chunk_size - strlen("Garply: ");
+    exp = (char *) malloc(len);
+    MAN(exp);
+    memset(exp, 'x', len);
+    MASSERT(memcmp(hdr, exp, len) == 0);
 
     /* Record not found */
     recs[NRECORDS / 2].tag = SLT_RespHeader;

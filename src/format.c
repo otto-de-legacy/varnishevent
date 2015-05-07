@@ -53,7 +53,7 @@ typedef struct compiled_fmt_t {
 } compiled_fmt_t;
 
 static struct vsb payload_storage, * const payload = &payload_storage,
-    *i_arg,  *scratch;
+    *i_arg,  *scratch, hdr_storage, * const hdr_sb = &hdr_storage;
 
 static char empty[] = "";
 static char hit[] = "hit";
@@ -137,25 +137,33 @@ get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr)
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
-        char *c;
+        char *c, *h;
 
         CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         assert(OCCUPIED(rec));
         if (rec->tag != tag)
             continue;
         c = get_payload(rec);
-        while (isspace(*c))
-            c++;
-        if (strncasecmp(c, hdr, strlen(hdr)) != 0)
+        h = c;
+        while (isspace(*h))
+            h++;
+        if (strncasecmp(h, hdr, strlen(hdr)) != 0)
             continue;
-        c += strlen(hdr);
-        while (isspace(*c))
-            c++;
-        if (*c++ != ':')
+        h += strlen(hdr);
+        while (isspace(*h))
+            h++;
+        if (*h++ != ':')
             continue;
-        while (isspace(*c))
-            c++;
-        hdr_payload = c;
+        while (isspace(*h))
+            h++;
+        if (rec->len <= config.chunk_size)
+            hdr_payload = h;
+        else {
+            VSB_clear(hdr_sb);
+            VSB_bcpy(hdr_sb, h, rec->len - (h - c));
+            VSB_finish(hdr_sb);
+            hdr_payload = VSB_data(hdr_sb);
+        }
     }
     return hdr_payload;
 }
@@ -1212,6 +1220,7 @@ int
 FMT_Init(char *err)
 {
     AN(VSB_new(payload, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
+    AN(VSB_new(hdr_sb, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
     i_arg = VSB_new_auto();
     AN(i_arg);
     scratch = VSB_new_auto();
