@@ -108,64 +108,56 @@ get_payload(const rec_t *rec)
 }
 
 /*
- * Return the *last* record in tx that matches the tag
+ * Return the *first* record in tx that matches the tag, or NULL if none
+ * match
  */
 rec_t *
 get_tag(const tx_t *tx, enum VSL_tag_e tag)
 {
-    rec_t *rec, *tagrec = NULL;
+    rec_t *rec;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
         CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         assert(OCCUPIED(rec));
         if (rec->tag == tag)
-            tagrec = rec;
+            return rec;
     }
-    return tagrec;
+    return NULL;
 }
 
 /*
- * Return the header payload of the *last* record in tx that matches the
+ * Return the header payload of the *first* record in tx that matches the
  * tag and the header name.
  */
 char *
 get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr)
 {
     rec_t *rec;
-    char *hdr_payload = NULL;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
-        char *c, *h;
+        char *c;
 
         CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
         assert(OCCUPIED(rec));
         if (rec->tag != tag)
             continue;
         c = get_payload(rec);
-        h = c;
-        while (isspace(*h))
-            h++;
-        if (strncasecmp(h, hdr, strlen(hdr)) != 0)
+        while (isspace(*c))
+            c++;
+        if (strncasecmp(c, hdr, strlen(hdr)) != 0)
             continue;
-        h += strlen(hdr);
-        while (isspace(*h))
-            h++;
-        if (*h++ != ':')
+        c += strlen(hdr);
+        while (isspace(*c))
+            c++;
+        if (*c++ != ':')
             continue;
-        while (isspace(*h))
-            h++;
-        if (rec->len <= config.chunk_size)
-            hdr_payload = h;
-        else {
-            VSB_clear(hdr_sb);
-            VSB_bcpy(hdr_sb, h, rec->len - (h - c));
-            VSB_finish(hdr_sb);
-            hdr_payload = VSB_data(hdr_sb);
-        }
+        while (isspace(*c))
+            c++;
+        return c;
     }
-    return hdr_payload;
+    return NULL;
 }
 
 /*

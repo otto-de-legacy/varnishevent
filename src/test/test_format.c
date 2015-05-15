@@ -189,7 +189,7 @@ static const char
     recs[NRECORDS / 2].tag = SLT_RespHeader;
     recs[NRECORDS - 1].tag = SLT_RespHeader;
     rec = get_tag(&tx, SLT_RespHeader);
-    MASSERT(rec == &recs[NRECORDS - 1]);
+    MASSERT(rec == &recs[NRECORDS / 2]);
 
     /* Record not found */
     recs[NRECORDS / 2].tag = SLT_ReqHeader;
@@ -238,19 +238,19 @@ static const char
     strcpy(c[NRECORDS - 1].data, "Foo: wilco");
     hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAN(hdr);
-    MASSERT(strcmp(hdr, "wilco") == 0);
+    MASSERT(strcmp(hdr, "quux") == 0);
 
     /* Case-insensitive match */
     hdr = get_hdr(&tx, SLT_ReqHeader, "fOO");
     MAN(hdr);
-    MASSERT(strcmp(hdr, "wilco") == 0);
+    MASSERT(strcmp(hdr, "quux") == 0);
 
     /* Ignore whitespace  */
-    recs[NRECORDS - 1].len = strlen("  Foo  :  wilco");
-    strcpy(c[NRECORDS - 1].data, "  Foo  :  wilco");
+    recs[NRECORDS / 2].len = strlen("  Foo  :  quux");
+    strcpy(c[NRECORDS / 2].data, "  Foo  :  quux");
     hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAN(hdr);
-    MASSERT(strcmp(hdr, "wilco") == 0);
+    MASSERT(strcmp(hdr, "quux") == 0);
 
     /* Different headers after the matching header */
     hdr = get_hdr(&tx, SLT_ReqHeader, "Bar");
@@ -1566,7 +1566,7 @@ static const char
     VSB_finish(os);
 #define EXP_FULL_CLIENT_OUTPUT "105 c 15963 HTTP/1.1 127.0.0.1 60 foohdr "\
         "barhdr - GET 283 bar=baz&quux=wilco GET "\
-        "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
+        "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.000166 hit hit "\
         "logload MATCH ACL \"10.0.0.0\"/8 \"foo\\0\\377 bar\" " \
         "1429213569.602005 0.000000 0.000000 60 0.000125 4711 1147\n"
@@ -1640,7 +1640,7 @@ static const char
     VSB_finish(os);
 #define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
         "283 foohdr barhdr - GET 60 bar=baz&quux=wilco GET "\
-        "http://bazquux.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
+        "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
         "2 chunked stream \"foo\\0\\377 bar\" "\
         "1429210777.728290 0.000048 0.000048 283 0.000048 4711 1147\n"
