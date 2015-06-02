@@ -192,7 +192,6 @@ DATA_Init(void)
 	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
     }
 
-    tx_occ = rec_occ = chunk_occ = tx_occ_hi = rec_occ_hi = chunk_occ_hi = 0;
     global_nfree_tx = config.max_data;
     global_nfree_rec = nrecords;
     global_nfree_chunk = nchunks;

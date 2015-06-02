@@ -355,12 +355,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         tx->occupied = 1;
         seen++;
         MON_StatsUpdate(STATS_DONE, nrec, total_chunks);
-        if (tx_occ > tx_occ_hi)
-            tx_occ_hi = tx_occ;
-        if (rec_occ > rec_occ_hi)
-            rec_occ_hi = rec_occ;
-        if (chunk_occ > chunk_occ_hi)
-            chunk_occ_hi = chunk_occ;
         submit(tx);
     }
 

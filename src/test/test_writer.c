@@ -85,6 +85,7 @@ static char
     for (int i = 0; i < THRESHOLD; i++) {
         tx.occupied = 1;
         tx.type = VSL_t_req;
+        MON_StatsUpdate(STATS_DONE, 1, 1);
 
         wrt_write(&tx);
         MAZ(to.tv_sec);

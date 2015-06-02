@@ -43,6 +43,9 @@ static int run = 0;
 static pthread_t monitor;
 static pthread_mutex_t stats_lock = PTHREAD_MUTEX_INITIALIZER;
 
+static unsigned tx_occ = 0, rec_occ = 0, chunk_occ = 0, tx_occ_hi = 0,
+    rec_occ_hi = 0, chunk_occ_hi = 0;
+
 static void
 log_output(void)
 {
@@ -115,24 +118,35 @@ MON_Start(void)
 void
 MON_StatsUpdate(stats_update_t update, unsigned nrec, unsigned nchunk)
 {
-    AZ(pthread_mutex_lock(&stats_lock));
     switch(update) {
         
     case STATS_WRITTEN:
+        AZ(pthread_mutex_lock(&stats_lock));
+        AN(tx_occ);
+        assert(rec_occ >= nrec);
+        assert(chunk_occ >= nchunk);
         tx_occ--;
         rec_occ -= nrec;
         chunk_occ -= nchunk;
+        AZ(pthread_mutex_unlock(&stats_lock));
         break;
         
     case STATS_DONE:
+        AZ(pthread_mutex_lock(&stats_lock));
         tx_occ++;
         rec_occ += nrec;
         chunk_occ += nchunk;
+        AZ(pthread_mutex_unlock(&stats_lock));
+        if (tx_occ > tx_occ_hi)
+            tx_occ_hi = tx_occ;
+        if (rec_occ > rec_occ_hi)
+            rec_occ_hi = rec_occ;
+        if (chunk_occ > chunk_occ_hi)
+            chunk_occ_hi = chunk_occ;
         break;
         
     default:
         /* Unreachable */
         AN(NULL);
     }
-    AZ(pthread_mutex_unlock(&stats_lock));
 }
