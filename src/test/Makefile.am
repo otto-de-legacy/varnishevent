@@ -29,6 +29,7 @@ test_format_LDADD = \
 	../config.$(OBJEXT) \
 	../strfTIM.$(OBJEXT) \
 	../base64.$(OBJEXT) \
+	../data.$(OBJEXT) \
 	../format.$(OBJEXT) \
 	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ -lm -lvarnish
 

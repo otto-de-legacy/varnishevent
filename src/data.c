@@ -33,8 +33,12 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <errno.h>
+#include <strings.h>
+#include <ctype.h>
 
 #include "varnishevent.h"
+#include "data.h"
+
 #include "vas.h"
 #include "miniobj.h"
 #include "vqueue.h"
@@ -62,6 +66,10 @@ static txhead_t freetxhead;
 static rechead_t freerechead;
 static chunkhead_t freechunkhead;
 
+static char bogus_rec;
+rec_t * const magic_end_rec = (rec_t * const) &bogus_rec;
+
+/* XXX update for new structures */
 static void
 data_Cleanup(void)
 {
@@ -74,6 +82,30 @@ data_Cleanup(void)
     AZ(pthread_mutex_destroy(&freechunk_lock));
 }
 
+static unsigned
+data_clear_rec(rec_t *rec, rechead_t * const freerec,
+               chunkhead_t * const freechunk)
+{
+    chunk_t *chunk;
+    unsigned nchunk = 0;
+
+    CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
+    rec->occupied = 0;
+    rec->tag = SLT__Bogus;
+    rec->len = 0;
+    while ((chunk = VSTAILQ_FIRST(&rec->chunks)) != NULL) {
+        CHECK_OBJ(chunk, CHUNK_MAGIC);
+        chunk->occupied = 0;
+        *chunk->data = '\0';
+        VSTAILQ_REMOVE_HEAD(&rec->chunks, chunklist);
+        VSTAILQ_INSERT_HEAD(freechunk, chunk, freelist);
+        nchunk++;
+    }
+    assert(VSTAILQ_EMPTY(&rec->chunks));
+    VSTAILQ_INSERT_HEAD(freerec, rec, freelist);
+    return nchunk;
+}
+
 void
 DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
               rechead_t * const freerec, chunkhead_t * const freechunk,
@@ -82,7 +114,6 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
               unsigned * restrict const nfree_chunk)
 {
     rec_t *rec;
-    chunk_t *chunk;
     unsigned nchunk = 0, nrec = 0;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
@@ -93,25 +124,24 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
     tx->type = VSL_t_unknown;
     tx->t = 0.;
 
-    while ((rec = VSTAILQ_FIRST(&tx->recs)) != NULL) {
-        CHECK_OBJ(rec, RECORD_MAGIC);
-        rec->occupied = 0;
-        rec->tag = SLT__Bogus;
-        rec->len = 0;
-        while ((chunk = VSTAILQ_FIRST(&rec->chunks)) != NULL) {
-            CHECK_OBJ(chunk, CHUNK_MAGIC);
-            chunk->occupied = 0;
-            *chunk->data = '\0';
-            VSTAILQ_REMOVE_HEAD(&rec->chunks, chunklist);
-            VSTAILQ_INSERT_HEAD(freechunk, chunk, freelist);
-            nchunk++;
+    for (int i = 0; i <= max_idx; i++) {
+        rec_node_t *rec_node = tx->recs[i];
+        CHECK_OBJ_NOTNULL(rec_node, REC_NODE_MAGIC);
+        if (rec_node->rec != NULL) {
+            nchunk += data_clear_rec(rec_node->rec, freerec, freechunk);
+            nrec++;
+            rec_node->rec = NULL;
+            continue;
         }
-        assert(VSTAILQ_EMPTY(&rec->chunks));
-        VSTAILQ_REMOVE_HEAD(&tx->recs, reclist);
-        VSTAILQ_INSERT_HEAD(freerec, rec, freelist);
-        nrec++;
+        if (rec_node->hdrs == NULL)
+            continue;
+        for (int j = 0; rec_node->hdrs[j] != magic_end_rec; j++)
+            if ((rec = rec_node->hdrs[j]) != NULL) {
+                nchunk += data_clear_rec(rec, freerec, freechunk);
+                nrec++;
+                rec_node->hdrs[j] = NULL;
+            }
     }
-    assert(VSTAILQ_EMPTY(&tx->recs));
     VSTAILQ_INSERT_HEAD(freetx, tx, freelist);
     *nfree_tx += 1;
     *nfree_rec += nrec;
@@ -122,7 +152,8 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
 int
 DATA_Init(void)
 {
-    int bufidx = 0, chunks_per_rec, recs_per_tx = FMT_Estimate_RecsPerTx();
+    int bufidx = 0, chunks_per_rec, recs_per_tx = FMT_Estimate_RecsPerTx(),
+        nrecnodes = config.max_data * (max_idx + 1);
 
     LOG_Log(LOG_DEBUG, "Estimated %d records per transaction", recs_per_tx);
     nrecords = config.max_data * recs_per_tx;
@@ -171,6 +202,18 @@ DATA_Init(void)
         VSTAILQ_INSERT_TAIL(&freerechead, &records[i], freelist);
     }
 
+    LOG_Log(LOG_DEBUG, "Allocating table for %d recnodes (%d bytes)",
+            nrecnodes, nrecnodes * sizeof(rec_node_t));
+    rec_nodes = (rec_node_t *) calloc(nrecnodes, sizeof(rec_node_t));
+    if (rec_nodes == NULL) {
+        free(bufptr);
+        free(chunks);
+        free(records);
+        return errno;
+    }
+    for (int i = 0; i < nrecnodes; i++)
+        rec_nodes[i].magic = REC_NODE_MAGIC;
+
     LOG_Log(LOG_DEBUG, "Allocating table for %d transactions (%d bytes)",
             config.max_data, config.max_data * sizeof(tx_t));
     txn = (tx_t *) calloc(config.max_data, sizeof(tx_t));
@@ -178,6 +221,7 @@ DATA_Init(void)
         free(bufptr);
         free(chunks);
         free(records);
+        free(rec_nodes);
         return errno;
     }
     VSTAILQ_INIT(&freetxhead);
@@ -188,7 +232,31 @@ DATA_Init(void)
         txn[i].pvxid = -1;
         txn[i].type = VSL_t_unknown;
         txn[i].t = 0.;
-        VSTAILQ_INIT(&txn[i].recs);
+        txn[i].recs = (rec_node_t **) malloc((max_idx + 1)
+                                             * sizeof(rec_node_t *));
+        AN(txn[i].recs);
+        for (int j = 0; j <= max_idx; j++) {
+            assert((i * max_idx) + j < nrecnodes);
+            txn[i].recs[j] = &rec_nodes[(i * max_idx) + j];
+            CHECK_OBJ(txn[i].recs[j], REC_NODE_MAGIC);
+        }
+        for (int j = 0; j < MAX_VSL_TAG; j++) {
+            include_t *inc;
+            int idx;
+
+            idx = tag2idx[j];
+            if (idx == -1)
+                continue;
+            assert(idx <= max_idx);
+            if ((inc = hdr_include_tbl[j]) == NULL) {
+                txn[i].recs[idx]->hdrs = NULL;
+                continue;
+            }
+            CHECK_OBJ(inc, INCLUDE_MAGIC);
+            txn[i].recs[idx]->hdrs = (rec_t **) calloc(inc->n + 1,
+                                                       sizeof(rec_t *));
+            txn[i].recs[idx]->hdrs[inc->n] = magic_end_rec;
+        }
 	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
     }
 
@@ -200,6 +268,49 @@ DATA_Init(void)
     atexit(data_Cleanup);
     
     return(0);
+}
+
+static inline int
+data_get_hdr_idx(char **hdrs, size_t n, const char *s, size_t len)
+{
+    int low = 0, high = n - 1;
+
+    while (high >= low) {
+        int i, cmp;
+        i = (high + low) >> 1;
+        if ((cmp = strncasecmp(s, hdrs[i], len)) == 0)
+            return i;
+        else if (cmp < 0)
+            high = i - 1;
+        else
+            low = i + 1;
+    }
+    return -1;
+}
+
+int
+DATA_FindHdrIdx(enum VSL_tag_e tag, const char *hdr)
+{
+    const char *b, *e, *s;
+
+    if (hdr_include_tbl[tag] == NULL)
+        return -1;
+    CHECK_OBJ(hdr_include_tbl[tag], INCLUDE_MAGIC);
+    b = hdr;
+    while (*b && isspace(*b))
+        b++;
+    e = b;
+    while (*e && *e != ':' && !isspace(*e))
+        e++;
+    s = e;
+    while (*s && isspace(*s))
+        s++;
+    if (*s != ':')
+        return -1;
+    if (e - b == 0)
+        return -1;
+    return data_get_hdr_idx(hdr_include_tbl[tag]->hdr,
+                            hdr_include_tbl[tag]->n, b, e - b);
 }
 
 /* 
@@ -241,6 +352,41 @@ DATA_Return_Free(tx)
 DATA_Return_Free(rec)
 DATA_Return_Free(chunk)
 
+static void
+data_dump_rec(int txidx, int nodeidx, int hdridx, rec_t *rec, struct vsb *data)
+{
+    AN(rec);
+    AN(data);
+
+    if (rec->magic != RECORD_MAGIC) {
+        LOG_Log(LOG_ERR,
+                "Invalid record at tx %d node %d hdr %d, magic = 0x%08x, "
+                "expected 0x%08x", txidx, nodeidx, hdridx, rec->magic,
+                RECORD_MAGIC);
+        return;
+    }
+    VSB_printf(data, "%s ", VSL_tags[rec->tag]);
+    if (rec->len) {
+        int n = rec->len;
+        chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
+        while (n > 0 && chunk != NULL) {
+            if (chunk->magic != CHUNK_MAGIC) {
+                LOG_Log(LOG_ERR,
+                        "Invalid chunk at tx %d node %d hdr %d, "
+                        "magic = 0x%08x, expected 0x%08x",
+                        txidx, nodeidx, hdridx, chunk->magic, CHUNK_MAGIC);
+                continue;
+            }
+            int cp = n;
+            if (cp > config.chunk_size)
+                cp = config.chunk_size;
+            VSB_bcat(data, chunk->data, cp);
+            n -= cp;
+            chunk = VSTAILQ_NEXT(chunk, chunklist);
+        }
+    }
+}
+
 void
 DATA_Dump(void)
 {
@@ -253,7 +399,7 @@ DATA_Dump(void)
     
     for (int i = 0; i < config.max_data; i++) {
         tx_t *tx;
-        rec_t *rec;
+        rec_node_t *rec_node;
 
         if (txn[i].magic != TX_MAGIC) {
             LOG_Log(LOG_ERR,
@@ -273,34 +419,28 @@ DATA_Dump(void)
                    i, tx->vxid, tx->pvxid, statename[tx->occupied],
                    C(tx->type) ? 'c' : B(tx->type) ? 'b' : '-');
 
-        VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
-            if (rec == NULL)
-                continue;
-            if (rec->magic != RECORD_MAGIC) {
-                LOG_Log(LOG_ERR,
-                    "Invalid record at tx %d, magic = 0x%08x, expected 0x%08x",
-                    i, rec->magic, RECORD_MAGIC);
+        for (int j = 0; j <= max_idx; j++) {
+            rec_t *rec;
+
+            rec_node = tx->recs[j];
+            AN(rec_node);
+            if (rec_node->magic != REC_NODE_MAGIC) {
+                LOG_Log(LOG_ERR, "Invalid rec node at tx %d node %d, "
+                        "magic = 0x%08x, expected 0x%08x", i, j,
+                        rec_node->magic, REC_NODE_MAGIC);
                 continue;
             }
-            VSB_printf(data, "%s ", VSL_tags[rec->tag]);
-            if (rec->len) {
-                int n = rec->len;
-                chunk_t *chunk = VSTAILQ_FIRST(&rec->chunks);
-                while (n > 0 && chunk != NULL) {
-                    if (chunk->magic != CHUNK_MAGIC) {
-                        LOG_Log(LOG_ERR,
-                            "Invalid chunk at tx %d, magic = 0x%08x, "
-                            "expected 0x%08x",
-                            i, chunk->magic, CHUNK_MAGIC);
-                        continue;
-                    }
-                    int cp = n;
-                    if (cp > config.chunk_size)
-                        cp = config.chunk_size;
-                    VSB_bcat(data, chunk->data, cp);
-                    n -= cp;
-                    chunk = VSTAILQ_NEXT(chunk, chunklist);
-                }
+            if (rec_node->rec != NULL) {
+                data_dump_rec(i, j, -1, rec, data);
+                continue;
+            }
+            if (rec_node->hdrs == NULL)
+                continue;
+            for (int k = 0; k <= max_idx; k++) {
+                rec = rec_node->hdrs[k];
+                if (rec == NULL)
+                    continue;
+                data_dump_rec(i, j, k, rec, data);
             }
         }
 
