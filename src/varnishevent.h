@@ -119,7 +119,8 @@ typedef VSTAILQ_HEAD(txhead_s, tx_t) txhead_t;
 
 #define OCCUPIED(p) ((p)->occupied == 1)
 
-unsigned global_nfree_tx, global_nfree_rec, global_nfree_chunk;
+unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi,
+    global_nfree_tx, global_nfree_rec, global_nfree_chunk;
 
 /* Writer (consumer) waits for this condition when the SPSC queue is empty.
    Reader (producer) signals the condition after enqueue. */
