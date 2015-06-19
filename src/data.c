@@ -43,6 +43,7 @@
 #include "miniobj.h"
 #include "vqueue.h"
 #include "vsb.h"
+#include "vmb.h"
 
 /* Preprend head2 before head1, result in head1, head2 empty afterward */
 #define	VSTAILQ_PREPEND(head1, head2) do {                      \
@@ -98,10 +99,12 @@ data_clear_rec(rec_t *rec, rechead_t * const freerec,
         chunk->occupied = 0;
         *chunk->data = '\0';
         VSTAILQ_REMOVE_HEAD(&rec->chunks, chunklist);
+        VWMB();
         VSTAILQ_INSERT_HEAD(freechunk, chunk, freelist);
         nchunk++;
     }
     assert(VSTAILQ_EMPTY(&rec->chunks));
+    VWMB();
     VSTAILQ_INSERT_HEAD(freerec, rec, freelist);
     return nchunk;
 }
