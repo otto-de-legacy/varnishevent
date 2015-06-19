@@ -247,10 +247,8 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 {
     int status = DISPATCH_RETURN_OK;
     unsigned nrec = 0, total_chunks = 0;
+    (void) vsl;
     (void) priv;
-
-    if (term)
-        return DISPATCH_TERMINATE;
 
     for (struct VSL_transaction *t = pt[0]; t != NULL; t = *++pt) {
         struct tx_t *tx;
@@ -270,7 +268,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         }
         CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
         assert(!OCCUPIED(tx));
-        assert(VSTAILQ_EMPTY(&tx->recs));
+        AN(tx->recs);
         tx->type = t->type;
         tx->vxid = t->vxid;
         tx->pvxid = t->vxid_parent;
@@ -278,34 +276,51 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             tx->t = VTIM_real();
 
         while ((status = VSL_Next(t->c)) > 0) {
-            int len, n, nchunk;
-            rec_t *rec;
+            enum VSL_tag_e tag;
+            int idx, hdr_idx, len, n, nchunk;
+            rec_t *rec, **rp;
             chunk_t *chunk;
             const char *p;
 
-            if (!VSL_Match(vsl, t->c))
+            if ((idx = tag2idx[VSL_TAG(t->c->rec.ptr)]) == -1)
                 continue;
+            CHECK_OBJ_NOTNULL(tx->recs[idx], REC_NODE_MAGIC);
+            if (tx->recs[idx]->rec != NULL)
+                continue;
+            if (tx->recs[idx]->hdrs != NULL) {
+                hdr_idx = DATA_FindHdrIdx(VSL_TAG(t->c->rec.ptr),
+                                          (const char *)
+                                          VSL_CDATA(t->c->rec.ptr));
+                if (hdr_idx == -1)
+                    continue;
+                if (tx->recs[idx]->hdrs[hdr_idx] != NULL)
+                    continue;
+                rp = &tx->recs[idx]->hdrs[hdr_idx];
+            }
+            else
+                rp = &tx->recs[idx]->rec;
 
+            tag = VSL_TAG(t->c->rec.ptr);
+            p = (const char *) VSL_CDATA(t->c->rec.ptr);
             len = VSL_LEN(t->c->rec.ptr);
             if (debug)
                 LOG_Log(LOG_DEBUG, "Record: [%u %s %.*s]",
-                        VSL_ID(t->c->rec.ptr), VSL_tags[VSL_TAG(t->c->rec.ptr)],
-                        len, VSL_CDATA(t->c->rec.ptr));
+                        VSL_ID(t->c->rec.ptr), VSL_tags[tag], len, p);
 
             rec = take_rec();
             if (rec == NULL) {
                 no_free_rec++;
                 LOG_Log(LOG_DEBUG, "Freelist exhausted, record DISCARDED: "
-                        "[%u %s %.*s]", VSL_ID(t->c->rec.ptr),
-                        VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
-                        VSL_CDATA(t->c->rec.ptr));
+                        "[%u %s %.*s]", VSL_ID(t->c->rec.ptr), VSL_tags[tag],
+                        len, p);
                 continue;
             }
             CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
             assert(!OCCUPIED(rec));
             assert(VSTAILQ_EMPTY(&rec->chunks));
+            *rp = rec;
 
-            rec->tag = VSL_TAG(t->c->rec.ptr);
+            rec->tag = tag;
             n = len;
             if (len > len_hi)
                 len_hi = len;
@@ -316,7 +331,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             rec->len = n;
 
             /* Copy the payload into chunks */
-            p = (const char *) VSL_CDATA(t->c->rec.ptr);
             nchunk = (n + config.chunk_size - 1) / config.chunk_size;
             for (int i = 0; i < nchunk; i++) {
                 assert(n > 0);
@@ -326,8 +340,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                     LOG_Log(LOG_DEBUG,
                             "Freelist exhausted, payload TRUNCATED: "
                             "[%u %s %.*s]", VSL_ID(t->c->rec.ptr),
-                            VSL_tags[VSL_TAG(t->c->rec.ptr)], len,
-                            VSL_CDATA(t->c->rec.ptr));
+                            VSL_tags[tag], len, p);
                     continue;
                 }
                 CHECK_OBJ(chunk, CHUNK_MAGIC);
@@ -343,7 +356,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
                 total_chunks++;
             }
             rec->occupied = 1;
-            VSTAILQ_INSERT_TAIL(&tx->recs, rec, reclist);
             nrec++;
         }
 
@@ -364,6 +376,8 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         submit(tx);
     }
 
+    if (term)
+        return DISPATCH_TERMINATE;
     if (flush)
         return DISPATCH_FLUSH;
     if (!reopen)
@@ -461,6 +475,7 @@ main(int argc, char *argv[])
     struct VSM_data *vsm = NULL;
     struct VSL_cursor *cursor;
     enum VSL_grouping_e grouping = VSL_g_vxid;
+    struct vsb *hdrs = VSB_new_auto();
 
     vsl = VSL_New();
 
@@ -722,24 +737,30 @@ main(int argc, char *argv[])
             LOG_Log(LOG_INFO, "Reading varnish instance %s", VSM_Name(vsm));
     }
 
-    char **include_args = FMT_Get_I_Args();
-    if (include_args != NULL) {
-        assert(VSL_Arg(vsl, 'C', NULL) > 0);
-        for (int i = 0; include_args[i] != NULL; i++) {
-            LOG_Log(LOG_INFO, "Include filter: %s", include_args[i]);
-            assert(VSL_Arg(vsl, 'I', include_args[i]) > 0);
-        }
-    }
-    bprintf(scratch, "%s", FMT_Get_i_Arg());
-    if (!EMPTY(scratch)) {
-        LOG_Log(LOG_INFO, "Include tags: %s", scratch);
-        assert(VSL_Arg(vsl, 'i', scratch) > 0);
-    }
-
     if (!VSB_EMPTY(config.cformat) && VSB_EMPTY(config.bformat))
         assert(VSL_Arg(vsl, 'c', scratch) > 0);
     else if (!VSB_EMPTY(config.bformat) && VSB_EMPTY(config.cformat))
         assert(VSL_Arg(vsl, 'b', scratch) > 0);
+
+    for (int i = 0; i < MAX_VSL_TAG; i++) {
+        int idx = tag2idx[i];
+        if (idx == -1)
+            continue;
+        if (hdr_include_tbl[i] == NULL)
+            LOG_Log(LOG_INFO, "Reading tag %s", VSL_tags[i]);
+        else {
+            include_t *inc = hdr_include_tbl[i];
+            CHECK_OBJ_NOTNULL(inc, INCLUDE_MAGIC);
+            VSB_clear(hdrs);
+            for (int j = 0; j < inc->n; j++) {
+                VSB_cat(hdrs, inc->hdr[j]);
+                VSB_cat(hdrs, ",");
+            }
+            VSB_finish(hdrs);
+            LOG_Log(LOG_INFO, "Reading tags %s with headers: %s", VSL_tags[i],
+                    VSB_data(hdrs));
+        }
+    }
 
     if ((errnum = DATA_Init()) != 0) {
         LOG_Log(LOG_CRIT, "Cannot init data tables: %s\n",

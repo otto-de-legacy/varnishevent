@@ -30,10 +30,15 @@
  */
 
 #include <string.h>
+#include <stddef.h>
 
 #include "minunit.h"
 
 #include "../varnishevent.h"
+#include "../data.h"
+
+/* __offsetof() used in VSTAILQ_LAST() */
+#define __offsetof(t,f) offsetof(t,f)
 
 int tests_run = 0;
 
@@ -74,11 +79,25 @@ static char
         MASSERT(txn[i].pvxid == -1);
         MASSERT(txn[i].type == VSL_t_unknown);
         MAZ(txn[i].t);
-        MASSERT(VSTAILQ_EMPTY(&txn[i].recs));
+        for (int j = 0; j <= max_idx; j++) {
+            MCHECK_OBJ_NOTNULL(txn[i].recs[j], REC_NODE_MAGIC);
+            MAZ(txn[i].recs[j]->rec);
+            if (txn[i].recs[j]->hdrs != NULL)
+                for (int k = 0; txn[i].recs[j]->hdrs[k] != magic_end_rec; k++)
+                    MAZ(txn[i].recs[j]->hdrs[k]);
+        }
         if (VSTAILQ_NEXT(&txn[i], freelist) != NULL)
             tx_free++;
     }
     MASSERT(global_nfree_tx == config.max_data);
+
+    for (int i = 0; i < config.max_data * (max_idx + 1); i++) {
+        MCHECK_OBJ(&rec_nodes[i], REC_NODE_MAGIC);
+        MAZ(rec_nodes[i].rec);
+        if (rec_nodes[i].hdrs != NULL)
+            for (int j = 0; rec_nodes[i].hdrs[j] != magic_end_rec; j++)
+                MAZ(rec_nodes[i].hdrs[j]);
+    }
 
     for (int i = 0; i < nrecords; i++) {
         MCHECK_OBJ(&records[i], RECORD_MAGIC);
@@ -256,14 +275,65 @@ static const char
     return NULL;
 }
 
+static int chunks_filled = 0;
+
+static void
+fill_rec(rec_t *rec, chunk_t *c, int nc)
+{
+    chunk_t *chunk;
+
+    rec->magic = RECORD_MAGIC;
+    rec->len = 42;
+    rec->tag = MAX_VSL_TAG/2;
+    rec->occupied = 1;
+    VSTAILQ_INIT(&rec->chunks);
+    for (int i = 0; i < nc; i++) {
+        chunk = &c[i];
+        VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
+        chunk->magic = CHUNK_MAGIC;
+        chunk->data = (char *) calloc(1, config.chunk_size);
+        chunks_filled++;
+    }
+}
+
+#define REC_NODE_CLEARED(n)                                     \
+do {                                                            \
+    MCHECK_OBJ(n, REC_NODE_MAGIC);                              \
+    MAZ((n)->rec);                                              \
+    if ((n)->hdrs != NULL) {                                    \
+        for (int x = 0; (n)->hdrs[x] != magic_end_rec; x++)     \
+            MAZ((n)->hdrs[x]);                                  \
+        MASSERT((n)->hdrs[HDRS_PER_NODE] == magic_end_rec);     \
+    }                                                           \
+} while(0)
+
+#define REC_CLEARED(rec)                        \
+do {                                            \
+    MCHECK_OBJ_NOTNULL((rec), RECORD_MAGIC);    \
+    MASSERT(!OCCUPIED(rec));                    \
+    MASSERT((rec)->tag == SLT__Bogus);          \
+    MAZ((rec)->len);                            \
+    MASSERT(VSTAILQ_EMPTY(&(rec)->chunks));     \
+} while(0)
+
+#define CHUNK_CLEARED(chunk)                    \
+do {                                            \
+    MCHECK_OBJ_NOTNULL((chunk), CHUNK_MAGIC);   \
+    MASSERT(!OCCUPIED(chunk));                  \
+    MAZ((chunk)->data[0]);                      \
+} while(0)
+    
 static const char
 *test_data_clear_tx(void)
 {
-#define NRECS 10
+#define N_NODES (max_idx + 1)
+#define HDRS_PER_NODE 5
 #define CHUNKS_PER_REC 3
+#define NRECS ((N_NODES)/2 + (((N_NODES) - (N_NODES)/2) * HDRS_PER_NODE))
+#define NCHUNKS ((NRECS) * (CHUNKS_PER_REC))
     tx_t tx;
-    rec_t r[NRECS], *rec;
-    chunk_t c[NRECS * CHUNKS_PER_REC], *chunk;
+    rec_t *rec;
+    chunk_t *chunk;
     int n = 0;
     unsigned nfree_tx = 4711, nfree_recs = 815, nfree_chunks = 1147;
 
@@ -274,17 +344,36 @@ static const char
     VSTAILQ_INIT(&local_freechunk);
 
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.recs);
-    for (int i = 0; i < NRECS; i++) {
-        VSTAILQ_INSERT_TAIL(&tx.recs, &r[i], reclist);
-        r[i].magic = RECORD_MAGIC;
-        VSTAILQ_INIT(&r[i].chunks);
-        for (int j = 0; j < CHUNKS_PER_REC; j++) {
-            chunk = &c[i*CHUNKS_PER_REC + j];
-            VSTAILQ_INSERT_TAIL(&r[i].chunks, chunk, chunklist);
-            chunk->magic = CHUNK_MAGIC;
-            chunk->data = (char *) calloc(1, config.chunk_size);
+    tx.t = 123456789.0;
+    tx.vxid = 314159265;
+    tx.pvxid = 2718281828;
+    tx.type = VSL_t_req;
+    tx.occupied = 1;
+    tx.recs = (rec_node_t **) calloc(N_NODES, sizeof(rec_node_t *));
+    MAN(tx.recs);
+    for (int i = 0; i < N_NODES/2; i++) {
+        tx.recs[i] = &rec_nodes[i];
+        rec_nodes[i].magic = REC_NODE_MAGIC;
+        rec_nodes[i].rec = &records[i];
+        fill_rec(&records[i], &chunks[i * CHUNKS_PER_REC], CHUNKS_PER_REC);
+        MASSERT(&chunks[(i * CHUNKS_PER_REC) + CHUNKS_PER_REC - 1]
+                == VSTAILQ_LAST(&records[i].chunks, chunk_t, chunklist));
+        rec_nodes[i].hdrs = NULL;
+    }
+    for (int i = N_NODES/2; i < N_NODES; i++) {
+        tx.recs[i] = &rec_nodes[i];
+        rec_nodes[i].magic = REC_NODE_MAGIC;
+        rec_nodes[i].rec = NULL;
+        rec_nodes[i].hdrs = (rec_t **) calloc(HDRS_PER_NODE + 1,
+                                              sizeof(rec_t *));
+        MAN(rec_nodes[i].hdrs);
+        for (int j = 0; j < HDRS_PER_NODE; j++) {
+            int idx = N_NODES/2 + (i - N_NODES/2) * HDRS_PER_NODE + j;
+            rec_nodes[i].hdrs[j] = &records[idx];
+            fill_rec(&records[idx], &chunks[idx * CHUNKS_PER_REC],
+                     CHUNKS_PER_REC);
         }
+        rec_nodes[i].hdrs[HDRS_PER_NODE] = magic_end_rec;
     }
 
     DATA_Clear_Tx(&tx, &local_freetx, &local_freerec, &local_freechunk,
@@ -292,7 +381,7 @@ static const char
 
     MASSERT(nfree_tx == 4712);
     MASSERT(nfree_recs == 815 + NRECS);
-    MASSERT(nfree_chunks == 1147 + NRECS*CHUNKS_PER_REC);
+    MASSERT(nfree_chunks == 1147 + NCHUNKS);
 
     MCHECK_OBJ(&tx, TX_MAGIC);
     MASSERT(!OCCUPIED(&tx));
@@ -300,7 +389,10 @@ static const char
     MASSERT(tx.pvxid == -1);
     MASSERT(tx.type == VSL_t_unknown);
     MAZ(tx.t);
-    MASSERT(VSTAILQ_EMPTY(&tx.recs));
+    for (int i = 0; i < N_NODES; i++) {
+        REC_NODE_CLEARED(tx.recs[i]);
+        REC_NODE_CLEARED(&rec_nodes[i]);
+    }
 
     MASSERT(!VSTAILQ_EMPTY(&local_freetx));
     MASSERT(VSTAILQ_FIRST(&local_freetx) == &tx);
@@ -308,11 +400,7 @@ static const char
 
     MASSERT(!VSTAILQ_EMPTY(&local_freerec));
     VSTAILQ_FOREACH(rec, &local_freerec, freelist) {
-        MCHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
-        MASSERT(!OCCUPIED(rec));
-        MASSERT(rec->tag == SLT__Bogus);
-        MAZ(rec->len);
-        MASSERT(VSTAILQ_EMPTY(&tx.recs));
+        REC_CLEARED(rec);
         n++;
     }
     MASSERT(n == NRECS);
@@ -320,13 +408,16 @@ static const char
     MASSERT(!VSTAILQ_EMPTY(&local_freechunk));
     n = 0;
     VSTAILQ_FOREACH(chunk, &local_freechunk, freelist) {
-        MCHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
-        MASSERT(!OCCUPIED(chunk));
-        MAZ(chunk->data[0]);
+        CHUNK_CLEARED(chunk);
         n++;
-        free(chunk->data);
     }
-    MASSERT(n == NRECS * CHUNKS_PER_REC);
+    MASSERT(n == NCHUNKS);
+
+    for (int i = 0; i < NRECS; i++)
+        REC_CLEARED(&records[i]);
+
+    for (int i = 0; i < NCHUNKS; i++)
+        CHUNK_CLEARED(&chunks[i]);
 
     return NULL;
 }
