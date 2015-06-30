@@ -32,7 +32,6 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#include <stdarg.h>
 
 #include "minunit.h"
 
@@ -44,64 +43,10 @@
 
 int tests_run = 0;
 
-/* So that we don't have to link monitor.o, and hence varnishevent.o */
-void
-MON_StatsUpdate(stats_update_t update, unsigned nrec, unsigned nchunk)
-{
-    (void) update;
-    (void) nrec;
-    (void) nchunk;
-}
-
 static void
-reset_tag2idx(int n, ...)
+add_rec_chunk(tx_t *tx, rec_t *rec, chunk_t *chunk)
 {
-    va_list tags;
-    enum VSL_tag_e tag;
-    int idx = 0;
-
-    for (int i = 0; i < MAX_VSL_TAG; i++)
-        tag2idx[i] = -1;
-    va_start(tags, n);
-    for (int i = 0; i < n; i++) {
-        tag = va_arg(tags, enum VSL_tag_e);
-        tag2idx[tag] = idx++;
-    }
-    va_end(tags);
-    max_idx = idx - 1;
-}
-
-static void
-reset_hdr_include(void)
-{
-    for (int i = 0; i < MAX_VSL_TAG; i++)
-        hdr_include_tbl[i] = NULL;
-}
-
-static void
-add_hdr_include(int n, enum VSL_tag_e tag, ...)
-{
-    va_list hdrs;
-    include_t *inc;
-
-    inc = (include_t *) calloc(1, sizeof(include_t));
-    inc->magic = INCLUDE_MAGIC;
-    inc->n = n;
-    inc->hdr = (char **) calloc(n, sizeof(char *));
-    va_start(hdrs, tag);
-    for (int i = 0; i < n; i++)  {
-        const char *hdr = va_arg(hdrs, const char *);
-        inc->hdr[i] = strdup(hdr);
-    }
-    va_end(hdrs);
-    qsort(inc->hdr, n, sizeof(char *), hdrcmp);
-    hdr_include_tbl[tag] = inc;
-}
-
-static void
-init_rec_chunk(enum VSL_tag_e tag, rec_t *rec, chunk_t *chunk)
-{
-    rec->tag = tag;
+    VSTAILQ_INSERT_TAIL(&tx->recs, rec, reclist);
     rec->magic = RECORD_MAGIC;
     rec->occupied = 1;
     VSTAILQ_INIT(&rec->chunks);
@@ -111,30 +56,11 @@ init_rec_chunk(enum VSL_tag_e tag, rec_t *rec, chunk_t *chunk)
 }
 
 static void
-set_rec(tx_t *tx, enum VSL_tag_e tag, rec_t *rec)
-{
-    int idx = tag2idx[tag];
-    tx->recs[idx]->rec = rec;
-}
-
-static void
-add_rec_chunk(tx_t *tx, enum VSL_tag_e tag, rec_t *rec, chunk_t *chunk)
-{
-    set_rec(tx, tag, rec);
-    init_rec_chunk(tag, rec, chunk);
-}
-
-static void
-init_tx_arg(tx_t *tx, rec_node_t node[], rec_node_t *nptr[], arg_t *args)
+init_tx_rec_chunk_arg(tx_t *tx, rec_t *rec, chunk_t *chunk, arg_t *args)
 {
     tx->magic = TX_MAGIC;
-    tx->recs = nptr;
-    for (int i = 0; i <= max_idx; i++) {
-        node[i].magic = REC_NODE_MAGIC;
-        node[i].rec = NULL;
-        node[i].hdrs = NULL;
-        nptr[i] = &node[i];
-    }
+    VSTAILQ_INIT(&tx->recs);
+    add_rec_chunk(tx, rec, chunk);
     args->name = NULL;
     args->tag = SLT__Bogus;
 }
@@ -151,43 +77,11 @@ set_record_data(rec_t *rec, chunk_t *chunk, const char *data,
 }
 
 static void
-add_record_data(tx_t *tx, enum VSL_tag_e tag, rec_t *rec, chunk_t *chunk,
-                const char *data)
+add_record_data(tx_t *tx, rec_t *rec, chunk_t *chunk, const char *data,
+                enum VSL_tag_e tag)
 {
-    add_rec_chunk(tx, tag, rec, chunk);
+    add_rec_chunk(tx, rec, chunk);
     set_record_data(rec, chunk, data, tag);
-}
-
-static void
-init_hdr_recs(tx_t *tx, enum VSL_tag_e tag)
-{
-    include_t *inc = hdr_include_tbl[tag];
-    int idx = tag2idx[tag];
-
-    tx->recs[idx]->rec = NULL;
-    tx->recs[idx]->hdrs = (rec_t **) calloc(inc->n, sizeof(char *));
-}
-
-static void
-set_hdr_rec(tx_t *tx, enum VSL_tag_e tag, int hdr_idx, rec_t *rec)
-{
-    int idx = tag2idx[tag];
-    tx->recs[idx]->rec = NULL;
-    tx->recs[idx]->hdrs[hdr_idx] = rec;
-}
-
-static void
-clear_rec(tx_t *tx, enum VSL_tag_e tag)
-{
-    int idx = tag2idx[tag];
-    tx->recs[idx]->rec = NULL;
-}
-
-static void
-clear_hdr(tx_t *tx, enum VSL_tag_e tag, int hdr_idx)
-{
-    int idx = tag2idx[tag];
-    tx->recs[idx]->hdrs[hdr_idx] = NULL;
 }
 
 /* N.B.: Always run the tests in this order */
@@ -278,194 +172,137 @@ static const char
 static const char
 *test_format_get_tag(void)
 {
-#define MAX_IDX 2
     tx_t tx;
-    rec_node_t node[MAX_IDX + 1], *n[MAX_IDX + 1];
-    rec_t recs[MAX_IDX + 1], *rec;
+    rec_t recs[NRECORDS], *rec;
 
     printf("... testing get_tag()\n");
 
-    max_idx = MAX_IDX;
-    for (int i = 0; i < MAX_VSL_TAG; i++)
-        if (i <= MAX_IDX)
-            tag2idx[i] = i;
-        else
-            tag2idx[i] = -1;
-
     tx.magic = TX_MAGIC;
-    tx.recs = n;
-    for (int i = 0; i <= MAX_IDX; i++) {
-        memset(&node[i], 0, sizeof(rec_node_t));
+    VSTAILQ_INIT(&tx.recs);
+    for (int i = 0; i < NRECORDS; i++) {
         memset(&recs[i], 0, sizeof(rec_t));
         recs[i].magic = RECORD_MAGIC;
-        recs[i].tag = i;
+        recs[i].tag = SLT_ReqHeader;
         recs[i].occupied = 1;
-        node[i].magic = REC_NODE_MAGIC;
-        node[i].rec = &recs[i];
-        node[i].hdrs = NULL;
-        n[i] = &node[i];
+        VSTAILQ_INSERT_TAIL(&tx.recs, &recs[i], reclist);
     }
+    recs[NRECORDS / 2].tag = SLT_RespHeader;
+    recs[NRECORDS - 1].tag = SLT_RespHeader;
+    rec = get_tag(&tx, SLT_RespHeader);
+    MASSERT(rec == &recs[NRECORDS / 2]);
 
-    for (int i = 0; i <= MAX_IDX; i++) {
-        rec = get_tag(&tx, i);
-        MASSERT(rec == &recs[i]);
-    }
+    /* Record not found */
+    recs[NRECORDS / 2].tag = SLT_ReqHeader;
+    recs[NRECORDS - 1].tag = SLT_ReqHeader;
+    rec = get_tag(&tx, SLT_RespHeader);
+    MAZ(rec);
 
-    /* No such tag in tx */
-    for (int i = MAX_IDX + 2; i < MAX_VSL_TAG; i++) {
-        rec = get_tag(&tx, i);
-        MAZ(rec);
-    }
-
-    /* Empty record */
-    for (int i = 0; i <= MAX_IDX; i++) {
-        node[i].rec = NULL;
-        rec = get_tag(&tx, i);
-        MAZ(rec);
-    }
+    /* Empty line list */
+    VSTAILQ_INIT(&tx.recs);
+    rec = get_tag(&tx, SLT_ReqHeader);
+    MAZ(rec);
 
     return NULL;
-#undef MAX_IDX
 }
 
 static const char
 *test_format_get_hdr(void)
 {
-#define MAX_IDX 1
-#define NHDRS 5
     tx_t tx;
-    const char *h[] = { "Bar", "Baz", "Foo", "Garply", "Xyzzy" };
-    include_t inc;
-    rec_node_t node[MAX_IDX + 1], *n[MAX_IDX + 1];
-    rec_t recs[(MAX_IDX + 1) * NHDRS], *rhdrs[MAX_IDX + 1][NHDRS];
-    chunk_t c[(MAX_IDX + 1) * NHDRS], *c2;
+    rec_t recs[NRECORDS];
+    chunk_t c[NRECORDS], *c1, *c2;
     char *hdr, *exp;
 
     printf("... testing get_hdr()\n");
 
-    max_idx = MAX_IDX;
-    inc.magic = INCLUDE_MAGIC;
-    inc.n = NHDRS;
-    inc.hdr = (char **) calloc(NHDRS, sizeof(char *));
-    for (int i = 0; i < NHDRS; i++)
-        inc.hdr[i] = strdup(h[i]);
-    for (int i = 0; i < MAX_VSL_TAG; i++)
-        if (i <= MAX_IDX) {
-            tag2idx[i] = i;
-            hdr_include_tbl[i] = &inc;
-        }
-        else {
-            tag2idx[i] = -1;
-            hdr_include_tbl[i] = NULL;
-        }
-
     tx.magic = TX_MAGIC;
-    tx.recs = n;
-    for (int i = 0; i <= MAX_IDX; i++) {
-        memset(&node[i], 0, sizeof(rec_node_t));
-        node[i].magic = REC_NODE_MAGIC;
-        node[i].rec = NULL;
-        node[i].hdrs = rhdrs[i];
-        for (int j = 0; j < NHDRS; j++) {
-            int idx = i * NHDRS + j;
-            MASSERT(idx < (MAX_IDX + 1) * NHDRS);
-            memset(&recs[idx], 0, sizeof(rec_t));
-            memset(&c[idx], 0, sizeof(chunk_t));
-            c[idx].magic = CHUNK_MAGIC;
-            c[idx].data = (char *) calloc(1, config.chunk_size);
-            c[idx].occupied = 1;
-            recs[idx].magic = RECORD_MAGIC;
-            recs[idx].occupied = 1;
-            VSTAILQ_INIT(&recs[idx].chunks);
-            VSTAILQ_INSERT_TAIL(&recs[idx].chunks, &c[idx], chunklist);
-            node[i].hdrs[j] = NULL;
-        }
-        n[i] = &node[i];
+    VSTAILQ_INIT(&tx.recs);
+    for (int i = 0; i < NRECORDS; i++) {
+        memset(&recs[i], 0, sizeof(rec_t));
+        recs[i].magic = RECORD_MAGIC;
+        recs[i].tag = SLT_ReqHeader;
+        recs[i].len = strlen("Bar: baz");
+        recs[i].occupied = 1;
+        VSTAILQ_INSERT_TAIL(&tx.recs, &recs[i], reclist);
+        VSTAILQ_INIT(&recs[i].chunks);
+        memset(&c[i], 0, sizeof(chunk_t));
+        c[i].magic = CHUNK_MAGIC;
+        c[i].data = (char *) calloc(1, config.chunk_size);
+        c[i].occupied = 1;
+        strcpy(c[i].data, "Bar: baz");
+        VSTAILQ_INSERT_TAIL(&recs[i].chunks, &c[i], chunklist);
     }
-
-    recs[0].tag = 0;
-    recs[0].len = strlen("Foo: quux");
-    strcpy(c[0].data, "Foo: quux");
-    tx.recs[0]->hdrs[2] = &recs[0];
-    hdr = get_hdr(&tx, 0, "Foo:");
+    recs[NRECORDS / 2].len = strlen("Foo: quux");
+    strcpy(c[NRECORDS / 2].data, "Foo: quux");
+    recs[NRECORDS - 1].len = strlen("Foo: wilco");
+    strcpy(c[NRECORDS - 1].data, "Foo: wilco");
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAN(hdr);
     MASSERT(strcmp(hdr, "quux") == 0);
 
     /* Case-insensitive match */
-    hdr = get_hdr(&tx, 0, "fOO:");
+    hdr = get_hdr(&tx, SLT_ReqHeader, "fOO");
     MAN(hdr);
     MASSERT(strcmp(hdr, "quux") == 0);
 
-    /* Ignore whitespace */
-    recs[0].len = strlen("  Foo  :  quux");
-    strcpy(c[0].data, "  Foo  :  quux");
-    hdr = get_hdr(&tx, 0, "Foo:");
+    /* Ignore whitespace  */
+    recs[NRECORDS / 2].len = strlen("  Foo  :  quux");
+    strcpy(c[NRECORDS / 2].data, "  Foo  :  quux");
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAN(hdr);
     MASSERT(strcmp(hdr, "quux") == 0);
 
-    /* Multiple headers in tx */
-    recs[0].len = strlen("Foo: h0");
-    strcpy(c[0].data, "Foo: h0");
-    recs[1].len = strlen("Bar: h1");
-    strcpy(c[1].data, "Bar: h1");
-    tx.recs[0]->hdrs[0] = &recs[1];
-    recs[2].len = strlen("Baz: h2");
-    strcpy(c[2].data, "Baz: h2");
-    tx.recs[0]->hdrs[1] = &recs[2];
-    recs[3].len = strlen("Garply: h3");
-    strcpy(c[3].data, "Garply: h3");
-    tx.recs[0]->hdrs[3] = &recs[3];
-    recs[4].len = strlen("Xyzzy: h4");
-    strcpy(c[4].data, "Xyzzy: h4");
-    tx.recs[0]->hdrs[4] = &recs[4];
+    /* Different headers after the matching header */
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Bar");
+    MAN(hdr);
+    MASSERT(strcmp(hdr, "baz") == 0);
 
-    hdr = get_hdr(&tx, 0, "Foo:");
-    MAN(hdr);
-    MASSERT(strcmp(hdr, "h0") == 0);
-    hdr = get_hdr(&tx, 0, "Bar:");
-    MAN(hdr);
-    MASSERT(strcmp(hdr, "h1") == 0);
-    hdr = get_hdr(&tx, 0, "Baz:");
-    MAN(hdr);
-    MASSERT(strcmp(hdr, "h2") == 0);
-    hdr = get_hdr(&tx, 0, "Garply:");
-    MAN(hdr);
-    MASSERT(strcmp(hdr, "h3") == 0);
-    hdr = get_hdr(&tx, 0, "Xyzzy:");
-    MAN(hdr);
-    MASSERT(strcmp(hdr, "h4") == 0);
-
-    /* Header spans more than one chunk */
-    memset(c[4].data + strlen("Xyzzy: "), 'x',
-           config.chunk_size - strlen("Xyzzy: "));
+    /* Different headers spanning more than one chunk after the matching
+     * header */
+    c1 = (chunk_t *) calloc(1, sizeof(chunk_t));
+    MAN(c1);
+    c1->magic = CHUNK_MAGIC;
+    c1->data = (char *) calloc(1, config.chunk_size);
+    MAN(c1->data);
+    c1->occupied = 1;
+    VSTAILQ_INSERT_TAIL(&recs[NRECORDS - 2].chunks, c1, chunklist);
+    recs[NRECORDS - 2].len = config.chunk_size * 2;
+    strcpy(c[NRECORDS - 2].data, "Garply: ");
+    memset(c[NRECORDS - 2].data + strlen("Garply : ") - 1, 'x',
+           config.chunk_size - strlen("Garply: "));
+    memset(c1->data, 'x', config.chunk_size);
     c2 = (chunk_t *) calloc(1, sizeof(chunk_t));
     MAN(c2);
     c2->magic = CHUNK_MAGIC;
     c2->data = (char *) calloc(1, config.chunk_size);
     MAN(c2->data);
-    memset(c2->data, 'x', config.chunk_size);
     c2->occupied = 1;
-    VSTAILQ_INSERT_TAIL(&recs[4].chunks, c2, chunklist);
-    recs[4].len = config.chunk_size * 2;
-    hdr = get_hdr(&tx, 0, "Xyzzy:");
+    VSTAILQ_INSERT_TAIL(&recs[NRECORDS - 1].chunks, c2, chunklist);
+    recs[NRECORDS - 1].len = config.chunk_size * 2;
+    strcpy(c[NRECORDS - 1].data, "Xyzzy: ");
+    memset(c[NRECORDS - 1].data + strlen("Xyzzy : ") - 1, 'y',
+           config.chunk_size - strlen("Xyzzy: "));
+    memset(c2->data, 'y', config.chunk_size);
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Garply");
     MAN(hdr);
-    int len = 2 * config.chunk_size - strlen("Xyzzy: ");
+    int len = 2 * config.chunk_size - strlen("Garply: ");
     exp = (char *) malloc(len);
     MAN(exp);
     memset(exp, 'x', len);
     MASSERT(memcmp(hdr, exp, len) == 0);
 
-    /* tag not in tx */
-    hdr = get_hdr(&tx, 1, "Foo");
+    /* Record not found */
+    recs[NRECORDS / 2].tag = SLT_RespHeader;
+    recs[NRECORDS - 1].tag = SLT_RespHeader;
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAZ(hdr);
 
-    /* header not in tx */
-    node[0].hdrs[4] = NULL;
-    hdr = get_hdr(&tx, 0, "Xyzzy");
+    /* Empty line list */
+    VSTAILQ_INIT(&tx.recs);
+    hdr = get_hdr(&tx, SLT_ReqHeader, "Foo");
     MAZ(hdr);
 
     return NULL;
-#undef MAX_IDX
 }
 
 static const char
@@ -571,312 +408,266 @@ static const char
 }
 
 static const char
-*test_format_b(void)
-{
-#define NTAGS 2
-    tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec1, rec2;
-    chunk_t c1, c2;
-    arg_t args;
-    char *str;
-    size_t len;
-
-    printf("... testing format_b_*()\n");
-
-    reset_tag2idx(NTAGS, SLT_ReqAcct, SLT_BereqAcct);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
-
-#define REQACCT_PAYLOAD "60 0 60 178 105 283"
-    add_record_data(&tx, SLT_ReqAcct, &rec1, &c1, REQACCT_PAYLOAD);
-    add_record_data(&tx, SLT_BereqAcct, &rec2, &c2, REQACCT_PAYLOAD);
-
-    format_b_client(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "105", 3) == 0);
-    MASSERT(len == 3);
-
-    format_b_backend(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "105", 3) == 0);
-    MASSERT(len == 3);
-
-    return NULL;
-#undef NTAGS
-}
-
-static const char
-*test_format_D(void)
-{
-#define NTAGS 1
-    tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t r1, r2;
-    chunk_t c1, c2;
-    arg_t args;
-    char *str;
-    size_t len;
-
-    printf("... testing format_D_*()\n");
-
-    reset_tag2idx(NTAGS, SLT_Timestamp);
-    MASSERT(max_idx == NTAGS - 1);
-    reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "BerespBody", "Resp");
-
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_Timestamp);
-
-#define TS_RESP_PAYLOAD "Resp: 1427799478.166798 0.015963 0.000125"
-    init_rec_chunk(SLT_Timestamp, &r1, &c1);
-    set_record_data(&r1, &c1, TS_RESP_PAYLOAD, SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 1, &r1);
-    format_D_client(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "15963", 5) == 0);
-    MASSERT(len == 5);
-
-#define TS_BERESP_PAYLOAD "BerespBody: 1427799478.166678 0.015703 0.000282"
-    init_rec_chunk(SLT_Timestamp, &r2, &c2);
-    set_record_data(&r2, &c2, TS_BERESP_PAYLOAD, SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 0, &r2);
-    format_D_backend(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "15703", 5) == 0);
-    MASSERT(len == 5);
-
-    return NULL;
-#undef NTAGS
-}
-
-static const char
 *test_format_H(void)
 {
-#define NTAGS 2
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec1, rec2;
-    chunk_t c1, c2;
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len, explen;
 
     printf("... testing format_H_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqProtocol, SLT_BereqProtocol);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define PROTOCOL_PAYLOAD "HTTP/1.1"
-    add_record_data(&tx, SLT_ReqProtocol, &rec1, &c1, PROTOCOL_PAYLOAD);
-    add_record_data(&tx, SLT_BereqProtocol, &rec2, &c2, PROTOCOL_PAYLOAD);
-
+    set_record_data(&rec, &chunk, PROTOCOL_PAYLOAD, SLT_ReqProtocol);
     format_H_client(&tx, &args, &str, &len);
     explen = strlen(PROTOCOL_PAYLOAD);
     MASSERT(strncmp(str, PROTOCOL_PAYLOAD, explen) == 0);
     MASSERT(len == explen);
 
+    rec.tag = SLT_BereqProtocol;
     format_H_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, PROTOCOL_PAYLOAD, explen) == 0);
     MASSERT(len == explen);
 
     return NULL;
-#undef NTAGS
+}
+
+static const char
+*test_format_b(void)
+{
+    tx_t tx;
+    rec_t rec;
+    chunk_t chunk;
+    arg_t args;
+    char *str;
+    size_t len;
+
+    printf("... testing format_b_*()\n");
+
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
+
+#define REQACCT_PAYLOAD "60 0 60 178 105 283"
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
+    format_b_client(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "105", 3) == 0);
+    MASSERT(len == 3);
+
+    rec.tag = SLT_BereqAcct;
+    format_b_backend(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "105", 3) == 0);
+    MASSERT(len == 3);
+
+    return NULL;
+}
+
+static const char
+*test_format_D(void)
+{
+    tx_t tx;
+    rec_t rec;
+    chunk_t chunk;
+    arg_t args;
+    char *str;
+    size_t len;
+
+    printf("... testing format_D_*()\n");
+
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
+
+#define TS_RESP_PAYLOAD "Resp: 1427799478.166798 0.015963 0.000125"
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    format_D_client(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "15963", 5) == 0);
+    MASSERT(len == 5);
+
+#define TS_BERESP_PAYLOAD "BerespBody: 1427799478.166678 0.015703 0.000282"
+    set_record_data(&rec, &chunk, TS_BERESP_PAYLOAD, SLT_Timestamp);
+    format_D_backend(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "15703", 5) == 0);
+    MASSERT(len == 5);
+
+    return NULL;
 }
 
 static const char
 *test_format_h(void)
 {
-#define NTAGS 2
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec1, rec2;
-    chunk_t c1, c2;
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_h_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqStart, SLT_Backend);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define REQSTART_PAYLOAD "127.0.0.1 33544"
-    add_record_data(&tx, SLT_ReqStart, &rec1, &c1, REQSTART_PAYLOAD);
+    set_record_data(&rec, &chunk, REQSTART_PAYLOAD, SLT_ReqStart);
     format_h_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "127.0.0.1", 9) == 0);
     MASSERT(len == 9);
 
 #define BACKEND_PAYLOAD "14 default default(127.0.0.1,,80)"
-    add_record_data(&tx, SLT_Backend, &rec2, &c2, BACKEND_PAYLOAD);
+    set_record_data(&rec, &chunk, BACKEND_PAYLOAD, SLT_Backend);
     format_h_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "default(127.0.0.1,,80)", 22) == 0);
     MASSERT(len == 22);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_I(void)
 {
-#define NTAGS 3
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec[2];
-    chunk_t c[2];
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_I_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqAcct, SLT_BereqAcct, SLT_PipeAcct);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
-    add_record_data(&tx, SLT_ReqAcct, &rec[0], &c[0], REQACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
     format_I_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "60", 2) == 0);
     MASSERT(len == 2);
 
-    add_record_data(&tx, SLT_BereqAcct, &rec[1], &c[1], REQACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_BereqAcct);
     format_I_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "283", 3) == 0);
     MASSERT(len == 3);
 
 #define PIPEACCT_PAYLOAD "60 60 178 105"
-    clear_rec(&tx, SLT_ReqAcct);
-    add_record_data(&tx, SLT_PipeAcct, &rec[0], &c[0], PIPEACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, PIPEACCT_PAYLOAD, SLT_PipeAcct);
     format_I_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "178", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_m(void)
 {
-#define NTAGS 2
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec[NTAGS];
-    chunk_t c[NTAGS];
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_m_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqMethod, SLT_BereqMethod);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define REQMETHOD_PAYLOAD "GET"
-    add_record_data(&tx, SLT_ReqMethod, &rec[0], &c[0], REQMETHOD_PAYLOAD);
+    set_record_data(&rec, &chunk, REQMETHOD_PAYLOAD, SLT_ReqMethod);
     format_m_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET", 3) == 0);
     MASSERT(len == 3);
 
-    add_record_data(&tx, SLT_BereqMethod, &rec[1], &c[1], REQMETHOD_PAYLOAD);
+    rec.tag = SLT_BereqMethod;
     format_m_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_O(void)
 {
-#define NTAGS 3
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec[2];
-    chunk_t c[2];
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_O_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqAcct, SLT_BereqAcct, SLT_PipeAcct);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
-    add_record_data(&tx, SLT_ReqAcct, &rec[0], &c[0], REQACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, REQACCT_PAYLOAD, SLT_ReqAcct);
     format_O_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "283", 3) == 0);
     MASSERT(len == 3);
 
-    add_record_data(&tx, SLT_BereqAcct, &rec[1], &c[1], REQACCT_PAYLOAD);
+    rec.tag = SLT_BereqAcct;
     format_O_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "60", 2) == 0);
     MASSERT(len == 2);
 
-    clear_rec(&tx, SLT_ReqAcct);
-    add_record_data(&tx, SLT_PipeAcct, &rec[0], &c[0], PIPEACCT_PAYLOAD);
+    set_record_data(&rec, &chunk, PIPEACCT_PAYLOAD, SLT_PipeAcct);
     format_O_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "105", 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_q(void)
 {
-#define NTAGS 2
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec[NTAGS];
-    chunk_t c[NTAGS];
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_q_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqURL, SLT_BereqURL);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define URL_QUERY_PAYLOAD "/foo?bar=baz&quux=wilco"
-    add_record_data(&tx, SLT_ReqURL, &rec[0], &c[0], URL_QUERY_PAYLOAD);
+    set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_ReqURL);
     format_q_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "bar=baz&quux=wilco", 18) == 0);
     MASSERT(len == 18);
 
-    add_record_data(&tx, SLT_BereqURL, &rec[1], &c[1], URL_QUERY_PAYLOAD);
+    rec.tag = SLT_BereqURL;
     format_q_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "bar=baz&quux=wilco", 18) == 0);
     MASSERT(len == 18);
 
 #define URL_PAYLOAD "/foo"
-    set_record_data(&rec[0], &c[0], URL_PAYLOAD, SLT_ReqURL);
+    set_record_data(&rec, &chunk, URL_PAYLOAD, SLT_ReqURL);
     str = NULL;
     len = 0;
     format_q_client(&tx, &args, &str, &len);
     MAZ(str);
     MAZ(len);
 
-    set_record_data(&rec[1], &c[1], URL_PAYLOAD, SLT_BereqURL);
+    rec.tag = SLT_BereqURL;
     format_q_backend(&tx, &args, &str, &len);
     MAZ(str);
     MAZ(len);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_r(void)
 {
-#define NTAGS 8
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
     rec_t rec_method, rec_host, rec_url, rec_proto;
     chunk_t chunk_method, chunk_host, chunk_url, chunk_proto;
     arg_t args;
@@ -885,45 +676,35 @@ static const char
 
     printf("... testing format_r_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqMethod, SLT_ReqHeader, SLT_ReqURL,
-                  SLT_ReqProtocol, SLT_BereqMethod, SLT_BereqHeader,
-                  SLT_BereqURL, SLT_BereqProtocol);
-    MASSERT(max_idx == NTAGS - 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_ReqHeader, "Host");
-    add_hdr_include(1, SLT_BereqHeader, "Host");
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_ReqHeader);
-    init_hdr_recs(&tx, SLT_BereqHeader);
+    init_tx_rec_chunk_arg(&tx, &rec_method, &chunk_method, &args);
+    MAN(chunk_method.data);
+    add_rec_chunk(&tx, &rec_host, &chunk_host);
+    MAN(chunk_host.data);
+    add_rec_chunk(&tx, &rec_url, &chunk_url);
+    MAN(chunk_url.data);
+    add_rec_chunk(&tx, &rec_proto, &chunk_proto);
+    MAN(chunk_proto.data);
 
-    add_record_data(&tx, SLT_ReqMethod, &rec_method, &chunk_method, "GET");
-    init_rec_chunk(SLT_ReqHeader, &rec_host, &chunk_host);
+    set_record_data(&rec_method, &chunk_method, "GET", SLT_ReqMethod);
     set_record_data(&rec_host, &chunk_host, "Host: www.foobar.com",
                     SLT_ReqHeader);
-    set_hdr_rec(&tx, SLT_ReqHeader, 0, &rec_host);
-    add_record_data(&tx, SLT_ReqURL, &rec_url, &chunk_url, URL_PAYLOAD);
-    add_record_data(&tx, SLT_ReqProtocol, &rec_proto, &chunk_proto,
-                    PROTOCOL_PAYLOAD);
+    set_record_data(&rec_url, &chunk_url, URL_PAYLOAD, SLT_ReqURL);
+    set_record_data(&rec_proto, &chunk_proto, PROTOCOL_PAYLOAD,
+                    SLT_ReqProtocol);
     format_r_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.1", 38) == 0);
     MASSERT(len == 38);
 
-    set_record_data(&rec_method, &chunk_method, "GET", SLT_BereqMethod);
-    set_rec(&tx, SLT_BereqMethod, &rec_method);
-    set_record_data(&rec_host, &chunk_host, "Host: www.foobar.com",
-                    SLT_BereqHeader);
-    set_hdr_rec(&tx, SLT_BereqHeader, 0, &rec_host);
-    set_record_data(&rec_url, &chunk_url, URL_PAYLOAD, SLT_BereqURL);
-    set_rec(&tx, SLT_BereqURL, &rec_url);
-    set_record_data(&rec_proto, &chunk_proto, PROTOCOL_PAYLOAD,
-                    SLT_BereqProtocol);
-    set_rec(&tx, SLT_BereqProtocol, &rec_proto);
+    rec_method.tag = SLT_BereqMethod;
+    rec_host.tag = SLT_BereqHeader;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.1", 38) == 0);
     MASSERT(len == 38);
 
     /* No method record */
-    clear_rec(&tx, SLT_ReqMethod);
+    rec_method.tag = SLT__Bogus;
     rec_host.tag = SLT_ReqHeader;
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
@@ -931,7 +712,6 @@ static const char
     MASSERT(strncmp(str, "- http://www.foobar.com/foo HTTP/1.1", 36) == 0);
     MASSERT(len == 36);
 
-    clear_rec(&tx, SLT_BereqMethod);
     rec_host.tag = SLT_BereqHeader;
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
@@ -940,37 +720,50 @@ static const char
     MASSERT(len == 36);
 
     /* No host header */
-    set_rec(&tx, SLT_ReqMethod, &rec_method);
     rec_method.tag = SLT_ReqMethod;
-    clear_hdr(&tx, SLT_ReqHeader, 0);
+    set_record_data(&rec_host, &chunk_host, "Foo: bar", SLT_ReqHeader);
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
     format_r_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
-    set_rec(&tx, SLT_BereqMethod, &rec_method);
     rec_method.tag = SLT_BereqMethod;
-    clear_hdr(&tx, SLT_BereqHeader, 0);
+    rec_host.tag = SLT_BereqHeader;
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
-    /* No URL record */
+    /* No header record */
     rec_method.tag = SLT_ReqMethod;
-    clear_rec(&tx, SLT_ReqURL);
-    set_hdr_rec(&tx, SLT_ReqHeader, 0, &rec_host);
-    rec_host.tag = SLT_ReqHeader;
+    rec_host.tag = SLT__Bogus;
+    rec_url.tag = SLT_ReqURL;
+    rec_proto.tag = SLT_ReqProtocol;
+    format_r_client(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
+    MASSERT(len == 33);
+
+    rec_method.tag = SLT_BereqMethod;
+    rec_url.tag = SLT_BereqURL;
+    rec_proto.tag = SLT_BereqProtocol;
+    format_r_backend(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
+    MASSERT(len == 33);
+
+    /* URL record empty */
+    set_record_data(&rec_host, &chunk_host, "Host: www.foobar.com",
+                    SLT_ReqHeader);
+    rec_method.tag = SLT_ReqMethod;
+    rec_url.tag = SLT_ReqURL;
+    rec_url.len = 0;
     rec_proto.tag = SLT_ReqProtocol;
     format_r_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com- HTTP/1.1", 35) == 0);
     MASSERT(len == 35);
 
     rec_method.tag = SLT_BereqMethod;
-    clear_rec(&tx, SLT_BereqURL);
-    set_hdr_rec(&tx, SLT_BereqHeader, 0, &rec_host);
     rec_host.tag = SLT_BereqHeader;
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
@@ -981,65 +774,58 @@ static const char
     /* Proto record empty */
     rec_method.tag = SLT_ReqMethod;
     rec_host.tag = SLT_ReqHeader;
-    set_rec(&tx, SLT_ReqURL, &rec_url);
     rec_url.tag = SLT_ReqURL;
-    clear_rec(&tx, SLT_ReqProtocol);
+    rec_url.len = strlen(URL_PAYLOAD);
+    rec_proto.tag = SLT_ReqProtocol;
+    rec_proto.len = 0;
     format_r_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
     MASSERT(len == 38);
 
     rec_method.tag = SLT_BereqMethod;
     rec_host.tag = SLT_BereqHeader;
-    set_rec(&tx, SLT_BereqURL, &rec_url);
     rec_url.tag = SLT_BereqURL;
-    clear_rec(&tx, SLT_BereqProtocol);
+    rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
     MASSERT(len == 38);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_s(void)
 {
-#define NTAGS 2
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec[NTAGS];
-    chunk_t c[NTAGS];
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_s_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_RespStatus, SLT_BerespStatus);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define STATUS_PAYLOAD "200"
-    add_record_data(&tx, SLT_RespStatus, &rec[0], &c[0], STATUS_PAYLOAD);
+    set_record_data(&rec, &chunk, STATUS_PAYLOAD, SLT_RespStatus);
     format_s_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, STATUS_PAYLOAD, 3) == 0);
     MASSERT(len == 3);
 
-    add_record_data(&tx, SLT_BerespStatus, &rec[1], &c[1], STATUS_PAYLOAD);
+    rec.tag = SLT_BerespStatus;
     format_s_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, STATUS_PAYLOAD, 3) == 0);
     MASSERT(len == 3);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_t(void)
 {
-#define NTAGS 1
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
     rec_t rec;
     chunk_t chunk;
     arg_t args;
@@ -1050,18 +836,11 @@ static const char
 
     printf("... testing format_t()\n");
 
-    reset_tag2idx(NTAGS, SLT_Timestamp);
-    MASSERT(max_idx == NTAGS - 1);
-    reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "Start");
-
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_Timestamp);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define T1 "Start: 1427743146.529143 0.000000 0.000000"
-    init_rec_chunk(SLT_Timestamp, &rec, &chunk);
     set_record_data(&rec, &chunk, T1, SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 0, &rec);
     tm = localtime(&t);
     MAN(strftime(strftime_s, config.max_reclen, fmt, tm));
     format_t(&tx, &args, &str, &len);
@@ -1072,138 +851,118 @@ static const char
     MASSERT(len == explen);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_T(void)
 {
-#define NTAGS 1
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t r1, r2;
-    chunk_t c1, c2;
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_T_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_Timestamp);
-    MASSERT(max_idx == NTAGS - 1);
-    reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "BerespBody", "Resp");
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_Timestamp);
-
-    init_rec_chunk(SLT_Timestamp, &r1, &c1);
-    set_record_data(&r1, &c1, TS_RESP_PAYLOAD, SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 1, &r1);
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
     format_T_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0", 1) == 0);
     MASSERT(len == 1);
 
-    init_rec_chunk(SLT_Timestamp, &r2, &c2);
-    set_record_data(&r2, &c2, TS_BERESP_PAYLOAD, SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 0, &r2);
+    set_record_data(&rec, &chunk, TS_BERESP_PAYLOAD, SLT_Timestamp);
     format_T_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0", 1) == 0);
     MASSERT(len == 1);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_U(void)
 {
-#define NTAGS 2
     tx_t tx;
-    rec_node_t node[NTAGS], *nptr[NTAGS];
-    rec_t rec[NTAGS];
-    chunk_t c[NTAGS];
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_U_*()\n");
 
-    reset_tag2idx(NTAGS, SLT_ReqURL, SLT_BereqURL);
-    MASSERT(max_idx == NTAGS - 1);
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
-    /* With query string */
-    add_record_data(&tx, SLT_ReqURL, &rec[0], &c[0], URL_QUERY_PAYLOAD);
+    set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_ReqURL);
     format_U_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
-    add_record_data(&tx, SLT_BereqURL, &rec[1], &c[1], URL_QUERY_PAYLOAD);
+    set_record_data(&rec, &chunk, URL_QUERY_PAYLOAD, SLT_BereqURL);
     format_U_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
-    /* Without query string */
-    set_record_data(&rec[0], &c[0], URL_PAYLOAD, SLT_ReqURL);
+    set_record_data(&rec, &chunk, URL_PAYLOAD, SLT_ReqURL);
     format_U_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
-    set_record_data(&rec[1], &c[1], URL_PAYLOAD, SLT_BereqURL);
+    rec.tag = SLT_BereqURL;
     format_U_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "/foo", 4) == 0);
     MASSERT(len == 4);
 
     return NULL;
-#undef NTAGS
 }
 
 static const char
 *test_format_u(void)
 {
     tx_t tx;
-    rec_node_t node[2], *nptr[2];
-    rec_t rec_req, rec_bereq;
-    chunk_t chunk_req, chunk_bereq;
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_u_*()\n");
 
-    reset_tag2idx(2, SLT_ReqHeader, SLT_BereqHeader);
-    MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_ReqHeader, "Authorization");
-    add_hdr_include(1, SLT_BereqHeader, "Authorization");
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_ReqHeader);
-    init_hdr_recs(&tx, SLT_BereqHeader);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define BASIC_AUTH_PAYLOAD "Authorization: Basic dmFybmlzaDo0ZXZlcg=="
-    init_rec_chunk(SLT_ReqHeader, &rec_req, &chunk_req);
-    set_record_data(&rec_req, &chunk_req, BASIC_AUTH_PAYLOAD, SLT_ReqHeader);
-    set_hdr_rec(&tx, SLT_ReqHeader, 0, &rec_req);
+    set_record_data(&rec, &chunk, BASIC_AUTH_PAYLOAD, SLT_ReqHeader);
     format_u_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "varnish", 7) == 0);
     MASSERT(len == 7);
 
-    init_rec_chunk(SLT_BereqHeader, &rec_bereq, &chunk_bereq);
-    set_record_data(&rec_bereq, &chunk_bereq, BASIC_AUTH_PAYLOAD,
-                    SLT_BereqHeader);
-    set_hdr_rec(&tx, SLT_BereqHeader, 0, &rec_bereq);
+    rec.tag = SLT_BereqHeader;
     format_u_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "varnish", 7) == 0);
     MASSERT(len == 7);
 
     /* No header record */
-    clear_hdr(&tx, SLT_ReqHeader, 0);
+    rec.tag = SLT__Bogus;
     format_u_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
-    clear_hdr(&tx, SLT_BereqHeader, 0);
+    format_u_backend(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "-", 1) == 0);
+    MASSERT(len == 1);
+
+    /* No auth header */
+    rec.tag = SLT_ReqHeader;
+    rec.len = 0;
+    format_u_client(&tx, &args, &str, &len);
+    MASSERT(strncmp(str, "-", 1) == 0);
+    MASSERT(len == 1);
+
+    rec.tag = SLT_BereqHeader;
     format_u_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
@@ -1213,15 +972,12 @@ static const char
      * that we can test with only one chunk.
      */
 #define DIGEST_AUTH_PAYLOAD "Authorization: Digest username=\"Mufasa\", realm=\"realm@host.com\""
-    set_record_data(&rec_req, &chunk_req, DIGEST_AUTH_PAYLOAD, SLT_ReqHeader);
-    set_hdr_rec(&tx, SLT_ReqHeader, 0, &rec_req);
+    set_record_data(&rec, &chunk, DIGEST_AUTH_PAYLOAD, SLT_ReqHeader);
     format_u_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
 
-    set_record_data(&rec_bereq, &chunk_bereq, DIGEST_AUTH_PAYLOAD,
-                    SLT_BereqHeader);
-    set_hdr_rec(&tx, SLT_BereqHeader, 0, &rec_bereq);
+    rec.tag = SLT_BereqHeader;
     format_u_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "-", 1) == 0);
     MASSERT(len == 1);
@@ -1233,38 +989,25 @@ static const char
 *test_format_Xi(void)
 {
     tx_t tx;
-    rec_node_t node[2], *nptr[2];
-    rec_t rec_req, rec_bereq;
-    chunk_t chunk_req, chunk_bereq;
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
-    char *str, hdr[] = "Foo:";
+    char *str, hdr[] = "Foo";
     size_t len;
 
     printf("... testing format_Xi_*()\n");
 
-    reset_tag2idx(2, SLT_ReqHeader, SLT_BereqHeader);
-    MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_ReqHeader, "Foo");
-    add_hdr_include(1, SLT_BereqHeader, "Foo");
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_ReqHeader);
-    init_hdr_recs(&tx, SLT_BereqHeader);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
     args.name = hdr;
 
-    init_rec_chunk(SLT_ReqHeader, &rec_req, &chunk_req);
-    set_record_data(&rec_req, &chunk_req, "Foo: bar", SLT_ReqHeader);
-    set_hdr_rec(&tx, SLT_ReqHeader, 0, &rec_req);
+    set_record_data(&rec, &chunk, "Foo: bar", SLT_ReqHeader);
     format_Xi_client(&tx, &args, &str, &len);
-    MAN(str);
     MASSERT(strncmp(str, "bar", 3) == 0);
     MASSERT(len == 3);
 
-    init_rec_chunk(SLT_BereqHeader, &rec_bereq, &chunk_bereq);
-    set_record_data(&rec_bereq, &chunk_bereq, "Foo: bar", SLT_BereqHeader);
-    set_hdr_rec(&tx, SLT_BereqHeader, 0, &rec_bereq);
+    rec.tag = SLT_BereqHeader;
     format_Xi_backend(&tx, &args, &str, &len);
-    MAN(str);
     MASSERT(strncmp(str, "bar", 3) == 0);
     MASSERT(len == 3);
 
@@ -1275,38 +1018,25 @@ static const char
 *test_format_Xo(void)
 {
     tx_t tx;
-    rec_node_t node[2], *nptr[2];
-    rec_t rec_resp, rec_beresp;
-    chunk_t chunk_resp, chunk_beresp;
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
-    char *str, hdr[] = "Baz:";
+    char *str, hdr[] = "Baz";
     size_t len;
 
     printf("... testing format_Xo_*()\n");
 
-    reset_tag2idx(2, SLT_RespHeader, SLT_BerespHeader);
-    MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_RespHeader, "Baz");
-    add_hdr_include(1, SLT_BerespHeader, "Baz");
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_RespHeader);
-    init_hdr_recs(&tx, SLT_BerespHeader);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
     args.name = hdr;
 
-    init_rec_chunk(SLT_RespHeader, &rec_resp, &chunk_resp);
-    set_record_data(&rec_resp, &chunk_resp, "Baz: quux", SLT_RespHeader);
-    set_hdr_rec(&tx, SLT_RespHeader, 0, &rec_resp);
+    set_record_data(&rec, &chunk, "Baz: quux", SLT_RespHeader);
     format_Xo_client(&tx, &args, &str, &len);
-    MAN(str);
     MASSERT(strncmp(str, "quux", 4) == 0);
     MASSERT(len == 4);
 
-    init_rec_chunk(SLT_BerespHeader, &rec_beresp, &chunk_beresp);
-    set_record_data(&rec_beresp, &chunk_beresp, "Baz: quux", SLT_BerespHeader);
-    set_hdr_rec(&tx, SLT_BerespHeader, 0, &rec_beresp);
+    rec.tag = SLT_BerespHeader;
     format_Xo_backend(&tx, &args, &str, &len);
-    MAN(str);
     MASSERT(strncmp(str, "quux", 4) == 0);
     MASSERT(len == 4);
 
@@ -1317,7 +1047,6 @@ static const char
 *test_format_Xt(void)
 {
     tx_t tx;
-    rec_node_t node[1], *nptr[1];
     rec_t rec;
     chunk_t chunk;
     arg_t args;
@@ -1335,16 +1064,10 @@ static const char
 
     printf("... testing format_Xt()\n");
 
-    reset_tag2idx(1, SLT_Timestamp);
-    MASSERT(max_idx == 0);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_Timestamp, "Start:");
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_Timestamp);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
-    init_rec_chunk(SLT_Timestamp, &rec, &chunk);
     set_record_data(&rec, &chunk, T1, SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 0, &rec);
     tm = localtime(&t);
     MAN(strftime(strftime_s, config.max_reclen, fmt, tm));
     explen = strlen(strftime_s);
@@ -1369,7 +1092,7 @@ static const char
     args.name = subs;
     format_Xt(&tx, &args, &str, &len);
     MAN(str);
-    /* us accuracy ... */
+    /* ms accuracy ... */
     VMASSERT(strncmp(str, "529143", 6) == 0, "'%s' != '529143'", str);
     MASSERT(len == 6);
 
@@ -1380,35 +1103,25 @@ static const char
 *test_format_Xttfb(void)
 {
     tx_t tx;
-    rec_node_t node[2], *nptr[2];
-    rec_t rec_req, rec_bereq;
-    chunk_t chunk_req, chunk_bereq;
+    rec_t rec;
+    chunk_t chunk;
     arg_t args;
     char *str;
     size_t len;
 
     printf("... testing format_Xttfb_*()\n");
 
-    reset_tag2idx(1, SLT_Timestamp);
-    MASSERT(max_idx == 0);
-    reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "Beresp:", "Process:");
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_Timestamp);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
 
 #define TS_PROCESS_PAYLOAD "Process: 1427979230.712416 0.000166 0.000166"
-    init_rec_chunk(SLT_Timestamp, &rec_req, &chunk_req);
-    set_record_data(&rec_req, &chunk_req, TS_PROCESS_PAYLOAD, SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 1, &rec_req);
+    set_record_data(&rec, &chunk, TS_PROCESS_PAYLOAD, SLT_Timestamp);
     format_Xttfb_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0.000166", 8) == 0);
     MASSERT(len == 8);
 
 #define TS_BERESP_HDR_PAYLOAD "Beresp: 1427979243.588828 0.002837 0.002743"
-    init_rec_chunk(SLT_Timestamp, &rec_bereq, &chunk_bereq);
-    set_record_data(&rec_bereq, &chunk_bereq, TS_BERESP_HDR_PAYLOAD,
-                    SLT_Timestamp);
-    set_hdr_rec(&tx, SLT_Timestamp, 0, &rec_bereq);
+    set_record_data(&rec, &chunk, TS_BERESP_HDR_PAYLOAD, SLT_Timestamp);
     format_Xttfb_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0.002837", 8) == 0);
     MASSERT(len == 8);
@@ -1416,7 +1129,6 @@ static const char
     return NULL;
 }
 
-#if 0
 static const char
 *test_format_VCL_disp(void)
 {
@@ -1538,40 +1250,38 @@ static const char
 
     return NULL;
 }
-#endif
 
 static const char
 *test_format_VCL_Log(void)
 {
     tx_t tx;
-    rec_node_t node[1], *nptr[1];
     rec_t rec;
     chunk_t chunk;
     arg_t args;
-    char *str, hdr[] = "foo:";
+    char *str, hdr[] = "foo";
     size_t len;
 
     printf("... testing format_VCL_Log()\n");
 
-    reset_tag2idx(1, SLT_VCL_Log);
-    MASSERT(max_idx == 0);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_VCL_Log, "foo:");
-    init_tx_arg(&tx, node, nptr, &args);
-    init_hdr_recs(&tx, SLT_VCL_Log);
+    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
+    MAN(chunk.data);
     args.name = hdr;
 
-    init_rec_chunk(SLT_VCL_Log, &rec, &chunk);
     set_record_data(&rec, &chunk, "foo: bar", SLT_VCL_Log);
-    set_hdr_rec(&tx, SLT_VCL_Log, 0, &rec);
     format_VCL_Log(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "bar", 3) == 0);
     MASSERT(len == 3);
 
     /* No match */
-    clear_hdr(&tx, SLT_VCL_Log, 0);
     str = NULL;
     len = 0;
+    set_record_data(&rec, &chunk, "baz: quux", SLT_VCL_Log);
+    format_VCL_Log(&tx, &args, &str, &len);
+    MAZ(str);
+    MAZ(len);
+
+    /* No VCL_Log record */
+    set_record_data(&rec, &chunk, "foo: bar", SLT_BereqHeader);
     format_VCL_Log(&tx, &args, &str, &len);
     MAZ(str);
     MAZ(len);
@@ -1579,7 +1289,6 @@ static const char
     return NULL;
 }
 
-#if 0
 static const char
 *test_format_SLT(void)
 {
@@ -2023,7 +1732,6 @@ static const char
 
     return NULL;
 }
-#endif
 
 static const char
 *all_tests(void)
@@ -2052,16 +1760,12 @@ static const char
     mu_run_test(test_format_Xo);
     mu_run_test(test_format_Xt);
     mu_run_test(test_format_Xttfb);
-#if 0
     mu_run_test(test_format_VCL_disp);
-#endif
     mu_run_test(test_format_VCL_Log);
-#if 0
     mu_run_test(test_format_SLT);
     mu_run_test(test_format_p_vxid);
     mu_run_test(test_FMT_Fini);
     mu_run_test(test_FMT_interface);
-#endif
 
     return NULL;
 }

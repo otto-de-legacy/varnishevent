@@ -53,28 +53,28 @@ typedef struct compiled_fmt_t {
 } compiled_fmt_t;
 
 static struct vsb payload_storage, * const payload = &payload_storage,
-    *scratch;
+    *i_arg,  *scratch, hdr_storage, * const hdr_sb = &hdr_storage;
 
 static char empty[] = "";
-#if 0
 static char hit[] = "hit";
 static char miss[] = "miss";
 static char pass[] = "pass";
 static char pipe[] = "pipe";
 static char error[] = "error";
-#endif
 static char dash[] = "-";
 static char buf[BUFSIZ];
 
-typedef struct inc_t {
+typedef struct include_t {
     char *hdr;
-    VSTAILQ_ENTRY(inc_t) inclist;
-} inc_t;
+    VSTAILQ_ENTRY(include_t) inclist;
+} include_t;
 
-typedef VSTAILQ_HEAD(includehead_s, inc_t) includehead_t;
+typedef VSTAILQ_HEAD(includehead_s, include_t) includehead_t;
 
 static compiled_fmt_t cformat, bformat, rformat;
 static includehead_t cincl[MAX_VSL_TAG], bincl[MAX_VSL_TAG], rincl[MAX_VSL_TAG];
+static unsigned includes, include_rx;
+static char **incl_arg = NULL;
 
 char *
 get_payload(const rec_t *rec)
@@ -114,21 +114,16 @@ get_payload(const rec_t *rec)
 rec_t *
 get_tag(const tx_t *tx, enum VSL_tag_e tag)
 {
-    int idx;
     rec_t *rec;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    idx = tag2idx[tag];
-    if (idx == -1)
-        return NULL;
-    assert(idx <= max_idx);
-    rec = tx->recs[idx]->rec;
-    if (rec == NULL)
-        return NULL;
-    CHECK_OBJ(rec, RECORD_MAGIC);
-    assert(OCCUPIED(rec));
-    assert(rec->tag == tag);
-    return rec;
+    VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
+        CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
+        assert(OCCUPIED(rec));
+        if (rec->tag == tag)
+            return rec;
+    }
+    return NULL;
 }
 
 /*
@@ -139,33 +134,30 @@ char *
 get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr)
 {
     rec_t *rec;
-    int idx, hdr_idx;
-    char *c;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    idx = tag2idx[tag];
-    if (idx == -1)
-        return NULL;
-    assert(idx <= max_idx);
-    CHECK_OBJ_NOTNULL(tx->recs[idx], REC_NODE_MAGIC);
-    if (tx->recs[idx]->hdrs == NULL)
-        return NULL;
-    hdr_idx = DATA_FindHdrIdx(tag, hdr);
-    if (hdr_idx == -1)
-        return NULL;
-    rec = tx->recs[idx]->hdrs[hdr_idx];
-    if (rec == NULL)
-        return NULL;
-    CHECK_OBJ(rec, RECORD_MAGIC);
-    assert(OCCUPIED(rec));
-    assert(rec->tag == tag);
-    c = get_payload(rec);
-    while (*c && *c != ':')
-        c++;
-    c++;
-    while (*c && isspace(*c))
-        c++;
-    return c;
+    VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
+        char *c;
+
+        CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
+        assert(OCCUPIED(rec));
+        if (rec->tag != tag)
+            continue;
+        c = get_payload(rec);
+        while (isspace(*c))
+            c++;
+        if (strncasecmp(c, hdr, strlen(hdr)) != 0)
+            continue;
+        c += strlen(hdr);
+        while (isspace(*c))
+            c++;
+        if (*c++ != ':')
+            continue;
+        while (isspace(*c))
+            c++;
+        return c;
+    }
+    return NULL;
 }
 
 /*
@@ -273,14 +265,14 @@ void
 format_D_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_DT(tx, "Resp:", 1e6, s, len);
+    format_DT(tx, "Resp", 1e6, s, len);
 }
 
 void
 format_D_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_DT(tx, "BerespBody:", 1e6, s, len);
+    format_DT(tx, "BerespBody", 1e6, s, len);
 }
 
 void
@@ -431,7 +423,7 @@ format_r(const tx_t *tx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
         VSB_cpy(scratch, "-");
     VSB_cat(scratch, " ");
 
-    if ((str = get_hdr(tx, htag, "Host:")) != NULL) {
+    if ((str = get_hdr(tx, htag, "Host")) != NULL) {
         if (strncmp(str, "http://", 7) != 0)
             VSB_cat(scratch, "http://");
         VSB_cat(scratch, str);
@@ -497,7 +489,7 @@ format_tim(const tx_t *tx, const char *fmt, char **s, size_t *len)
     struct tm tm;
 
     if (tx->type != VSL_t_raw) {
-        data = get_hdr(tx, SLT_Timestamp, "Start:");
+        data = get_hdr(tx, SLT_Timestamp, "Start");
         if (data == NULL)
             return;
         ts = get_fld(data, 0, len);
@@ -531,14 +523,14 @@ void
 format_T_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_DT(tx, "Resp:", 1, s, len);
+    format_DT(tx, "Resp", 1, s, len);
 }
 
 void
 format_T_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_DT(tx, "BerespBody:", 1, s, len);
+    format_DT(tx, "BerespBody", 1, s, len);
 }
 
 static inline void
@@ -578,7 +570,7 @@ format_u(const tx_t *tx, enum VSL_tag_e tag, char **s, size_t *len)
 {
     char *hdr;
 
-    if ((hdr = get_hdr(tx, tag, "Authorization:")) != NULL
+    if ((hdr = get_hdr(tx, tag, "Authorization")) != NULL
         && strncasecmp(get_fld(hdr, 0, len), "Basic", 5) == 0) {
         const char *c, *auth = get_fld(hdr, 1, len);
         VB64_init();
@@ -664,21 +656,20 @@ void
 format_Xttfb_client(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_Xttfb(tx, "Process:", s, len);
+    format_Xttfb(tx, "Process", s, len);
 }
 
 void
 format_Xttfb_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_Xttfb(tx, "Beresp:", s, len);
+    format_Xttfb(tx, "Beresp", s, len);
 }
 
-#if 0
 void
 format_VCL_disp(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
-    rec_node_t *rec;
+    rec_t *rec;
 
     *s = dash;
     VSTAILQ_FOREACH(rec, &tx->recs, reclist) {
@@ -713,7 +704,6 @@ format_VCL_disp(const tx_t *tx, const arg_t *args, char **s, size_t *len)
     }
     *len = strlen(*s);
 }
-#endif
 
 void
 format_VCL_Log(const tx_t *tx, const arg_t *args, char **s, size_t *len)
@@ -771,12 +761,9 @@ add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
     if (name == NULL)
         fmt->args[n].name = NULL;
     else {
-        int len = strlen(name);
-        fmt->args[n].name = (char *) malloc(len + 2);
+        fmt->args[n].name = (char *) malloc(strlen(name) + 1);
         AN(fmt->args[n].name);
         strcpy(fmt->args[n].name, name);
-        fmt->args[n].name[len] = ':';
-        fmt->args[n].name[len + 1] = '\0';
     }
     VSB_finish(os);
     strcpy(fmt->str[n], VSB_data(os));
@@ -807,7 +794,7 @@ static void
 add_tag(enum VSL_transaction_e type, enum VSL_tag_e tag, const char *hdr)
 {
     includehead_t *inclhead;
-    inc_t *incl;
+    include_t *incl;
 
     switch(type) {
     case VSL_t_req:
@@ -830,11 +817,14 @@ add_tag(enum VSL_transaction_e type, enum VSL_tag_e tag, const char *hdr)
                 && (strcmp(incl->hdr, hdr) == 0)))
             return;
 
-    incl = calloc(1, sizeof(inc_t));
+    incl = calloc(1, sizeof(include_t));
     AN(incl);
-    if (hdr != NULL)
+    if (hdr != NULL) {
         incl->hdr = strdup(hdr);
+        include_rx++;
+    }
     VSTAILQ_INSERT_TAIL(inclhead, incl, inclist);
+    includes++;
 }
 
 static void
@@ -1086,7 +1076,6 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     add_formatter(fmt, os, n, FMT(type, format_Xttfb));
                     add_cb_tag_incl(type, SLT_Timestamp, "Process", "Beresp");
                 }
-#if 0
                 else if (strcmp(fname, "Varnish:hitmiss") == 0) {
                     if (C(type)) {
                         add_fmt_name(fmt, os, n, format_VCL_disp, "m");
@@ -1111,7 +1100,6 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                         return 1;
                     }
                 }
-#endif
                 else if (strncmp(fname, "VCL_Log:", 8) == 0) {
                     // support pulling entries logged with std.log() into
                     // output.
@@ -1194,107 +1182,98 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
     return 0;
 }
 
-int
-hdrcmp(const void *s1, const void *s2)
-{
-    return strcasecmp((const char *) s1, (const char *) s2);
-}
-
 static void
-fmt_build_include_tbls(const includehead_t *inclhead)
+fmt_build_include_args(const includehead_t *inclhead, int *incl_idx)
 {
-    int idx = 0;
-    int hdrs_per_idx[MAX_VSL_TAG] = { 0 };
-    inc_t *incl;
+    AN(incl_arg);
+    AN(includes);
 
     for (int i = 0; i < MAX_VSL_TAG; i++) {
-        if (VSTAILQ_EMPTY(&inclhead[i]))
-            continue;
-        VSTAILQ_FOREACH(incl, &inclhead[i], inclist) {
-            if (incl->hdr != NULL)
-                hdrs_per_idx[i]++;
-        }
-        tag2idx[i] = idx++;
-    }
+        include_t *incl;
 
-    for (int i = 0; i < MAX_VSL_TAG; i++) {
-        int hdr_idx = 0;
-
-        if (hdrs_per_idx[i] == 0) {
-            hdr_include_tbl[i] = NULL;
-            continue;
-        }
-        ALLOC_OBJ(hdr_include_tbl[i], INCLUDE_MAGIC);
-        AN(hdr_include_tbl[i]);
-        hdr_include_tbl[i]->hdr = (char **) calloc(hdrs_per_idx[i],
-                                                   sizeof(char *));
-        AN(hdr_include_tbl[i]->hdr);
         VSTAILQ_FOREACH(incl, &inclhead[i], inclist) {
-            assert(incl->hdr != NULL);
-            hdr_include_tbl[i]->hdr[hdr_idx] = strdup(incl->hdr);
-            AN(hdr_include_tbl[i]->hdr[hdr_idx]);
-            hdr_idx++;
+            assert(*incl_idx < includes);
+            if (incl->hdr == NULL) {
+                VSB_cat(i_arg, VSL_tags[i]);
+                VSB_cat(i_arg, ",");
+            }
+            else {
+                VSB_clear(scratch);
+                VSB_printf(scratch, "%s:^\\s*%s\\s*:", VSL_tags[i], incl->hdr);
+                VSB_finish(scratch);
+                incl_arg[*incl_idx] = strdup(VSB_data(scratch));
+                *incl_idx += 1;
+            }
         }
-        hdr_include_tbl[i]->n = hdr_idx;
-        qsort(hdr_include_tbl[i]->hdr, hdr_idx, sizeof(char *), hdrcmp);
     }
-    if (idx > max_idx)
-        max_idx = idx;
 }
 
 int
 FMT_Init(char *err)
 {
     AN(VSB_new(payload, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
+    AN(VSB_new(hdr_sb, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
+    i_arg = VSB_new_auto();
+    AN(i_arg);
     scratch = VSB_new_auto();
     AN(scratch);
 
-    memset(tag2idx, -1, sizeof(tag2idx));
-    max_idx = 0;
-
+    includes = 0;
+    include_rx = 0;
     for (int i = 0; i < MAX_VSL_TAG; i++) {
         VSTAILQ_INIT(&cincl[i]);
         VSTAILQ_INIT(&bincl[i]);
         VSTAILQ_INIT(&rincl[i]);
     }
 
-    if (!VSB_EMPTY(config.cformat)) {
-        if (compile_fmt(VSB_data(config.cformat), &cformat, VSL_t_req, err)
-            != 0)
-            return EINVAL;
-        fmt_build_include_tbls(cincl);
-    }
+    if (!VSB_EMPTY(config.cformat) &&
+        compile_fmt(VSB_data(config.cformat), &cformat, VSL_t_req, err) != 0)
+        return EINVAL;
 
-    if (!VSB_EMPTY(config.bformat)) {
-        if (compile_fmt(VSB_data(config.bformat), &bformat, VSL_t_bereq, err)
-            != 0)
-            return EINVAL;
-        fmt_build_include_tbls(bincl);
-    }
+    if (!VSB_EMPTY(config.bformat) &&
+        compile_fmt(VSB_data(config.bformat), &bformat, VSL_t_bereq, err) != 0)
+        return EINVAL;
 
-    if (!VSB_EMPTY(config.rformat)) {
-        if (compile_fmt(VSB_data(config.rformat), &rformat, VSL_t_raw, err)
-            != 0)
-            return EINVAL;
-        fmt_build_include_tbls(rincl);
+    if (!VSB_EMPTY(config.rformat) &&
+        compile_fmt(VSB_data(config.rformat), &rformat, VSL_t_raw, err) != 0)
+        return EINVAL;
+
+    if (includes > 0) {
+        incl_arg = calloc(include_rx + 1, sizeof(char *));
+        if (incl_arg == NULL)
+            return ENOMEM;
+        int incl_idx = 0;
+
+        fmt_build_include_args(cincl, &incl_idx);
+        fmt_build_include_args(bincl, &incl_idx);
+        fmt_build_include_args(rincl, &incl_idx);
+        assert(incl_idx == include_rx);
+        VSB_finish(i_arg);
     }
 
     return 0;
 }
 
-int
-FMT_GetMaxIdx(void)
+char **
+FMT_Get_I_Args(void)
 {
-    return max_idx;
+    return incl_arg;
+}
+
+char *
+FMT_Get_i_Arg(void)
+{
+    assert(VSB_done(i_arg));
+    return VSB_data(i_arg);
 }
 
 int
 FMT_Estimate_RecsPerTx(void)
 {
     int recs_per_tx = 0, recs_per_ctx = 0, recs_per_btx = 0;
-    inc_t *incl;
+    include_t *incl;
 
-    if (max_idx == 0)
+    if (includes == 0)
         return 0;
 
     for (int i = 0; i < MAX_VSL_TAG; i++) {
@@ -1379,7 +1358,7 @@ free_format(compiled_fmt_t *fmt)
 static void
 free_incl(includehead_t inclhead[])
 {
-    inc_t *incl;
+    include_t *incl;
 
     for (int i = 0; i < MAX_VSL_TAG; i++)
         VSTAILQ_FOREACH(incl, &inclhead[i], inclist) {
@@ -1389,16 +1368,25 @@ free_incl(includehead_t inclhead[])
         }
 }
 
-/* XXX new structures */
 void
 FMT_Fini(void)
 {
     VSB_delete(scratch);
     VSB_delete(payload);
+    VSB_delete(i_arg);
 
-    free_incl(cincl);
-    free_incl(bincl);
-    free_incl(rincl);
+    if (include_rx > 0) {
+        for (int i = 0; i <= include_rx; i++)
+            if (incl_arg[i] != NULL)
+                free((void *) incl_arg[i]);
+        free(incl_arg);
+    }
+
+    if (includes > 0) {
+        free_incl(cincl);
+        free_incl(bincl);
+        free_incl(rincl);
+    }
 
     if (!VSB_EMPTY(config.cformat))
         free_format(&cformat);

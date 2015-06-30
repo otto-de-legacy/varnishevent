@@ -45,7 +45,6 @@ rec_t *get_tag(const tx_t *tx, enum VSL_tag_e tag);
 char *get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr);
 char *get_fld(char *str, int n, size_t *len);
 char *get_rec_fld(const rec_t *rec, int n, size_t *len);
-int hdrcmp(const void *s1, const void *s2);
 
 formatter_f format_b_client;
 formatter_f format_b_backend;
@@ -98,9 +97,7 @@ formatter_f format_Xt;
 formatter_f format_Xttfb_client;
 formatter_f format_Xttfb_backend;
 
-#if 0
 formatter_f format_VCL_disp;
-#endif
 
 formatter_f format_VCL_Log;
 

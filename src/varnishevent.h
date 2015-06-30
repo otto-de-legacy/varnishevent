@@ -69,10 +69,7 @@
     "%h %l %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-agent}i\""
 
 struct sigaction default_action;
-
-int tag2idx[MAX_VSL_TAG];
-int max_idx;
-
+    
 typedef struct chunk_t {
     unsigned magic;
 #define CHUNK_MAGIC 0x676e0d19
@@ -93,6 +90,7 @@ typedef struct rec_t {
     unsigned len;
     chunkhead_t chunks;
     VSTAILQ_ENTRY(rec_t) freelist;
+    VSTAILQ_ENTRY(rec_t) reclist;
     enum VSL_tag_e tag;
     unsigned int occupied:1;
 } rec_t;
@@ -102,24 +100,15 @@ unsigned nrecords;
 
 typedef VSTAILQ_HEAD(rechead_s, rec_t) rechead_t;
 
-typedef struct rec_node_t {
-    unsigned magic;
-#define REC_NODE_MAGIC 0x92d4933d
-    rec_t *rec;
-    rec_t **hdrs;
-} rec_node_t;
-
-rec_node_t *rec_nodes;
-
 typedef struct tx_t {
     unsigned magic;
 #define TX_MAGIC 0xff463e42
-    VSTAILQ_ENTRY(tx_t) freelist;
-    VSTAILQ_ENTRY(tx_t) spscq;
-    rec_node_t **recs;
-    double t;
     int32_t vxid;
     int32_t pvxid;
+    rechead_t recs;
+    VSTAILQ_ENTRY(tx_t) freelist;
+    VSTAILQ_ENTRY(tx_t) spscq;
+    double t;
     enum VSL_transaction_e type:7;
     unsigned int occupied:1;
 } tx_t;
@@ -132,15 +121,6 @@ typedef VSTAILQ_HEAD(txhead_s, tx_t) txhead_t;
 
 unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi,
     global_nfree_tx, global_nfree_rec, global_nfree_chunk;
-
-typedef struct include_s {
-    unsigned magic;
-#define INCLUDE_MAGIC 0x4dd6fe3b
-    char **hdr;
-    int n;
-} include_t;
-
-include_t *hdr_include_tbl[MAX_VSL_TAG];
 
 /* Writer (consumer) waits for this condition when the SPSC queue is empty.
    Reader (producer) signals the condition after enqueue. */
@@ -225,7 +205,6 @@ unsigned DATA_Take_Freechunk(struct chunkhead_s *dst);
 void DATA_Return_Freetx(struct txhead_s *returned, unsigned nreturned);
 void DATA_Return_Freerec(struct rechead_s *returned, unsigned nreturned);
 void DATA_Return_Freechunk(struct chunkhead_s *returned, unsigned nreturned);
-int DATA_FindHdrIdx(enum VSL_tag_e, const char *hdr);
 void DATA_Dump(void);
 
 /* writer.c */
@@ -260,7 +239,8 @@ void MON_Output(void);
 
 /* format.c */
 int FMT_Init(char *err);
-int FMT_GetMaxIdx(void);
+char **FMT_Get_I_Args(void);
+char *FMT_Get_i_Arg(void);
 int FMT_Estimate_RecsPerTx(void);
 void FMT_Format(tx_t *tx, struct vsb *os);
 void FMT_Fini(void);
