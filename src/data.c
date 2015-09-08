@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <strings.h>
 #include <ctype.h>
+#include <stddef.h>
 
 #include "varnishevent.h"
 #include "data.h"
@@ -43,20 +44,27 @@
 #include "miniobj.h"
 #include "vqueue.h"
 #include "vsb.h"
+#include "vmb.h"
+
+#define __offsetof(st, m) offsetof(st,m)
 
 /* Preprend head2 before head1, result in head1, head2 empty afterward */
-#define	VSTAILQ_PREPEND(head1, head2) do {                      \
+#define	VSTAILQ_PREPEND(head1, head2, type, fld) do {           \
         if (VSTAILQ_EMPTY((head2)))                             \
             break;                                              \
 	if (VSTAILQ_EMPTY((head1)))                             \
             (head1)->vstqh_last = (head2)->vstqh_last;          \
-	else                                                    \
-            *(head2)->vstqh_last = VSTAILQ_FIRST((head1));      \
+	else {                                                  \
+            struct type *l = VSTAILQ_LAST(head2, type, fld);    \
+            VSTAILQ_NEXT(l, fld) = VSTAILQ_FIRST((head1));      \
+        }                                                       \
         VSTAILQ_FIRST((head1)) = VSTAILQ_FIRST((head2));        \
         VSTAILQ_INIT((head2));                                  \
 } while (0)
 
-static const char *statename[3] = { "EMPTY", "OCCUPIED" };
+static const char *statename[] = {
+    "FREE", "OPEN", "DONE", "SUBMITTED", "FORMATTING", "WRITTEN"
+};
 
 static pthread_mutex_t freetx_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t freerec_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -69,11 +77,11 @@ static chunkhead_t freechunkhead;
 static char bogus_rec;
 rec_t * const magic_end_rec = (rec_t * const) &bogus_rec;
 
-/* XXX update for new structures */
 static void
 data_Cleanup(void)
 {
     free(txn);
+    free(rec_nodes);
     free(records);
     free(chunks);
     free(bufptr);
@@ -90,11 +98,10 @@ data_clear_rec(rec_t *rec, rechead_t * const freerec,
     unsigned nchunk = 0;
 
     CHECK_OBJ_NOTNULL(rec, RECORD_MAGIC);
-    rec->occupied = 0;
-    rec->tag = SLT__Bogus;
-    rec->len = 0;
+    assert(OCCUPIED(rec));
     while ((chunk = VSTAILQ_FIRST(&rec->chunks)) != NULL) {
         CHECK_OBJ(chunk, CHUNK_MAGIC);
+        assert(OCCUPIED(chunk));
         chunk->occupied = 0;
         *chunk->data = '\0';
         VSTAILQ_REMOVE_HEAD(&rec->chunks, chunklist);
@@ -102,6 +109,9 @@ data_clear_rec(rec_t *rec, rechead_t * const freerec,
         nchunk++;
     }
     assert(VSTAILQ_EMPTY(&rec->chunks));
+    rec->tag = SLT__Bogus;
+    rec->len = 0;
+    rec->occupied = 0;
     VSTAILQ_INSERT_HEAD(freerec, rec, freelist);
     return nchunk;
 }
@@ -113,21 +123,22 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
               unsigned * restrict const nfree_rec,
               unsigned * restrict const nfree_chunk)
 {
-    rec_t *rec;
     unsigned nchunk = 0, nrec = 0;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
+    assert(tx->state == TX_WRITTEN);
     
-    tx->occupied = 0;
     tx->vxid = -1;
     tx->pvxid = -1;
     tx->type = VSL_t_unknown;
     tx->t = 0.;
+    tx->disp = DISP_NONE;
 
-    for (int i = 0; i <= max_idx; i++) {
+    for (int i = 0; i < max_idx; i++) {
         rec_node_t *rec_node = tx->recs[i];
         CHECK_OBJ_NOTNULL(rec_node, REC_NODE_MAGIC);
         if (rec_node->rec != NULL) {
+            CHECK_OBJ(rec_node->rec, RECORD_MAGIC);
             nchunk += data_clear_rec(rec_node->rec, freerec, freechunk);
             nrec++;
             rec_node->rec = NULL;
@@ -135,13 +146,17 @@ DATA_Clear_Tx(tx_t * const tx, txhead_t * const freetx,
         }
         if (rec_node->hdrs == NULL)
             continue;
-        for (int j = 0; rec_node->hdrs[j] != magic_end_rec; j++)
+        for (int j = 0; rec_node->hdrs[j] != magic_end_rec; j++) {
+            rec_t *rec;
             if ((rec = rec_node->hdrs[j]) != NULL) {
+                CHECK_OBJ(rec, RECORD_MAGIC);
                 nchunk += data_clear_rec(rec, freerec, freechunk);
                 nrec++;
                 rec_node->hdrs[j] = NULL;
             }
+        }
     }
+    tx->state = TX_FREE;
     VSTAILQ_INSERT_HEAD(freetx, tx, freelist);
     *nfree_tx += 1;
     *nfree_rec += nrec;
@@ -227,15 +242,15 @@ DATA_Init(void)
     VSTAILQ_INIT(&freetxhead);
     for (int i = 0; i < config.max_data; i++) {
         txn[i].magic = TX_MAGIC;
-        txn[i].occupied = 0;
+        txn[i].state = TX_FREE;
         txn[i].vxid = -1;
         txn[i].pvxid = -1;
         txn[i].type = VSL_t_unknown;
         txn[i].t = 0.;
-        txn[i].recs = (rec_node_t **) malloc((max_idx + 1)
-                                             * sizeof(rec_node_t *));
+        txn[i].disp = DISP_NONE;
+        txn[i].recs = (rec_node_t **) malloc(max_idx * sizeof(rec_node_t *));
         AN(txn[i].recs);
-        for (int j = 0; j <= max_idx; j++) {
+        for (int j = 0; j < max_idx; j++) {
             assert((i * max_idx) + j < nrecnodes);
             txn[i].recs[j] = &rec_nodes[(i * max_idx) + j];
             CHECK_OBJ(txn[i].recs[j], REC_NODE_MAGIC);
@@ -247,7 +262,7 @@ DATA_Init(void)
             idx = tag2idx[j];
             if (idx == -1)
                 continue;
-            assert(idx <= max_idx);
+            assert(idx < max_idx);
             if ((inc = hdr_include_tbl[j]) == NULL) {
                 txn[i].recs[idx]->hdrs = NULL;
                 continue;
@@ -323,7 +338,7 @@ DATA_Take_Free##type(struct type##head_s *dst)          \
     unsigned nfree;                                     \
                                                         \
     AZ(pthread_mutex_lock(&free##type##_lock));         \
-    VSTAILQ_PREPEND(dst, &free##type##head);            \
+    VSTAILQ_PREPEND(dst, &free##type##head, type##_t, freelist); \
     nfree = global_nfree_##type;                        \
     global_nfree_##type = 0;                            \
     AZ(pthread_mutex_unlock(&free##type##_lock));       \
@@ -343,7 +358,7 @@ void                                                                    \
 DATA_Return_Free##type(struct type##head_s *returned, unsigned nreturned) \
 {                                                                       \
     AZ(pthread_mutex_lock(&free##type##_lock));                         \
-    VSTAILQ_PREPEND(&free##type##head, returned);                       \
+    VSTAILQ_PREPEND(&free##type##head, returned, type##_t, freelist);   \
     global_nfree_##type += nreturned;                                   \
     AZ(pthread_mutex_unlock(&free##type##_lock));                       \
 }
@@ -408,7 +423,7 @@ DATA_Dump(void)
             continue;
         }
         
-        if (txn[i].occupied == 0)
+        if (txn[i].state == TX_FREE)
             continue;
 
         tx = &txn[i];
@@ -416,10 +431,10 @@ DATA_Dump(void)
 
         VSB_printf(data,
                    "Tx entry %d: vxid=%u pvxid=%d state=%s dir=%c records={",
-                   i, tx->vxid, tx->pvxid, statename[tx->occupied],
+                   i, tx->vxid, tx->pvxid, statename[tx->state],
                    C(tx->type) ? 'c' : B(tx->type) ? 'b' : '-');
 
-        for (int j = 0; j <= max_idx; j++) {
+        for (int j = 0; j < max_idx; j++) {
             rec_t *rec;
 
             rec_node = tx->recs[j];
@@ -436,7 +451,7 @@ DATA_Dump(void)
             }
             if (rec_node->hdrs == NULL)
                 continue;
-            for (int k = 0; k <= max_idx; k++) {
+            for (int k = 0; rec_node->hdrs[k] != magic_end_rec; k++) {
                 rec = rec_node->hdrs[k];
                 if (rec == NULL)
                     continue;

@@ -52,8 +52,7 @@ static char
 *test_timeout(void)
 {
     tx_t tx;
-    rec_t rec;
-    chunk_t chunk;
+    rec_node_t node, *nptr[1];
 
     printf("... testing write timeouts\n");
 
@@ -72,18 +71,15 @@ static char
     VSTAILQ_INIT(&wrt_freetx);
     MASSERT(VSTAILQ_EMPTY(&wrt_freetx));
 
-    /* XXX: common helper functions with test_format */
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.recs);
-    VSTAILQ_INSERT_TAIL(&tx.recs, &rec, reclist);
-    rec.magic = RECORD_MAGIC;
-    VSTAILQ_INIT(&rec.chunks);
-    VSTAILQ_INSERT_TAIL(&rec.chunks, &chunk, chunklist);
-    chunk.magic = CHUNK_MAGIC;
-    chunk.data = (char *) calloc(1, config.chunk_size);
+    tx.recs = nptr;
+    nptr[0] = &node;
+    node.magic = REC_NODE_MAGIC;
+    node.rec = NULL;
+    node.hdrs = NULL;
 
     for (int i = 0; i < THRESHOLD; i++) {
-        tx.occupied = 1;
+        tx.state = TX_SUBMITTED;
         tx.type = VSL_t_req;
 
         wrt_write(&tx);

@@ -98,9 +98,7 @@ formatter_f format_Xt;
 formatter_f format_Xttfb_client;
 formatter_f format_Xttfb_backend;
 
-#if 0
 formatter_f format_VCL_disp;
-#endif
 
 formatter_f format_VCL_Log;
 

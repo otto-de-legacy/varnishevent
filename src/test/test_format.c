@@ -68,7 +68,7 @@ reset_tag2idx(int n, ...)
         tag2idx[tag] = idx++;
     }
     va_end(tags);
-    max_idx = idx - 1;
+    max_idx = idx;
 }
 
 static void
@@ -115,6 +115,7 @@ set_rec(tx_t *tx, enum VSL_tag_e tag, rec_t *rec)
 {
     int idx = tag2idx[tag];
     tx->recs[idx]->rec = rec;
+    rec->tag = tag;
 }
 
 static void
@@ -125,16 +126,23 @@ add_rec_chunk(tx_t *tx, enum VSL_tag_e tag, rec_t *rec, chunk_t *chunk)
 }
 
 static void
-init_tx_arg(tx_t *tx, rec_node_t node[], rec_node_t *nptr[], arg_t *args)
+init_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[])
 {
     tx->magic = TX_MAGIC;
     tx->recs = nptr;
-    for (int i = 0; i <= max_idx; i++) {
+    tx->state = TX_FORMATTING;
+    for (int i = 0; i < max_idx; i++) {
         node[i].magic = REC_NODE_MAGIC;
         node[i].rec = NULL;
         node[i].hdrs = NULL;
         nptr[i] = &node[i];
     }
+}
+
+static void
+init_tx_arg(tx_t *tx, rec_node_t node[], rec_node_t *nptr[], arg_t *args)
+{
+    init_tx(tx, node, nptr);
     args->name = NULL;
     args->tag = SLT__Bogus;
 }
@@ -165,7 +173,7 @@ init_hdr_recs(tx_t *tx, enum VSL_tag_e tag)
     int idx = tag2idx[tag];
 
     tx->recs[idx]->rec = NULL;
-    tx->recs[idx]->hdrs = (rec_t **) calloc(inc->n, sizeof(char *));
+    tx->recs[idx]->hdrs = (rec_t **) calloc(inc->n, sizeof(rec_t *));
 }
 
 static void
@@ -174,6 +182,16 @@ set_hdr_rec(tx_t *tx, enum VSL_tag_e tag, int hdr_idx, rec_t *rec)
     int idx = tag2idx[tag];
     tx->recs[idx]->rec = NULL;
     tx->recs[idx]->hdrs[hdr_idx] = rec;
+    rec->tag = tag;
+}
+
+static void
+set_hdr_data(tx_t *tx, rec_t *rec, chunk_t *chunk, int hdr_idx,
+             enum VSL_tag_e tag, const char *data)
+{
+    init_rec_chunk(tag, rec, chunk);
+    set_record_data(rec, chunk, data, tag);
+    set_hdr_rec(tx, tag, hdr_idx, rec);
 }
 
 static void
@@ -280,21 +298,22 @@ static const char
 {
 #define MAX_IDX 2
     tx_t tx;
-    rec_node_t node[MAX_IDX + 1], *n[MAX_IDX + 1];
-    rec_t recs[MAX_IDX + 1], *rec;
+    rec_node_t node[MAX_IDX], *n[MAX_IDX];
+    rec_t recs[MAX_IDX], *rec;
 
     printf("... testing get_tag()\n");
 
     max_idx = MAX_IDX;
     for (int i = 0; i < MAX_VSL_TAG; i++)
-        if (i <= MAX_IDX)
+        if (i < MAX_IDX)
             tag2idx[i] = i;
         else
             tag2idx[i] = -1;
 
     tx.magic = TX_MAGIC;
     tx.recs = n;
-    for (int i = 0; i <= MAX_IDX; i++) {
+    tx.state = TX_FORMATTING;
+    for (int i = 0; i < MAX_IDX; i++) {
         memset(&node[i], 0, sizeof(rec_node_t));
         memset(&recs[i], 0, sizeof(rec_t));
         recs[i].magic = RECORD_MAGIC;
@@ -306,19 +325,19 @@ static const char
         n[i] = &node[i];
     }
 
-    for (int i = 0; i <= MAX_IDX; i++) {
+    for (int i = 0; i < MAX_IDX; i++) {
         rec = get_tag(&tx, i);
         MASSERT(rec == &recs[i]);
     }
 
     /* No such tag in tx */
-    for (int i = MAX_IDX + 2; i < MAX_VSL_TAG; i++) {
+    for (int i = MAX_IDX + 1; i < MAX_VSL_TAG; i++) {
         rec = get_tag(&tx, i);
         MAZ(rec);
     }
 
     /* Empty record */
-    for (int i = 0; i <= MAX_IDX; i++) {
+    for (int i = 0; i < MAX_IDX; i++) {
         node[i].rec = NULL;
         rec = get_tag(&tx, i);
         MAZ(rec);
@@ -336,9 +355,9 @@ static const char
     tx_t tx;
     const char *h[] = { "Bar", "Baz", "Foo", "Garply", "Xyzzy" };
     include_t inc;
-    rec_node_t node[MAX_IDX + 1], *n[MAX_IDX + 1];
-    rec_t recs[(MAX_IDX + 1) * NHDRS], *rhdrs[MAX_IDX + 1][NHDRS];
-    chunk_t c[(MAX_IDX + 1) * NHDRS], *c2;
+    rec_node_t node[MAX_IDX], *n[MAX_IDX];
+    rec_t recs[MAX_IDX * NHDRS], *rhdrs[MAX_IDX][NHDRS];
+    chunk_t c[MAX_IDX * NHDRS], *c2;
     char *hdr, *exp;
 
     printf("... testing get_hdr()\n");
@@ -350,7 +369,7 @@ static const char
     for (int i = 0; i < NHDRS; i++)
         inc.hdr[i] = strdup(h[i]);
     for (int i = 0; i < MAX_VSL_TAG; i++)
-        if (i <= MAX_IDX) {
+        if (i < MAX_IDX) {
             tag2idx[i] = i;
             hdr_include_tbl[i] = &inc;
         }
@@ -361,14 +380,15 @@ static const char
 
     tx.magic = TX_MAGIC;
     tx.recs = n;
-    for (int i = 0; i <= MAX_IDX; i++) {
+    tx.state = TX_FORMATTING;
+    for (int i = 0; i < MAX_IDX; i++) {
         memset(&node[i], 0, sizeof(rec_node_t));
         node[i].magic = REC_NODE_MAGIC;
         node[i].rec = NULL;
         node[i].hdrs = rhdrs[i];
         for (int j = 0; j < NHDRS; j++) {
             int idx = i * NHDRS + j;
-            MASSERT(idx < (MAX_IDX + 1) * NHDRS);
+            MASSERT(idx < MAX_IDX * NHDRS);
             memset(&recs[idx], 0, sizeof(rec_t));
             memset(&c[idx], 0, sizeof(chunk_t));
             c[idx].magic = CHUNK_MAGIC;
@@ -585,7 +605,7 @@ static const char
     printf("... testing format_b_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqAcct, SLT_BereqAcct);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
 #define REQACCT_PAYLOAD "60 0 60 178 105 283"
@@ -613,13 +633,13 @@ static const char
     rec_t r1, r2;
     chunk_t c1, c2;
     arg_t args;
-    char *str;
+    char *str = NULL;
     size_t len;
 
     printf("... testing format_D_*()\n");
 
     reset_tag2idx(NTAGS, SLT_Timestamp);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     reset_hdr_include();
     add_hdr_include(2, SLT_Timestamp, "BerespBody", "Resp");
 
@@ -631,6 +651,7 @@ static const char
     set_record_data(&r1, &c1, TS_RESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 1, &r1);
     format_D_client(&tx, &args, &str, &len);
+    MAN(str);
     MASSERT(strncmp(str, "15963", 5) == 0);
     MASSERT(len == 5);
 
@@ -638,7 +659,10 @@ static const char
     init_rec_chunk(SLT_Timestamp, &r2, &c2);
     set_record_data(&r2, &c2, TS_BERESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 0, &r2);
+    str = NULL;
+    len = 0;
     format_D_backend(&tx, &args, &str, &len);
+    MAN(str);
     MASSERT(strncmp(str, "15703", 5) == 0);
     MASSERT(len == 5);
 
@@ -661,7 +685,7 @@ static const char
     printf("... testing format_H_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqProtocol, SLT_BereqProtocol);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
 #define PROTOCOL_PAYLOAD "HTTP/1.1"
@@ -696,7 +720,7 @@ static const char
     printf("... testing format_h_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqStart, SLT_Backend);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
 #define REQSTART_PAYLOAD "127.0.0.1 33544"
@@ -730,7 +754,7 @@ static const char
     printf("... testing format_I_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqAcct, SLT_BereqAcct, SLT_PipeAcct);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
     add_record_data(&tx, SLT_ReqAcct, &rec[0], &c[0], REQACCT_PAYLOAD);
@@ -769,7 +793,7 @@ static const char
     printf("... testing format_m_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqMethod, SLT_BereqMethod);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
 #define REQMETHOD_PAYLOAD "GET"
@@ -802,7 +826,7 @@ static const char
     printf("... testing format_O_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqAcct, SLT_BereqAcct, SLT_PipeAcct);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
     add_record_data(&tx, SLT_ReqAcct, &rec[0], &c[0], REQACCT_PAYLOAD);
@@ -840,7 +864,7 @@ static const char
     printf("... testing format_q_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqURL, SLT_BereqURL);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
 #define URL_QUERY_PAYLOAD "/foo?bar=baz&quux=wilco"
@@ -888,7 +912,7 @@ static const char
     reset_tag2idx(NTAGS, SLT_ReqMethod, SLT_ReqHeader, SLT_ReqURL,
                   SLT_ReqProtocol, SLT_BereqMethod, SLT_BereqHeader,
                   SLT_BereqURL, SLT_BereqProtocol);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     reset_hdr_include();
     add_hdr_include(1, SLT_ReqHeader, "Host");
     add_hdr_include(1, SLT_BereqHeader, "Host");
@@ -941,7 +965,6 @@ static const char
 
     /* No host header */
     set_rec(&tx, SLT_ReqMethod, &rec_method);
-    rec_method.tag = SLT_ReqMethod;
     clear_hdr(&tx, SLT_ReqHeader, 0);
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
@@ -950,7 +973,6 @@ static const char
     MASSERT(len == 33);
 
     set_rec(&tx, SLT_BereqMethod, &rec_method);
-    rec_method.tag = SLT_BereqMethod;
     clear_hdr(&tx, SLT_BereqHeader, 0);
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
@@ -962,7 +984,6 @@ static const char
     rec_method.tag = SLT_ReqMethod;
     clear_rec(&tx, SLT_ReqURL);
     set_hdr_rec(&tx, SLT_ReqHeader, 0, &rec_host);
-    rec_host.tag = SLT_ReqHeader;
     rec_proto.tag = SLT_ReqProtocol;
     format_r_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com- HTTP/1.1", 35) == 0);
@@ -971,7 +992,6 @@ static const char
     rec_method.tag = SLT_BereqMethod;
     clear_rec(&tx, SLT_BereqURL);
     set_hdr_rec(&tx, SLT_BereqHeader, 0, &rec_host);
-    rec_host.tag = SLT_BereqHeader;
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
     format_r_backend(&tx, &args, &str, &len);
@@ -982,7 +1002,6 @@ static const char
     rec_method.tag = SLT_ReqMethod;
     rec_host.tag = SLT_ReqHeader;
     set_rec(&tx, SLT_ReqURL, &rec_url);
-    rec_url.tag = SLT_ReqURL;
     clear_rec(&tx, SLT_ReqProtocol);
     format_r_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
@@ -991,7 +1010,6 @@ static const char
     rec_method.tag = SLT_BereqMethod;
     rec_host.tag = SLT_BereqHeader;
     set_rec(&tx, SLT_BereqURL, &rec_url);
-    rec_url.tag = SLT_BereqURL;
     clear_rec(&tx, SLT_BereqProtocol);
     format_r_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
@@ -1016,7 +1034,7 @@ static const char
     printf("... testing format_s_*()\n");
 
     reset_tag2idx(NTAGS, SLT_RespStatus, SLT_BerespStatus);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
 #define STATUS_PAYLOAD "200"
@@ -1051,9 +1069,9 @@ static const char
     printf("... testing format_t()\n");
 
     reset_tag2idx(NTAGS, SLT_Timestamp);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "Start");
+    add_hdr_include(1, SLT_Timestamp, "Start");
 
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
@@ -1090,7 +1108,7 @@ static const char
     printf("... testing format_T_*()\n");
 
     reset_tag2idx(NTAGS, SLT_Timestamp);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     reset_hdr_include();
     add_hdr_include(2, SLT_Timestamp, "BerespBody", "Resp");
 
@@ -1130,7 +1148,7 @@ static const char
     printf("... testing format_U_*()\n");
 
     reset_tag2idx(NTAGS, SLT_ReqURL, SLT_BereqURL);
-    MASSERT(max_idx == NTAGS - 1);
+    MASSERT(max_idx == NTAGS);
     init_tx_arg(&tx, node, nptr, &args);
 
     /* With query string */
@@ -1173,7 +1191,7 @@ static const char
     printf("... testing format_u_*()\n");
 
     reset_tag2idx(2, SLT_ReqHeader, SLT_BereqHeader);
-    MASSERT(max_idx == 1);
+    MASSERT(max_idx == 2);
     reset_hdr_include();
     add_hdr_include(1, SLT_ReqHeader, "Authorization");
     add_hdr_include(1, SLT_BereqHeader, "Authorization");
@@ -1243,7 +1261,7 @@ static const char
     printf("... testing format_Xi_*()\n");
 
     reset_tag2idx(2, SLT_ReqHeader, SLT_BereqHeader);
-    MASSERT(max_idx == 1);
+    MASSERT(max_idx == 2);
     reset_hdr_include();
     add_hdr_include(1, SLT_ReqHeader, "Foo");
     add_hdr_include(1, SLT_BereqHeader, "Foo");
@@ -1285,7 +1303,7 @@ static const char
     printf("... testing format_Xo_*()\n");
 
     reset_tag2idx(2, SLT_RespHeader, SLT_BerespHeader);
-    MASSERT(max_idx == 1);
+    MASSERT(max_idx == 2);
     reset_hdr_include();
     add_hdr_include(1, SLT_RespHeader, "Baz");
     add_hdr_include(1, SLT_BerespHeader, "Baz");
@@ -1336,7 +1354,7 @@ static const char
     printf("... testing format_Xt()\n");
 
     reset_tag2idx(1, SLT_Timestamp);
-    MASSERT(max_idx == 0);
+    MASSERT(max_idx == 1);
     reset_hdr_include();
     add_hdr_include(1, SLT_Timestamp, "Start:");
     init_tx_arg(&tx, node, nptr, &args);
@@ -1390,7 +1408,7 @@ static const char
     printf("... testing format_Xttfb_*()\n");
 
     reset_tag2idx(1, SLT_Timestamp);
-    MASSERT(max_idx == 0);
+    MASSERT(max_idx == 1);
     reset_hdr_include();
     add_hdr_include(2, SLT_Timestamp, "Beresp:", "Process:");
     init_tx_arg(&tx, node, nptr, &args);
@@ -1416,13 +1434,10 @@ static const char
     return NULL;
 }
 
-#if 0
 static const char
 *test_format_VCL_disp(void)
 {
     tx_t tx;
-    rec_t *recs[NRECORDS];
-    chunk_t *c[NRECORDS];
     arg_t args;
     char *str, hitmiss[] = "m", handling[] = "n";
     size_t len;
@@ -1430,25 +1445,9 @@ static const char
     printf("... testing format_VCL_disp()\n");
 
     tx.magic = TX_MAGIC;
-    VSTAILQ_INIT(&tx.recs);
-    for (int i = 0; i < NRECORDS; i++) {
-        recs[i] = (rec_t *) calloc(1, sizeof(rec_t));
-        MAN(recs[i]);
-        c[i] = (chunk_t *) calloc(1, sizeof(chunk_t));
-        MAN(c[i]);
-    }
 
     /* %{Varnish:hitmiss} for a hit */
-    add_record_data(&tx, recs[0], c[0], "RECV", SLT_VCL_call);
-    add_record_data(&tx, recs[1], c[1], "hash", SLT_VCL_return);
-    add_record_data(&tx, recs[2], c[2], "HASH", SLT_VCL_call);
-    add_record_data(&tx, recs[3], c[3], "lookup", SLT_VCL_return);
-    add_record_data(&tx, recs[4], c[4], "HIT", SLT_VCL_call);
-    add_record_data(&tx, recs[5], c[5], "deliver", SLT_VCL_return);
-    add_record_data(&tx, recs[6], c[6], "DELIVER", SLT_VCL_call);
-    add_record_data(&tx, recs[7], c[7], "deliver", SLT_VCL_return);
-    for (int i = 8; i < NRECORDS; i++)
-        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    tx.disp = DISP_HIT;
     args.name = hitmiss;
     format_VCL_disp(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "hit", 3) == 0);
@@ -1461,8 +1460,7 @@ static const char
     MASSERT(len == 3);
 
     /* %{Varnish:hitmiss} for a miss */
-    add_record_data(&tx, recs[4], c[4], "MISS", SLT_VCL_call);
-    add_record_data(&tx, recs[5], c[5], "fetch", SLT_VCL_return);
+    tx.disp = DISP_MISS;
     args.name = hitmiss;
     format_VCL_disp(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "miss", 4) == 0);
@@ -1475,7 +1473,7 @@ static const char
     MASSERT(len == 4);
 
     /* %{Varnish:hitmiss} for a pass */
-    add_record_data(&tx, recs[4], c[4], "PASS", SLT_VCL_call);
+    tx.disp = DISP_PASS;
     args.name = hitmiss;
     format_VCL_disp(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "miss", 4) == 0);
@@ -1488,8 +1486,7 @@ static const char
     MASSERT(len == 4);
 
     /* %{Varnish:hitmiss} for an error */
-    add_record_data(&tx, recs[4], c[4], "ERROR", SLT_VCL_call);
-    add_record_data(&tx, recs[5], c[5], "synth", SLT_VCL_return);
+    tx.disp = DISP_ERROR;
     args.name = hitmiss;
     format_VCL_disp(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "miss", 4) == 0);
@@ -1502,14 +1499,7 @@ static const char
     MASSERT(len == 5);
 
     /* %{Varnish:hitmiss} for none of the above */
-    add_record_data(&tx, recs[0], c[0], "RECV", SLT_VCL_call);
-    add_record_data(&tx, recs[1], c[1], "synth", SLT_VCL_return);
-    add_record_data(&tx, recs[2], c[2], "HASH", SLT_VCL_call);
-    add_record_data(&tx, recs[3], c[3], "lookup", SLT_VCL_return);
-    add_record_data(&tx, recs[4], c[4], "SYNTH", SLT_VCL_call);
-    add_record_data(&tx, recs[5], c[5], "deliver", SLT_VCL_return);
-    for (int i = 6; i < NRECORDS; i++)
-        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    tx.disp = DISP_NONE;
     args.name = hitmiss;
     format_VCL_disp(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "-", 1) == 0);
@@ -1522,9 +1512,7 @@ static const char
     MASSERT(len == 1);
 
     /* %{Varnish:hitmiss} for a pipe */
-    add_record_data(&tx, recs[1], c[1], "pipe", SLT_VCL_return);
-    for (int i = 2; i < NRECORDS; i++)
-        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    tx.disp = DISP_PIPE;
     args.name = hitmiss;
     format_VCL_disp(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "miss", 4) == 0);
@@ -1538,7 +1526,6 @@ static const char
 
     return NULL;
 }
-#endif
 
 static const char
 *test_format_VCL_Log(void)
@@ -1554,7 +1541,7 @@ static const char
     printf("... testing format_VCL_Log()\n");
 
     reset_tag2idx(1, SLT_VCL_Log);
-    MASSERT(max_idx == 0);
+    MASSERT(max_idx == 1);
     reset_hdr_include();
     add_hdr_include(1, SLT_VCL_Log, "foo:");
     init_tx_arg(&tx, node, nptr, &args);
@@ -1579,92 +1566,125 @@ static const char
     return NULL;
 }
 
-#if 0
 static const char
 *test_format_SLT(void)
 {
     tx_t tx;
+    rec_node_t node[2], *nptr[2];
     rec_t rec;
     chunk_t chunk;
     arg_t args;
-    char *str, *substr;
-    size_t len;
+    char *str = NULL, *substr;
+    size_t len = 0;
 
     printf("... testing format_SLT()\n");
 
-    init_tx_rec_chunk_arg(&tx, &rec, &chunk, &args);
-    MAN(chunk.data);
+    reset_tag2idx(1, SLT_FetchError);
+    MASSERT(max_idx == 1);
+    init_tx_arg(&tx, node, nptr, &args);
 
-    set_record_data(&rec, &chunk, "no backend connection", SLT_FetchError);
+    add_record_data(&tx, SLT_FetchError, &rec, &chunk, "no backend connection");
     args.tag = SLT_FetchError;
     args.fld = -1;
     format_SLT(&tx, &args, &str, &len);
+    MAN(str);
     MASSERT(strncmp(str, "no backend connection", 21) == 0);
     MASSERT(len == 21);
 
     /* record not found */
+    reset_tag2idx(2, SLT_FetchError, SLT_BereqHeader);
+    MASSERT(max_idx == 2);
+    init_tx(&tx, node, nptr);
+    add_record_data(&tx, SLT_BereqHeader, &rec, &chunk, "Foo: bar");
     str = NULL;
     len = 0;
-    rec.tag = SLT_BereqHeader;
     format_SLT(&tx, &args, &str, &len);
     MAZ(str);
     MAZ(len);
 
     /* Binary tag with non-printables in the payload */
+    reset_tag2idx(1, SLT_Debug);
+    MASSERT(max_idx == 1);
+    init_tx(&tx, node, nptr);
+    add_record_data(&tx, SLT_Debug, &rec, &chunk, "");
     memcpy(chunk.data, "foo\0\xFF bar\0", 10);
     rec.len = 10;
-    rec.tag = SLT_Debug;
+    str = NULL;
+    len = 0;
     args.tag = SLT_Debug;
     format_SLT(&tx, &args, &str, &len);
+    MAN(str);
 #define EXP_SLT_BINARY "\"foo\\0\\377 bar\""
-    VMASSERT(strncmp(str, EXP_SLT_BINARY, 15) == 0,
+    VMASSERT(strncmp(str, EXP_SLT_BINARY, strlen(EXP_SLT_BINARY)) == 0,
              "format_SLT with binary data: Expected '%s', got '%s'",
              EXP_SLT_BINARY, str);
-    MASSERT(len == 15);
+    MASSERT(len == strlen(EXP_SLT_BINARY));
 
     /* header selector */
+    reset_tag2idx(1, SLT_Timestamp);
+    MASSERT(max_idx == 1);
+    reset_hdr_include();
+    add_hdr_include(1, SLT_Timestamp, "Resp");
+    init_tx_arg(&tx, node, nptr, &args);
+    init_hdr_recs(&tx, SLT_Timestamp);
+    init_rec_chunk(SLT_Timestamp, &rec, &chunk);
     set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
-    rec.len = strlen(TS_RESP_PAYLOAD);
-    rec.tag = SLT_Timestamp;
+    set_hdr_rec(&tx, SLT_Timestamp, 0, &rec);
     args.tag = SLT_Timestamp;
-    args.name = strdup("Resp");
+    args.name = strdup("Resp:");
+    str = NULL;
+    len = 0;
     format_SLT(&tx, &args, &str, &len);
+    MAN(str);
     substr = strstr(TS_RESP_PAYLOAD, "14");
     MASSERT(strncmp(str, substr, strlen(substr)) == 0);
     MASSERT(len == strlen(substr));
 
     /* field selector */
-    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
-    args.name = NULL;
-    args.fld = 0;
+    reset_tag2idx(1, SLT_ReqAcct);
+    MASSERT(max_idx == 1);
+    init_tx_arg(&tx, node, nptr, &args);
+    add_record_data(&tx, SLT_ReqAcct, &rec, &chunk, "277 0 277 319 0 319");
+    args.tag = SLT_ReqAcct;
+    args.fld = 3;
     format_SLT(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "Resp:", 5) == 0);
-    MASSERT(len == 5);
+    MASSERT(strncmp(str, "319", 3) == 0);
+    MASSERT(len == 3);
 
-    /* header and field selector */
-    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
-    args.name = strdup("Resp");
+    /* field not found */
+    args.fld = 6;
+    str = NULL;
+    len = 0;
     format_SLT(&tx, &args, &str, &len);
+    MAZ(len);
+    
+    /* header and field selector */
+    reset_tag2idx(1, SLT_Timestamp);
+    MASSERT(max_idx == 1);
+    reset_hdr_include();
+    add_hdr_include(1, SLT_Timestamp, "Resp");
+    init_tx_arg(&tx, node, nptr, &args);
+    init_hdr_recs(&tx, SLT_Timestamp);
+    init_rec_chunk(SLT_Timestamp, &rec, &chunk);
+    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
+    set_hdr_rec(&tx, SLT_Timestamp, 0, &rec);
+    args.tag = SLT_Timestamp;
+    args.name = strdup("Resp:");
+    args.fld = 0;
+    str = NULL;
+    len = 0;
+    format_SLT(&tx, &args, &str, &len);
+    MAN(str);
     MASSERT(strncmp(str, substr, len) == 0);
     MASSERT(len == strlen("1427799478.166798"));
 
     /* header not found */
-    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
     args.name = strdup("Foo");
     args.fld = -1;
     str = NULL;
     len = 0;
     format_SLT(&tx, &args, &str, &len);
     MAZ(str);
-    MAZ(len);
-    
-    /* field not found */
-    set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
-    args.name = NULL;
-    args.fld = 4;
-    str = NULL;
-    len = 0;
-    format_SLT(&tx, &args, &str, &len);
     MAZ(len);
     
     /* header field not found */
@@ -1714,79 +1734,207 @@ static const char
     return NULL;
 }
 
+#define ASSERT_TAG_NOHDR(idx) do {              \
+        MASSERT(tag2idx[idx] != -1);            \
+        MASSERT(hdr_include_tbl[idx] == NULL);  \
+    } while(0)                                  \
+
+#define ASSERT_TAG_HDR(idx) do {                \
+        MASSERT(tag2idx[idx] != -1);            \
+        MASSERT(hdr_include_tbl[idx] != NULL);  \
+    } while(0)
+
+#define ASSERT_NOTAG_NOHDR(idx) do {            \
+        MASSERT(tag2idx[idx] == -1);            \
+        MASSERT(hdr_include_tbl[idx] == NULL);  \
+    } while(0)
+
+#define CHECK_HDRS(idx, ...) do {                                       \
+	const char *hdrs[] = {__VA_ARGS__};                             \
+	int sz = sizeof(hdrs)/sizeof(hdrs[0]);                          \
+	MASSERT(hdr_include_tbl[idx]->n == sz);                         \
+	for (int j = 0; j < sz; j++ )                                   \
+	    MASSERT(strcmp(hdrs[j], hdr_include_tbl[idx]->hdr[j]) == 0); \
+	} while (0)
+
+static void
+setup_full_client_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[],
+                     rec_t rec[], chunk_t c[])
+{
+#define TS_REQ_PAYLOAD "Req: 1429213569.602005 0.000000 0.000000"
+    init_tx(tx, node, nptr);
+    tx->state = TX_SUBMITTED;
+    tx->disp = DISP_HIT;
+    tx->type = VSL_t_req;
+
+    init_hdr_recs(tx, SLT_Timestamp);
+    set_hdr_data(tx, &rec[0], &c[0], DATA_FindHdrIdx(SLT_Timestamp, "Start:"),
+                 SLT_Timestamp, T1);
+    add_record_data(tx, SLT_ReqStart,    &rec[1], &c[1], REQSTART_PAYLOAD);
+    add_record_data(tx, SLT_ReqMethod,   &rec[2], &c[2], "GET");
+    add_record_data(tx, SLT_ReqURL,      &rec[3], &c[3], URL_QUERY_PAYLOAD);
+    add_record_data(tx, SLT_ReqProtocol, &rec[4], &c[4], PROTOCOL_PAYLOAD);
+    init_hdr_recs(tx, SLT_ReqHeader);
+    set_hdr_data(tx, &rec[5], &c[5],
+                 DATA_FindHdrIdx(SLT_ReqHeader, "Authorization:"),
+                 SLT_ReqHeader, BASIC_AUTH_PAYLOAD);
+    set_hdr_data(tx, &rec[6], &c[6], DATA_FindHdrIdx(SLT_ReqHeader, "Host:"),
+                 SLT_ReqHeader, "Host: foobar.com");
+    set_hdr_data(tx, &rec[7], &c[7], DATA_FindHdrIdx(SLT_ReqHeader, "Foo:"),
+                 SLT_ReqHeader, "Foo: foohdr");
+    add_record_data(tx, SLT_RespStatus, &rec[9],  &c[9], "200");
+    add_record_data(tx, SLT_ReqAcct,    &rec[10], &c[10], REQACCT_PAYLOAD);
+    set_hdr_data(tx, &rec[11], &c[11], DATA_FindHdrIdx(SLT_Timestamp, "Resp:"),
+                 SLT_Timestamp, TS_RESP_PAYLOAD);
+    init_hdr_recs(tx, SLT_RespHeader);
+    set_hdr_data(tx, &rec[12], &c[12], DATA_FindHdrIdx(SLT_RespHeader, "Bar:"),
+                 SLT_RespHeader, "Bar: barhdr");
+    set_hdr_data(tx, &rec[13], &c[13],
+                 DATA_FindHdrIdx(SLT_Timestamp, "Process:"), SLT_Timestamp,
+                 TS_PROCESS_PAYLOAD);
+    init_hdr_recs(tx, SLT_VCL_Log);
+    set_hdr_data(tx, &rec[15], &c[15], DATA_FindHdrIdx(SLT_VCL_Log, "baz:"),
+                 SLT_VCL_Log, "baz: logload");
+    add_record_data(tx, SLT_VCL_acl, &rec[16], &c[16],
+                    "MATCH ACL \"10.0.0.0\"/8");
+    add_record_data(tx, SLT_Debug, &rec[17], &c[17], "");
+    rec[17].len = 10;
+    memcpy(c[17].data, "foo\0\xFF bar\0", 10);
+    set_hdr_data(tx, &rec[18], &c[18], DATA_FindHdrIdx(SLT_Timestamp, "Req:"),
+                 SLT_Timestamp, TS_REQ_PAYLOAD);
+}
+
+/* Assumes that setup_full_client_tx() has been called first, so that
+   some values are already in the records and chunks. */
+static void
+setup_full_backend_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[],
+                     rec_t rec[], chunk_t c[])
+{
+#define TS_BEREQ_PAYLOAD "Bereq: 1429210777.728290 0.000048 0.000048"
+    init_tx(tx, node, nptr);
+    tx->state = TX_SUBMITTED;
+    tx->disp = DISP_NONE;
+    tx->type = VSL_t_bereq;
+
+    init_hdr_recs(tx, SLT_Timestamp);
+    set_hdr_data(tx, &rec[0], &c[0], DATA_FindHdrIdx(SLT_Timestamp, "Start:"),
+                 SLT_Timestamp, T1);
+    add_record_data(tx, SLT_Backend,       &rec[1], &c[1], BACKEND_PAYLOAD);
+    add_record_data(tx, SLT_BereqMethod,   &rec[2], &c[2], "GET");
+    add_record_data(tx, SLT_BereqURL,      &rec[3], &c[3], URL_QUERY_PAYLOAD);
+    add_record_data(tx, SLT_BereqProtocol, &rec[4], &c[4], PROTOCOL_PAYLOAD);
+
+    init_hdr_recs(tx, SLT_BereqHeader);
+    set_hdr_data(tx, &rec[5], &c[5],
+                 DATA_FindHdrIdx(SLT_BereqHeader, "Authorization:"),
+                 SLT_BereqHeader, BASIC_AUTH_PAYLOAD);
+    set_hdr_data(tx, &rec[6], &c[6], DATA_FindHdrIdx(SLT_BereqHeader, "Host:"),
+                 SLT_BereqHeader, "Host: foobar.com");
+    set_hdr_data(tx, &rec[7], &c[7], DATA_FindHdrIdx(SLT_BereqHeader, "Foo:"),
+                 SLT_BereqHeader, "Foo: foohdr");
+    add_record_data(tx, SLT_BerespStatus, &rec[9],  &c[9], "200");
+    add_record_data(tx, SLT_BereqAcct,    &rec[10], &c[10], REQACCT_PAYLOAD);
+    set_hdr_data(tx, &rec[11], &c[11],
+                 DATA_FindHdrIdx(SLT_Timestamp, "Beresp:"), SLT_Timestamp,
+                 TS_BERESP_HDR_PAYLOAD);
+    init_hdr_recs(tx, SLT_BerespHeader);
+    set_hdr_data(tx, &rec[12], &c[12],
+                 DATA_FindHdrIdx(SLT_BerespHeader, "Bar:"), SLT_BerespHeader,
+                 "Bar: barhdr");
+    set_hdr_data(tx, &rec[13], &c[13],
+                 DATA_FindHdrIdx(SLT_Timestamp, "BerespBody:"), SLT_Timestamp,
+                 TS_BERESP_PAYLOAD);
+    init_hdr_recs(tx, SLT_VCL_Log);
+    set_hdr_data(tx, &rec[15], &c[15], DATA_FindHdrIdx(SLT_VCL_Log, "baz:"),
+                 SLT_VCL_Log, "baz: logload");
+    add_record_data(tx, SLT_Fetch_Body, &rec[16], &c[16], "2 chunked stream");
+    add_record_data(tx, SLT_Debug, &rec[17], &c[17], "");
+    rec[17].len = 10;
+    memcpy(c[17].data, "foo\0\xFF bar\0", 10);
+    set_hdr_data(tx, &rec[18], &c[18], DATA_FindHdrIdx(SLT_Timestamp, "Bereq:"),
+                 SLT_Timestamp, TS_BEREQ_PAYLOAD);
+}
+
 static const char
 *test_FMT_interface(void)
 {
-#define NRECS 20
-    char err[BUFSIZ], **i_args, *i_arg, strftime_s[BUFSIZ];
-    int status, recs_per_tx;
+#define NTAGS 25
+    char err[BUFSIZ], strftime_s[BUFSIZ];
+    int status;
     tx_t tx;
-    rec_t *recs[NRECS];
-    chunk_t *c[NRECS];
+    rec_node_t node[NTAGS], *nptr[NTAGS];
+    rec_t rec[NTAGS];
+    chunk_t c[NTAGS];
     struct vsb *os;
     struct tm *tm;
     time_t t = 1427743146;
 
-    printf("... testing FMT_Format(), FMT_Get_i_Arg() and "\
-           "FMT_Estimate_RecsPerTx()\n");
+    printf("... testing FMT_*() interface\n");
 
+    reset_tag2idx(0);
+    reset_hdr_include();
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
+
+    MASSERT(8 == FMT_GetMaxIdx());
+    MASSERT(11 == FMT_Estimate_RecsPerTx());
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        switch(i) {
+        case SLT_ReqMethod:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqURL:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqProtocol:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_RespStatus:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqStart:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqAcct:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Authorization", "Host", "Referer", "User-agent");
+            break;
+        case SLT_Timestamp:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Start");
+            break;
+        default:
+            ASSERT_NOTAG_NOHDR(i);
+            break;
+        }
 
     os = VSB_new_auto();
     MAN(os);
 
-    tx.magic = TX_MAGIC;
-    tx.occupied = 1;
+    init_tx(&tx, node, nptr);
+    tx.state = TX_SUBMITTED;
     tx.vxid = 4711;
     tx.pvxid = 1147;
-    VSTAILQ_INIT(&tx.recs);
-    for (int i = 0; i < NRECS; i++) {
-        recs[i] = (rec_t *) calloc(1, sizeof(rec_t));
-        MAN(recs[i]);
-        c[i] = (chunk_t *) calloc(1, sizeof(chunk_t));
-        MAN(c[i]);
-    }
-
-    /* Default client format */
-    i_args = FMT_Get_I_Args();
-    MAN(i_args);
-    const char *exp_default_I_args[] = {
-        "ReqHeader:^\\s*Authorization\\s*:", "ReqHeader:^\\s*Host\\s*:",
-        "ReqHeader:^\\s*Referer\\s*:", "ReqHeader:^\\s*User-agent\\s*:",
-        "Timestamp:^\\s*Start\\s*:", NULL
-    };
-    for (int i = 0; i_args[i] != NULL; i++) {
-        MAN(exp_default_I_args[i]);
-        VMASSERT(strcmp(i_args[i], exp_default_I_args[i]) == 0, "'%s' != '%s'",
-                 i_args[i], exp_default_I_args[i]);
-    }
-
-    i_arg = FMT_Get_i_Arg();
-    MAN(i_arg);
-#define DEFAULT_I_TAGS "ReqMethod,ReqURL,ReqProtocol,RespStatus,ReqStart,"\
-        "ReqAcct,"
-    VMASSERT(strcmp(i_arg, DEFAULT_I_TAGS) == 0,
-             "Default -i arg expected '%s' != '%s'", DEFAULT_I_TAGS, i_arg);
-
-    recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 11);
-
     tx.type = VSL_t_req;
-    add_record_data(&tx, recs[0], c[0], T1, SLT_Timestamp);
-    add_record_data(&tx, recs[1], c[1], REQSTART_PAYLOAD, SLT_ReqStart);
-    add_record_data(&tx, recs[2], c[2], "GET", SLT_ReqMethod);
-    add_record_data(&tx, recs[3], c[3], URL_PAYLOAD, SLT_ReqURL);
-    add_record_data(&tx, recs[4], c[4], PROTOCOL_PAYLOAD, SLT_ReqProtocol);
-    add_record_data(&tx, recs[5], c[5], BASIC_AUTH_PAYLOAD, SLT_ReqHeader);
-    add_record_data(&tx, recs[6], c[6], "Referer: http://foobar.com/",
-                    SLT_ReqHeader);
-    add_record_data(&tx, recs[7], c[7], "User-Agent: Mozilla", SLT_ReqHeader);
-    add_record_data(&tx, recs[8], c[8], "Host: bazquux.com", SLT_ReqHeader);
-    add_record_data(&tx, recs[9], c[9], "200", SLT_RespStatus);
-    add_record_data(&tx, recs[10], c[10], REQACCT_PAYLOAD, SLT_ReqAcct);
-    for (int i = 11; i < NRECS; i++)
-        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+
+    init_hdr_recs(&tx, SLT_Timestamp);
+    set_hdr_data(&tx, &rec[0], &c[0], 0, SLT_Timestamp, T1);
+    add_record_data(&tx, SLT_ReqStart,    &rec[1], &c[1], REQSTART_PAYLOAD);
+    add_record_data(&tx, SLT_ReqMethod,   &rec[2], &c[2], "GET");
+    add_record_data(&tx, SLT_ReqURL,      &rec[3], &c[3], URL_PAYLOAD);
+    add_record_data(&tx, SLT_ReqProtocol, &rec[4], &c[4], PROTOCOL_PAYLOAD);
+    init_hdr_recs(&tx, SLT_ReqHeader);
+    set_hdr_data(&tx, &rec[5], &c[5], 0, SLT_ReqHeader, BASIC_AUTH_PAYLOAD);
+    set_hdr_data(&tx, &rec[6], &c[6], 1, SLT_ReqHeader, "Host: bazquux.com");
+    set_hdr_data(&tx, &rec[7], &c[7], 2, SLT_ReqHeader,
+                 "Referer: http://foobar.com/");
+    set_hdr_data(&tx, &rec[8], &c[8], 3, SLT_ReqHeader, "User-Agent: Mozilla");
+    add_record_data(&tx, SLT_RespStatus, &rec[9],  &c[9], "200");
+    add_record_data(&tx, SLT_ReqAcct,    &rec[10], &c[10], REQACCT_PAYLOAD);
+
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_DEFAULT_OUTPUT "127.0.0.1 - varnish [%d/%b/%Y:%T %z] "\
@@ -1812,47 +1960,66 @@ static const char
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
-    i_args = FMT_Get_I_Args();
-    MAN(i_args);
-    const char *exp_full_client_I_args[] = {
-        "ReqHeader:^\\s*Foo\\s*:", "ReqHeader:^\\s*Host\\s*:",
-        "ReqHeader:^\\s*Authorization\\s*:", "RespHeader:^\\s*Bar\\s*:",
-        "VCL_Log:^\\s*baz\\s*:", "Timestamp:^\\s*Resp\\s*:",
-        "Timestamp:^\\s*Start\\s*:", "Timestamp:^\\s*Process\\s*:",
-        "Timestamp:^\\s*Req\\s*:", NULL
-    };
-    for (int i = 0; i_args[i] != NULL; i++) {
-        MAN(exp_full_client_I_args[i]);
-        VMASSERT(strcmp(i_args[i], exp_full_client_I_args[i]) == 0,
-                 "'%s' != '%s'", i_args[i], exp_full_client_I_args[i]);
-    }
-    
-    i_arg = FMT_Get_i_Arg();
-    MAN(i_arg);
-#define FULL_CLIENT_I_TAGS "Debug,ReqMethod,ReqURL,ReqProtocol,RespStatus,"\
-        "VCL_acl,VCL_call,VCL_return,ReqStart,ReqAcct,PipeAcct,"
-    VMASSERT(strcmp(i_arg, FULL_CLIENT_I_TAGS) == 0,
-             "Full client -i arg expected '%s' != '%s'", FULL_CLIENT_I_TAGS,
-             i_arg);
+    MASSERT(15 == FMT_GetMaxIdx());
+    MASSERT(18 == FMT_Estimate_RecsPerTx());
 
-    recs_per_tx = FMT_Estimate_RecsPerTx();
-    VMASSERT(recs_per_tx == 38, "recs_per_tx(%d) != 38", recs_per_tx);
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        switch(i) {
+        case SLT_Debug:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqMethod:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqURL:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqProtocol:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_RespStatus:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqStart:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqAcct:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_VCL_acl:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_VCL_call:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_VCL_return:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_PipeAcct:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            break;
+        case SLT_RespHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Bar");
+            break;
+        case SLT_VCL_Log:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "baz");
+            break;
+        case SLT_Timestamp:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Process", "Req", "Resp", "Start");
+            break;
+        default:
+            ASSERT_NOTAG_NOHDR(i);
+            break;
+        }
 
-#define TS_REQ_PAYLOAD "Req: 1429213569.602005 0.000000 0.000000"
-    set_record_data(recs[3], c[3], URL_QUERY_PAYLOAD, SLT_ReqURL);
-    set_record_data(recs[6], c[6], "Host: foobar.com", SLT_ReqHeader);
-    set_record_data(recs[7], c[7], "Foo: foohdr", SLT_ReqHeader);
-    set_record_data(recs[8], c[8], "Host: bazquux.com", SLT_ReqHeader);
-    set_record_data(recs[11], c[11], TS_RESP_PAYLOAD, SLT_Timestamp);
-    set_record_data(recs[12], c[12], "Bar: barhdr", SLT_RespHeader);
-    set_record_data(recs[13], c[13], TS_PROCESS_PAYLOAD, SLT_Timestamp);
-    set_record_data(recs[14], c[14], "HIT", SLT_VCL_call);
-    set_record_data(recs[15], c[15], "baz: logload", SLT_VCL_Log);
-    set_record_data(recs[16], c[16], "MATCH ACL \"10.0.0.0\"/8", SLT_VCL_acl);
-    set_record_data(recs[17], c[17], "", SLT_Debug);
-    recs[17]->len = 10;
-    memcpy(c[17]->data, "foo\0\xFF bar\0", 10);
-    set_record_data(recs[18], c[18], TS_REQ_PAYLOAD, SLT_Timestamp);
+    setup_full_client_tx(&tx, node, nptr, rec, c);
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_FULL_CLIENT_OUTPUT "105 c 15963 HTTP/1.1 127.0.0.1 60 foohdr "\
@@ -1881,52 +2048,57 @@ static const char
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
-    i_args = FMT_Get_I_Args();
-    const char *exp_full_backend_I_args[] = {
-        "BereqHeader:^\\s*Foo\\s*:", "BereqHeader:^\\s*Host\\s*:",
-        "BereqHeader:^\\s*Authorization\\s*:", "BerespHeader:^\\s*Bar\\s*:",
-        "VCL_Log:^\\s*baz\\s*:", "Timestamp:^\\s*BerespBody\\s*:",
-        "Timestamp:^\\s*Start\\s*:", "Timestamp:^\\s*Beresp\\s*:",
-        "Timestamp:^\\s*Bereq\\s*:", NULL
-    };
-    for (int i = 0; i_args[i] != NULL; i++) {
-        MAN(exp_full_backend_I_args[i]);
-        VMASSERT(strcmp(i_args[i], exp_full_backend_I_args[i]) == 0,
-                 "'%s' != '%s'", i_args[i], exp_full_backend_I_args[i]);
-    }
+    MASSERT(12 == FMT_GetMaxIdx());
+    MASSERT(17 == FMT_Estimate_RecsPerTx());
 
-    i_arg = FMT_Get_i_Arg();
-    MAN(i_arg);
-#define FULL_BACKEND_I_TAGS "Debug,Backend,BereqMethod,BereqURL,BereqProtocol,"\
-        "BerespStatus,Fetch_Body,BereqAcct,"
-    VMASSERT(strcmp(i_arg, FULL_BACKEND_I_TAGS) == 0,
-             "Full backend -i arg expected '%s' != '%s'", FULL_BACKEND_I_TAGS,
-             i_arg);
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        switch(i) {
+        case SLT_Debug:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqMethod:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqURL:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqProtocol:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BerespStatus:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_Backend:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqAcct:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_Fetch_Body:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            break;
+        case SLT_BerespHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Bar");
+            break;
+        case SLT_VCL_Log:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "baz");
+            break;
+        case SLT_Timestamp:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Bereq", "Beresp", "BerespBody", "Start");
+            break;
+        default:
+            ASSERT_NOTAG_NOHDR(i);
+            break;
+        }
 
-    recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 17);
-
-#define TS_BEREQ_PAYLOAD "Bereq: 1429210777.728290 0.000048 0.000048"
-    tx.type = VSL_t_bereq;
-    set_record_data(recs[1], c[1], BACKEND_PAYLOAD, SLT_Backend);
-    recs[2]->tag = SLT_BereqMethod;
-    recs[3]->tag = SLT_BereqURL;
-    recs[4]->tag = SLT_BereqProtocol;
-    recs[5]->tag = SLT_BereqHeader;
-    recs[6]->tag = SLT_BereqHeader;
-    recs[7]->tag = SLT_BereqHeader;
-    recs[8]->tag = SLT_BereqHeader;
-    recs[9]->tag = SLT_BerespStatus;
-    recs[10]->tag = SLT_BereqAcct;
-    set_record_data(recs[11], c[11], TS_BERESP_PAYLOAD, SLT_Timestamp);
-    recs[12]->tag = SLT_BerespHeader;
-    set_record_data(recs[13], c[13], TS_BERESP_HDR_PAYLOAD, SLT_Timestamp);
-    set_record_data(recs[14], c[14], "", SLT__Bogus);
-    set_record_data(recs[16], c[16], "2 chunked stream", SLT_Fetch_Body);
-    set_record_data(recs[17], c[17], "", SLT_Debug);
-    recs[17]->len = 10;
-    memcpy(c[17]->data, "foo\0\xFF bar\0", 10);
-    set_record_data(recs[18], c[18], TS_BEREQ_PAYLOAD, SLT_Timestamp);
+    setup_full_backend_tx(&tx, node, nptr, rec, c);
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
@@ -1935,6 +2107,125 @@ static const char
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
         "2 chunked stream \"foo\\0\\377 bar\" "\
         "1429210777.728290 0.000048 0.000048 283 0.000048 4711 1147\n"
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
+    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
+             VSB_data(os), strftime_s);
+
+    /* Both backend and client formats */
+    FMT_Fini();
+    VSB_clear(os);
+
+    VSB_clear(config.cformat);
+    VSB_cpy(config.cformat, FULL_CLIENT_FMT);
+    VSB_finish(config.cformat);
+    VSB_clear(config.bformat);
+    VSB_cpy(config.bformat, FULL_BACKEND_FMT);
+    VSB_finish(config.bformat);
+    status = FMT_Init(err);
+    VMASSERT(status == 0, "FMT_Init: %s", err);
+
+    MASSERT(24 == FMT_GetMaxIdx());
+    MASSERT(18 == FMT_Estimate_RecsPerTx());
+
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        switch(i) {
+        case SLT_Debug:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqMethod:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqURL:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqProtocol:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_RespStatus:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqStart:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqAcct:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_VCL_acl:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_VCL_call:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_VCL_return:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_PipeAcct:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_ReqHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            break;
+        case SLT_RespHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Bar");
+            break;
+        case SLT_VCL_Log:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "baz");
+            break;
+        case SLT_Timestamp:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Bereq", "Beresp", "BerespBody", "Process", "Req",
+                       "Resp", "Start");
+            break;
+        case SLT_BereqMethod:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqURL:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqProtocol:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BerespStatus:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_Backend:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqAcct:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_Fetch_Body:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        case SLT_BereqHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            break;
+        case SLT_BerespHeader:
+            ASSERT_TAG_HDR(i);
+            CHECK_HDRS(i, "Bar");
+            break;
+        default:
+            ASSERT_NOTAG_NOHDR(i);
+            break;
+        }
+
+    setup_full_client_tx(&tx, node, nptr, rec, c);
+    FMT_Format(&tx, os);
+    VSB_finish(os);
+    tm = localtime(&t);
+    MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
+    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
+             VSB_data(os), strftime_s);
+
+    setup_full_backend_tx(&tx, node, nptr, rec, c);
+    VSB_clear(os);
+    FMT_Format(&tx, os);
+    VSB_finish(os);
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
     VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
@@ -1949,29 +2240,30 @@ static const char
     VSB_cpy(config.rformat, FULL_RAW_FMT);
     VSB_finish(config.rformat);
     VSB_clear(config.bformat);
+    VSB_clear(config.cformat);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
-    i_args = FMT_Get_I_Args();
-    MAZ(i_args[0]);
+    MASSERT(1 == FMT_GetMaxIdx());
+    MASSERT(1 == FMT_Estimate_RecsPerTx());
 
-    i_arg = FMT_Get_i_Arg();
-    MAN(i_arg);
-#define FULL_RAW_I_TAGS "Backend_health,"
-    VMASSERT(strcmp(i_arg, FULL_RAW_I_TAGS) == 0,
-             "Full raw -i arg expected '%s' != '%s'", FULL_RAW_I_TAGS,
-             i_arg);
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        switch(i) {
+        case SLT_Backend_health:
+            ASSERT_TAG_NOHDR(i);
+            break;
+        default:
+            ASSERT_NOTAG_NOHDR(i);
+            break;
+        }
 
-    recs_per_tx = FMT_Estimate_RecsPerTx();
-    MASSERT(recs_per_tx == 1);
-
+    init_tx(&tx, node, nptr);
+    tx.state = TX_SUBMITTED;
     tx.type = VSL_t_raw;
     tx.t = 1427743146.529143;
 #define HEALTH_PAYLOAD "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 " \
         "HTTP/1.1 200 OK"
-    set_record_data(recs[1], c[1], HEALTH_PAYLOAD, SLT_Backend_health);
-    for (int i = 2; i < NRECS; i++)
-        add_record_data(&tx, recs[i], c[i], "", SLT__Bogus);
+    add_record_data(&tx, SLT_Backend_health, &rec[0],  &c[0], HEALTH_PAYLOAD);
     FMT_Format(&tx, os);
     VSB_finish(os);
 #define EXP_FULL_RAW_OUTPUT "[%d/%b/%Y:%T %z] %F-%T.529143 "\
@@ -2023,7 +2315,6 @@ static const char
 
     return NULL;
 }
-#endif
 
 static const char
 *all_tests(void)
@@ -2052,16 +2343,12 @@ static const char
     mu_run_test(test_format_Xo);
     mu_run_test(test_format_Xt);
     mu_run_test(test_format_Xttfb);
-#if 0
     mu_run_test(test_format_VCL_disp);
-#endif
     mu_run_test(test_format_VCL_Log);
-#if 0
     mu_run_test(test_format_SLT);
     mu_run_test(test_format_p_vxid);
     mu_run_test(test_FMT_Fini);
     mu_run_test(test_FMT_interface);
-#endif
 
     return NULL;
 }

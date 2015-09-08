@@ -217,7 +217,9 @@ static inline tx_t
     }
     tx_exhausted = 0;
     tx = VSTAILQ_FIRST(&rdr_tx_freelist);
+    assert(tx->state == TX_FREE);
     VSTAILQ_REMOVE_HEAD(&rdr_tx_freelist, freelist);
+    tx->state = TX_OPEN;
     rdr_tx_free--;
 
     return (tx);
@@ -235,7 +237,8 @@ static inline void
 submit(tx_t *tx)
 {
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    assert(OCCUPIED(tx));
+    assert(tx->state == TX_DONE);
+    tx->state = TX_SUBMITTED;
     VWMB();
     SPSCQ_Enq(tx);
     signal_spscq_ready();
@@ -267,7 +270,8 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             continue;
         }
         CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-        assert(!OCCUPIED(tx));
+        assert(tx->state == TX_OPEN);
+        assert(tx->disp == DISP_NONE);
         AN(tx->recs);
         tx->type = t->type;
         tx->vxid = t->vxid;
@@ -284,13 +288,38 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 
             if ((idx = tag2idx[VSL_TAG(t->c->rec.ptr)]) == -1)
                 continue;
+            tag = VSL_TAG(t->c->rec.ptr);
+            p = (const char *) VSL_CDATA(t->c->rec.ptr);
+            len = VSL_LEN(t->c->rec.ptr);
+
+            switch(tag) {
+            case SLT_VCL_call:
+            case SLT_VCL_return:
+                if (tx->disp != DISP_NONE)
+                    continue;
+                if (strncasecmp("hit", p, len) == 0)
+                    tx->disp = DISP_HIT;
+                else if (strncasecmp("miss", p, len) == 0)
+                    tx->disp = DISP_MISS;
+                else if (strncasecmp("pass", p, len) == 0)
+                    tx->disp = DISP_PASS;
+                else if (strncasecmp("error", p, len) == 0)
+                    tx->disp = DISP_ERROR;
+                else if (strncasecmp("pipe", p, len) == 0)
+                    tx->disp = DISP_PIPE;
+                if (debug && tx->disp != DISP_NONE)
+                    LOG_Log(LOG_DEBUG, "Record: [%u %s %.*s]",
+                            VSL_ID(t->c->rec.ptr), VSL_tags[tag], len, p);
+                continue;
+            default:
+                break;
+            }
+
             CHECK_OBJ_NOTNULL(tx->recs[idx], REC_NODE_MAGIC);
             if (tx->recs[idx]->rec != NULL)
                 continue;
             if (tx->recs[idx]->hdrs != NULL) {
-                hdr_idx = DATA_FindHdrIdx(VSL_TAG(t->c->rec.ptr),
-                                          (const char *)
-                                          VSL_CDATA(t->c->rec.ptr));
+                hdr_idx = DATA_FindHdrIdx(tag, p);
                 if (hdr_idx == -1)
                     continue;
                 if (tx->recs[idx]->hdrs[hdr_idx] != NULL)
@@ -300,9 +329,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             else
                 rp = &tx->recs[idx]->rec;
 
-            tag = VSL_TAG(t->c->rec.ptr);
-            p = (const char *) VSL_CDATA(t->c->rec.ptr);
-            len = VSL_LEN(t->c->rec.ptr);
             if (debug)
                 LOG_Log(LOG_DEBUG, "Record: [%u %s %.*s]",
                         VSL_ID(t->c->rec.ptr), VSL_tags[tag], len, p);
@@ -360,11 +386,17 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         }
 
         if (nrec == 0) {
+            tx->state = TX_FREE;
+            tx->type = VSL_t_unknown;
+            tx->vxid = -1;
+            tx->pvxid = -1;
+            tx->t = 0.;
             VSTAILQ_INSERT_HEAD(&rdr_tx_freelist, tx, freelist);
             continue;
         }
 
-        tx->occupied = 1;
+        assert(tx->state == TX_OPEN);
+        tx->state = TX_DONE;
         seen++;
         MON_StatsUpdate(STATS_DONE, nrec, total_chunks);
         if (tx_occ > tx_occ_hi)

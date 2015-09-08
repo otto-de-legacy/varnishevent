@@ -76,10 +76,10 @@ int max_idx;
 typedef struct chunk_t {
     unsigned magic;
 #define CHUNK_MAGIC 0x676e0d19
+    unsigned occupied;
     char *data;
     VSTAILQ_ENTRY(chunk_t) freelist;
     VSTAILQ_ENTRY(chunk_t) chunklist;
-    unsigned int occupied:1;
 } chunk_t;
 
 typedef VSTAILQ_HEAD(chunkhead_s, chunk_t) chunkhead_t;
@@ -91,10 +91,10 @@ typedef struct rec_t {
     unsigned magic;
 #define RECORD_MAGIC 0xf427a374
     unsigned len;
+    unsigned occupied;
+    enum VSL_tag_e tag;
     chunkhead_t chunks;
     VSTAILQ_ENTRY(rec_t) freelist;
-    enum VSL_tag_e tag;
-    unsigned int occupied:1;
 } rec_t;
 
 rec_t *records;
@@ -111,17 +111,36 @@ typedef struct rec_node_t {
 
 rec_node_t *rec_nodes;
 
+enum tx_state_e {
+    TX_FREE,
+    TX_OPEN,
+    TX_DONE,
+    TX_SUBMITTED,
+    TX_FORMATTING,
+    TX_WRITTEN
+};
+
+enum tx_disp_e {
+    DISP_NONE = 0,
+    DISP_HIT,
+    DISP_MISS,
+    DISP_PASS,
+    DISP_PIPE,
+    DISP_ERROR
+};
+
 typedef struct tx_t {
     unsigned magic;
 #define TX_MAGIC 0xff463e42
-    VSTAILQ_ENTRY(tx_t) freelist;
-    VSTAILQ_ENTRY(tx_t) spscq;
-    rec_node_t **recs;
-    double t;
     int32_t vxid;
     int32_t pvxid;
-    enum VSL_transaction_e type:7;
-    unsigned int occupied:1;
+    enum VSL_transaction_e type;
+    enum tx_state_e state;
+    enum tx_disp_e disp;
+    double t;
+    rec_node_t **recs;
+    VSTAILQ_ENTRY(tx_t) freelist;
+    VSTAILQ_ENTRY(tx_t) spscq;
 } tx_t;
 
 tx_t *txn;

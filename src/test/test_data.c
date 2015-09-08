@@ -74,12 +74,13 @@ static char
 
     for (int i = 0; i < config.max_data; i++) {
         MCHECK_OBJ(&txn[i], TX_MAGIC);
-        MASSERT(!OCCUPIED(&txn[i]));
+        MASSERT(txn[i].state == TX_FREE);
         MASSERT(txn[i].vxid == -1);
         MASSERT(txn[i].pvxid == -1);
         MASSERT(txn[i].type == VSL_t_unknown);
+        MASSERT(txn[i].disp == DISP_NONE);
         MAZ(txn[i].t);
-        for (int j = 0; j <= max_idx; j++) {
+        for (int j = 0; j < max_idx; j++) {
             MCHECK_OBJ_NOTNULL(txn[i].recs[j], REC_NODE_MAGIC);
             MAZ(txn[i].recs[j]->rec);
             if (txn[i].recs[j]->hdrs != NULL)
@@ -292,6 +293,7 @@ fill_rec(rec_t *rec, chunk_t *c, int nc)
         VSTAILQ_INSERT_TAIL(&rec->chunks, chunk, chunklist);
         chunk->magic = CHUNK_MAGIC;
         chunk->data = (char *) calloc(1, config.chunk_size);
+        chunk->occupied = 1;
         chunks_filled++;
     }
 }
@@ -329,7 +331,7 @@ static const char
 #define N_NODES (max_idx + 1)
 #define HDRS_PER_NODE 5
 #define CHUNKS_PER_REC 3
-#define NRECS ((N_NODES)/2 + (((N_NODES) - (N_NODES)/2) * HDRS_PER_NODE))
+#define NRECS ((max_idx)/2 + (((max_idx) - (max_idx)/2) * HDRS_PER_NODE))
 #define NCHUNKS ((NRECS) * (CHUNKS_PER_REC))
     tx_t tx;
     rec_t *rec;
@@ -348,10 +350,11 @@ static const char
     tx.vxid = 314159265;
     tx.pvxid = 2718281828;
     tx.type = VSL_t_req;
-    tx.occupied = 1;
-    tx.recs = (rec_node_t **) calloc(N_NODES, sizeof(rec_node_t *));
+    tx.state = TX_WRITTEN;
+    tx.disp = DISP_HIT;
+    tx.recs = (rec_node_t **) calloc(max_idx, sizeof(rec_node_t *));
     MAN(tx.recs);
-    for (int i = 0; i < N_NODES/2; i++) {
+    for (int i = 0; i < max_idx/2; i++) {
         tx.recs[i] = &rec_nodes[i];
         rec_nodes[i].magic = REC_NODE_MAGIC;
         rec_nodes[i].rec = &records[i];
@@ -360,7 +363,7 @@ static const char
                 == VSTAILQ_LAST(&records[i].chunks, chunk_t, chunklist));
         rec_nodes[i].hdrs = NULL;
     }
-    for (int i = N_NODES/2; i < N_NODES; i++) {
+    for (int i = max_idx/2; i < max_idx; i++) {
         tx.recs[i] = &rec_nodes[i];
         rec_nodes[i].magic = REC_NODE_MAGIC;
         rec_nodes[i].rec = NULL;
@@ -368,7 +371,7 @@ static const char
                                               sizeof(rec_t *));
         MAN(rec_nodes[i].hdrs);
         for (int j = 0; j < HDRS_PER_NODE; j++) {
-            int idx = N_NODES/2 + (i - N_NODES/2) * HDRS_PER_NODE + j;
+            int idx = max_idx/2 + (i - max_idx/2) * HDRS_PER_NODE + j;
             rec_nodes[i].hdrs[j] = &records[idx];
             fill_rec(&records[idx], &chunks[idx * CHUNKS_PER_REC],
                      CHUNKS_PER_REC);
@@ -384,12 +387,13 @@ static const char
     MASSERT(nfree_chunks == 1147 + NCHUNKS);
 
     MCHECK_OBJ(&tx, TX_MAGIC);
-    MASSERT(!OCCUPIED(&tx));
+    MASSERT(tx.state == TX_FREE);
     MASSERT(tx.vxid == -1);
     MASSERT(tx.pvxid == -1);
     MASSERT(tx.type == VSL_t_unknown);
+    MASSERT(tx.disp == DISP_NONE);
     MAZ(tx.t);
-    for (int i = 0; i < N_NODES; i++) {
+    for (int i = 0; i < max_idx; i++) {
         REC_NODE_CLEARED(tx.recs[i]);
         REC_NODE_CLEARED(&rec_nodes[i]);
     }

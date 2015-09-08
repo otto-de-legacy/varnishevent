@@ -140,11 +140,12 @@ open_log(void)
 static inline void
 wrt_return_freelist(void)
 {
-    if (wrt_nfree_tx > 0) {
-        DATA_Return_Freetx(&wrt_freetx, wrt_nfree_tx);
-        LOG_Log(LOG_DEBUG, "Writer: returned %u tx to free list", wrt_nfree_tx);
-        wrt_nfree_tx = 0;
-        assert(VSTAILQ_EMPTY(&wrt_freetx));
+    if (wrt_nfree_chunks > 0) {
+        DATA_Return_Freechunk(&wrt_freechunks, wrt_nfree_chunks);
+        LOG_Log(LOG_DEBUG, "Writer: returned %u chunks to free list",
+                wrt_nfree_chunks);
+        wrt_nfree_chunks = 0;
+        assert(VSTAILQ_EMPTY(&wrt_freechunks));
     }
     if (wrt_nfree_recs > 0) {
         DATA_Return_Freerec(&wrt_freerecs, wrt_nfree_recs);
@@ -153,12 +154,11 @@ wrt_return_freelist(void)
         wrt_nfree_recs = 0;
         assert(VSTAILQ_EMPTY(&wrt_freerecs));
     }
-    if (wrt_nfree_chunks > 0) {
-        DATA_Return_Freechunk(&wrt_freechunks, wrt_nfree_chunks);
-        LOG_Log(LOG_DEBUG, "Writer: returned %u chunks to free list",
-                wrt_nfree_chunks);
-        wrt_nfree_chunks = 0;
-        assert(VSTAILQ_EMPTY(&wrt_freechunks));
+    if (wrt_nfree_tx > 0) {
+        DATA_Return_Freetx(&wrt_freetx, wrt_nfree_tx);
+        LOG_Log(LOG_DEBUG, "Writer: returned %u tx to free list", wrt_nfree_tx);
+        wrt_nfree_tx = 0;
+        assert(VSTAILQ_EMPTY(&wrt_freetx));
     }
 }
 
@@ -168,7 +168,7 @@ wrt_write(tx_t *tx)
     int errnum;
     
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
-    assert(OCCUPIED(tx));
+    assert(tx->state == TX_SUBMITTED);
 
     AZ(pthread_mutex_lock(&reopen_lock));
     if (reopen && fo != stdout) {
@@ -194,6 +194,7 @@ wrt_write(tx_t *tx)
     VSB_clear(os);
     FMT_Format(tx, os);
     VSB_finish(os);
+    assert(tx->state == TX_WRITTEN);
 
     if (timeout != NULL)
         to = config.output_timeout;
@@ -238,6 +239,8 @@ wrt_write(tx_t *tx)
     /* clean up */
     DATA_Clear_Tx(tx, &wrt_freetx, &wrt_freerecs, &wrt_freechunks,
                   &wrt_nfree_tx, &wrt_nfree_recs, &wrt_nfree_chunks);
+
+    assert(tx->state == TX_FREE);
 
     if (RDR_Exhausted() || wrt_nfree_tx > tx_thresh
         || wrt_nfree_recs > rec_thresh || wrt_nfree_chunks > chunk_thresh)
