@@ -1,7 +1,7 @@
 AC_PREREQ(2.59)
 AC_COPYRIGHT([Copyright (c) 2015 UPLEX Nils Goroll Systemoptimierung
 Copyright (c) 2015 Otto Gmbh & Co KG])
-AC_INIT([varnishevent], [4.0.0])
+AC_INIT([varnishevent], [4.1.0])
 AC_CONFIG_SRCDIR(src/varnishevent.h)
 AM_CONFIG_HEADER(config.h)
 
