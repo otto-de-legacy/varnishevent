@@ -86,14 +86,16 @@
 #define DISPATCH_REOPEN 11
 #define DISPATCH_FLUSH 12
 
-const char *version = PACKAGE_TARNAME "-" PACKAGE_VERSION " revision " \
+#define MAX_IDLE_PAUSE 0.01
+
+const char *version = PACKAGE_TARNAME "-" PACKAGE_VERSION " revision "  \
     VCS_Version " branch " VCS_Branch;
 
 static unsigned len_hi = 0, closed = 0, overrun = 0, ioerr = 0, reacquire = 0,
     tx_thresh, rec_thresh, chunk_thresh;
 
 static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
-    no_free_rec = 0, no_free_chunk = 0;
+    no_free_rec = 0, no_free_chunk = 0, eol = 0;
 
 /* Hack, because we cannot have #ifdef in the macro definition SIGDISP */
 #define _UNDEFINED(SIG) ((#SIG)[0] == 0)
@@ -126,16 +128,18 @@ static unsigned rdr_tx_free = 0;
 static int tx_type_log[VSL_t__MAX], debug = 0;
 static char tx_type_name[VSL_t__MAX];
 
+static double idle_pause = MAX_IDLE_PAUSE;
+
 void
 RDR_Stats(void)
 {
     LOG_Log(LOG_INFO, "Reader: seen=%lu submitted=%lu free_tx=%u free_rec=%u "
             "free_chunk=%u no_free_tx=%lu no_free_rec=%lu no_free_chunk=%lu "
-            "len_hi=%u len_overflows=%lu closed=%u overrun=%u ioerr=%u "
-            "reacquire=%u",
+            "len_hi=%u len_overflows=%lu eol=%lu idle_pause=%.06f closed=%u "
+            "overrun=%u ioerr=%u reacquire=%u",
             seen, submitted, rdr_tx_free, rdr_rec_free, rdr_chunk_free,
             no_free_tx, no_free_rec, no_free_chunk, len_hi, len_overflows,
-            closed, overrun, ioerr, reacquire);
+            eol, idle_pause, closed, overrun, ioerr, reacquire);
 }
 
 int
@@ -500,6 +504,8 @@ main(int argc, char *argv[])
     struct VSL_cursor *cursor;
     enum VSL_grouping_e grouping = VSL_g_vxid;
     struct vsb *hdrs = VSB_new_auto();
+    unsigned long last_seen = 0;
+    double last_t;
 
     vsl = VSL_New();
 
@@ -856,7 +862,19 @@ main(int argc, char *argv[])
             continue;
         case DISPATCH_EOL:
             take_free();
-            VTIM_sleep(config.idle_pause);
+            eol++;
+            /* re-adjust idle pause every 1024 seen txn */
+            if ((seen & (~0L << 10)) > (last_seen & (~0L << 10))) {
+                double t = VTIM_mono();
+                idle_pause = (t - last_t) / (double) (seen - last_seen);
+                last_seen = seen;
+                if (idle_pause > MAX_IDLE_PAUSE)
+                    idle_pause = MAX_IDLE_PAUSE;
+                if (idle_pause < 1e-6)
+                    idle_pause = 1e-6;
+                last_t = t;
+            }
+            VTIM_sleep(idle_pause);
             if (!flush)
                 continue;
             break;

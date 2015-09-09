@@ -410,9 +410,6 @@ Parameter              CLI Option Description                                   
 ``syslog.ident``                  See ``syslog(3)``; this parameter is useful to distinguish ``varnishevent`` processes in  ``varnishevent``
                                   the syslog if more than one is running on the system.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``idle.pause``                    The time in seconds to pause when the reader thread reaches the end of the Varnish log    0.01
-                                  with no further transactions currently to be read.
----------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``output.timeout``                Output timeout used by the writer thread. If the timeout is set and the output stream     0
                                   is not ready when it elapses, the transaction to be output is discarded. If 0, the
                                   writer waits indefinitely.
@@ -431,7 +428,7 @@ to the log (as configured with the parameter
 depending on how syslog is configured)::
 
  Data tables: len_tx=5000 len_rec=70000 len_chunk=4480000 tx_occ=0 rec_occ=0 chunk_occ=0 tx_occ_hi=4 rec_occ_hi=44 chunk_occ_hi=48 global_free_tx=0 global_free_rec=0 global_free_chunk=0
- Reader: seen=68 submitted=68 free_tx=5000 free_rec=70000 free_chunk=4480000 no_free_tx=0 no_free_rec=0 no_free_chunk=0 len_hi=1712 len_overflows=0 closed=0 overrun=0 ioerr=0 reacquire=0
+ Reader: seen=68 submitted=68 free_tx=5000 free_rec=70000 free_chunk=4480000 no_free_tx=0 no_free_rec=0 no_free_chunk=0 len_hi=1712 len_overflows=0 eol=67 idle_pause=0.010000 closed=0 overrun=0 ioerr=0 reacquire=0
  Writer (waiting): seen=68 writes=68 bytes=35881 errors=0 timeouts=0 waits=53 free_tx=0 free_rec=0 free_chunk=0
  Queue: max=5000 len=0 load=0.00 occ_hi=4
 
@@ -489,8 +486,8 @@ the reader asks the Varnish log API to flush pending transactions,
 which are buffered for writing, and attempts to re-acquire the log
 (``reacquire``).
 
-The ``free_*`` fields are gauges, and ``len_hi`` is monotonic increasing. All of the other
-fields are cumulative counters:
+The ``free_*`` and ``idle_pause`` fields are gauges, and ``len_hi`` is
+monotonic increasing. All of the other fields are cumulative counters:
 
 =================== ===========================================================
 Field               Description
@@ -518,6 +515,12 @@ Field               Description
 ------------------- -----------------------------------------------------------
 ``len_overflows``   Number of Varnish log payloads seen with a length greater
                     than ``max.reclen``
+------------------- -----------------------------------------------------------
+``eol``             Number of times the reader thread reached the end of the
+                    Varnish log and paused
+------------------- -----------------------------------------------------------
+``idle_pause``      Current length in seconds of an idle pause at end of log
+                    (periodically adjusted to match the transaction read rate)
 ------------------- -----------------------------------------------------------
 ``closed``          Number of times the Varnish log was closed or abandoned
 ------------------- -----------------------------------------------------------

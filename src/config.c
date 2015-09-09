@@ -170,15 +170,6 @@ CONF_Add(const char *lval, const char *rval)
         return(0);
     }
 
-    if (strcmp(lval, "idle.pause") == 0) {
-        double pause;
-        int err = conf_getDouble(rval, &pause);
-        if (err != 0)
-            return err;
-        config.idle_pause = pause;
-        return(0);
-    }
-
     return EINVAL;
 }
 
@@ -235,7 +226,6 @@ CONF_Init(void)
     config.max_vcl_call = DEFAULT_MAX_VCL_CALL;
     config.max_data = DEFAULT_MAX_DATA;
     config.chunk_size = DEFAULT_CHUNK_SIZE;
-    config.idle_pause = DEFAULT_IDLE_PAUSE;
 
     config.append = 0;
     config.output_timeout.tv_sec = 0;
@@ -349,6 +339,5 @@ CONF_Dump(void)
     confdump("max.vcl_call = %u", config.max_vcl_call);
     confdump("max.data = %u", config.max_data);
     confdump("chunk.size = %u", config.chunk_size);
-    confdump("idle.pause = %f", config.idle_pause);
     confdump("output.bufsiz = %u", config.output_bufsiz);
 }
