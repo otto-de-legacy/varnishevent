@@ -43,7 +43,7 @@ RDR_Stats(void)
 {}
 
 int
-RDR_Exhausted(void)
+RDR_Depleted(void)
 {
     return 0;
 }

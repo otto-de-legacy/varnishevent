@@ -90,7 +90,7 @@ const char *version = PACKAGE_TARNAME "-" PACKAGE_VERSION " revision " \
     VCS_Version " branch " VCS_Branch;
 
 static unsigned len_hi = 0, closed = 0, overrun = 0, ioerr = 0, reacquire = 0,
-    tx_exhausted = 0, rec_exhausted = 0, chunk_exhausted = 0;
+    tx_thresh, rec_thresh, chunk_thresh;
 
 static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
     no_free_rec = 0, no_free_chunk = 0;
@@ -139,9 +139,10 @@ RDR_Stats(void)
 }
 
 int
-RDR_Exhausted(void)
+RDR_Depleted(void)
 {
-    return tx_exhausted | rec_exhausted | chunk_exhausted;
+    return (rdr_tx_free < tx_thresh) | (rdr_rec_free < rec_thresh)
+        | (rdr_chunk_free < chunk_thresh);
 }
 
 static inline void
@@ -162,14 +163,11 @@ static inline chunk_t
     if (VSTAILQ_EMPTY(&rdr_chunk_freelist)) {
         signal_spscq_ready();
         rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
-        if (VSTAILQ_EMPTY(&rdr_chunk_freelist)) {
-            chunk_exhausted = 1;
+        if (VSTAILQ_EMPTY(&rdr_chunk_freelist))
             return NULL;
-        }
         if (debug)
             LOG_Log(LOG_DEBUG, "Reader: took %u free chunks", rdr_chunk_free);
     }
-    chunk_exhausted = 0;
     chunk = VSTAILQ_FIRST(&rdr_chunk_freelist);
     VSTAILQ_REMOVE_HEAD(&rdr_chunk_freelist, freelist);
     rdr_chunk_free--;
@@ -185,14 +183,11 @@ static inline rec_t
     if (VSTAILQ_EMPTY(&rdr_rec_freelist)) {
         signal_spscq_ready();
         rdr_rec_free = DATA_Take_Freerec(&rdr_rec_freelist);
-        if (VSTAILQ_EMPTY(&rdr_rec_freelist)) {
-            rec_exhausted = 1;
+        if (VSTAILQ_EMPTY(&rdr_rec_freelist))
             return NULL;
-        }
         if (debug)
             LOG_Log(LOG_DEBUG, "Reader: took %u free records", rdr_rec_free);
     }
-    rec_exhausted = 0;
     rec = VSTAILQ_FIRST(&rdr_rec_freelist);
     VSTAILQ_REMOVE_HEAD(&rdr_rec_freelist, freelist);
     rdr_rec_free--;
@@ -208,14 +203,11 @@ static inline tx_t
     if (VSTAILQ_EMPTY(&rdr_tx_freelist)) {
         signal_spscq_ready();
         rdr_tx_free = DATA_Take_Freetx(&rdr_tx_freelist);
-        if (VSTAILQ_EMPTY(&rdr_tx_freelist)) {
-            tx_exhausted = 1;
+        if (VSTAILQ_EMPTY(&rdr_tx_freelist))
             return NULL;
-        }
         if (debug)
             LOG_Log(LOG_DEBUG, "Reader: took %u free tx", rdr_tx_free);
     }
-    tx_exhausted = 0;
     tx = VSTAILQ_FIRST(&rdr_tx_freelist);
     assert(tx->state == TX_FREE);
     VSTAILQ_REMOVE_HEAD(&rdr_tx_freelist, freelist);
@@ -820,6 +812,10 @@ main(int argc, char *argv[])
     assert(!VSTAILQ_EMPTY(&rdr_rec_freelist));
     rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
     assert(!VSTAILQ_EMPTY(&rdr_chunk_freelist));
+
+    tx_thresh = config.max_data >> 1;
+    rec_thresh = nrecords >> 1;
+    chunk_thresh = nchunks >> 1;
 
     for (int i = 0; i < VSL_t__MAX; i++) {
         tx_type_log[i] = 0;
