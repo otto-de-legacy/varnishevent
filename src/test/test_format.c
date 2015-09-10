@@ -208,6 +208,12 @@ clear_hdr(tx_t *tx, enum VSL_tag_e tag, int hdr_idx)
     tx->recs[idx]->hdrs[hdr_idx] = NULL;
 }
 
+static inline void
+set_arg_hdr_idx(arg_t *arg, enum VSL_tag_e tag, const char *hdr)
+{
+    arg->hdr_idx = DATA_FindHdrIdx(tag, hdr);
+}
+
 /* N.B.: Always run the tests in this order */
 static const char
 *test_format_init(void)
@@ -407,19 +413,14 @@ static const char
     recs[0].len = strlen("Foo: quux");
     strcpy(c[0].data, "Foo: quux");
     tx.recs[0]->hdrs[2] = &recs[0];
-    hdr = get_hdr(&tx, 0, "Foo:");
-    MAN(hdr);
-    MASSERT(strcmp(hdr, "quux") == 0);
-
-    /* Case-insensitive match */
-    hdr = get_hdr(&tx, 0, "fOO:");
+    hdr = get_hdr(&tx, 0, 2);
     MAN(hdr);
     MASSERT(strcmp(hdr, "quux") == 0);
 
     /* Ignore whitespace */
     recs[0].len = strlen("  Foo  :  quux");
     strcpy(c[0].data, "  Foo  :  quux");
-    hdr = get_hdr(&tx, 0, "Foo:");
+    hdr = get_hdr(&tx, 0, 2);
     MAN(hdr);
     MASSERT(strcmp(hdr, "quux") == 0);
 
@@ -439,19 +440,19 @@ static const char
     strcpy(c[4].data, "Xyzzy: h4");
     tx.recs[0]->hdrs[4] = &recs[4];
 
-    hdr = get_hdr(&tx, 0, "Foo:");
+    hdr = get_hdr(&tx, 0, 2);
     MAN(hdr);
     MASSERT(strcmp(hdr, "h0") == 0);
-    hdr = get_hdr(&tx, 0, "Bar:");
+    hdr = get_hdr(&tx, 0, 0);
     MAN(hdr);
     MASSERT(strcmp(hdr, "h1") == 0);
-    hdr = get_hdr(&tx, 0, "Baz:");
+    hdr = get_hdr(&tx, 0, 1);
     MAN(hdr);
     MASSERT(strcmp(hdr, "h2") == 0);
-    hdr = get_hdr(&tx, 0, "Garply:");
+    hdr = get_hdr(&tx, 0, 3);
     MAN(hdr);
     MASSERT(strcmp(hdr, "h3") == 0);
-    hdr = get_hdr(&tx, 0, "Xyzzy:");
+    hdr = get_hdr(&tx, 0, 4);
     MAN(hdr);
     MASSERT(strcmp(hdr, "h4") == 0);
 
@@ -467,7 +468,7 @@ static const char
     c2->occupied = 1;
     VSTAILQ_INSERT_TAIL(&recs[4].chunks, c2, chunklist);
     recs[4].len = config.chunk_size * 2;
-    hdr = get_hdr(&tx, 0, "Xyzzy:");
+    hdr = get_hdr(&tx, 0, 4);
     MAN(hdr);
     int len = 2 * config.chunk_size - strlen("Xyzzy: ");
     exp = (char *) malloc(len);
@@ -475,13 +476,9 @@ static const char
     memset(exp, 'x', len);
     MASSERT(memcmp(hdr, exp, len) == 0);
 
-    /* tag not in tx */
-    hdr = get_hdr(&tx, 1, "Foo");
-    MAZ(hdr);
-
     /* header not in tx */
     node[0].hdrs[4] = NULL;
-    hdr = get_hdr(&tx, 0, "Xyzzy");
+    hdr = get_hdr(&tx, 0, 4);
     MAZ(hdr);
 
     return NULL;
@@ -650,6 +647,7 @@ static const char
     init_rec_chunk(SLT_Timestamp, &r1, &c1);
     set_record_data(&r1, &c1, TS_RESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 1, &r1);
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Resp:");
     format_D_client(&tx, &args, &str, &len);
     MAN(str);
     MASSERT(strncmp(str, "15963", 5) == 0);
@@ -659,6 +657,7 @@ static const char
     init_rec_chunk(SLT_Timestamp, &r2, &c2);
     set_record_data(&r2, &c2, TS_BERESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 0, &r2);
+    set_arg_hdr_idx(&args, SLT_Timestamp, "BerespBody:");
     str = NULL;
     len = 0;
     format_D_backend(&tx, &args, &str, &len);
@@ -903,7 +902,7 @@ static const char
     rec_node_t node[NTAGS], *nptr[NTAGS];
     rec_t rec_method, rec_host, rec_url, rec_proto;
     chunk_t chunk_method, chunk_host, chunk_url, chunk_proto;
-    arg_t args;
+    arg_t cargs, bargs;
     char *str;
     size_t len;
 
@@ -916,9 +915,11 @@ static const char
     reset_hdr_include();
     add_hdr_include(1, SLT_ReqHeader, "Host");
     add_hdr_include(1, SLT_BereqHeader, "Host");
-    init_tx_arg(&tx, node, nptr, &args);
+    init_tx(&tx, node, nptr);
     init_hdr_recs(&tx, SLT_ReqHeader);
     init_hdr_recs(&tx, SLT_BereqHeader);
+    set_arg_hdr_idx(&cargs, SLT_ReqHeader, "Host:");
+    set_arg_hdr_idx(&bargs, SLT_BereqHeader, "Host:");
 
     add_record_data(&tx, SLT_ReqMethod, &rec_method, &chunk_method, "GET");
     init_rec_chunk(SLT_ReqHeader, &rec_host, &chunk_host);
@@ -928,7 +929,7 @@ static const char
     add_record_data(&tx, SLT_ReqURL, &rec_url, &chunk_url, URL_PAYLOAD);
     add_record_data(&tx, SLT_ReqProtocol, &rec_proto, &chunk_proto,
                     PROTOCOL_PAYLOAD);
-    format_r_client(&tx, &args, &str, &len);
+    format_r_client(&tx, &cargs, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.1", 38) == 0);
     MASSERT(len == 38);
 
@@ -942,7 +943,7 @@ static const char
     set_record_data(&rec_proto, &chunk_proto, PROTOCOL_PAYLOAD,
                     SLT_BereqProtocol);
     set_rec(&tx, SLT_BereqProtocol, &rec_proto);
-    format_r_backend(&tx, &args, &str, &len);
+    format_r_backend(&tx, &bargs, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.1", 38) == 0);
     MASSERT(len == 38);
 
@@ -951,7 +952,7 @@ static const char
     rec_host.tag = SLT_ReqHeader;
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
-    format_r_client(&tx, &args, &str, &len);
+    format_r_client(&tx, &cargs, &str, &len);
     MASSERT(strncmp(str, "- http://www.foobar.com/foo HTTP/1.1", 36) == 0);
     MASSERT(len == 36);
 
@@ -959,7 +960,7 @@ static const char
     rec_host.tag = SLT_BereqHeader;
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
-    format_r_backend(&tx, &args, &str, &len);
+    format_r_backend(&tx, &bargs, &str, &len);
     MASSERT(strncmp(str, "- http://www.foobar.com/foo HTTP/1.1" ,36) == 0);
     MASSERT(len == 36);
 
@@ -968,7 +969,7 @@ static const char
     clear_hdr(&tx, SLT_ReqHeader, 0);
     rec_url.tag = SLT_ReqURL;
     rec_proto.tag = SLT_ReqProtocol;
-    format_r_client(&tx, &args, &str, &len);
+    format_r_client(&tx, &cargs, &str, &len);
     MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
@@ -976,7 +977,7 @@ static const char
     clear_hdr(&tx, SLT_BereqHeader, 0);
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
-    format_r_backend(&tx, &args, &str, &len);
+    format_r_backend(&tx, &bargs, &str, &len);
     MASSERT(strncmp(str, "GET http://localhost/foo HTTP/1.1", 33) == 0);
     MASSERT(len == 33);
 
@@ -985,7 +986,7 @@ static const char
     clear_rec(&tx, SLT_ReqURL);
     set_hdr_rec(&tx, SLT_ReqHeader, 0, &rec_host);
     rec_proto.tag = SLT_ReqProtocol;
-    format_r_client(&tx, &args, &str, &len);
+    format_r_client(&tx, &cargs, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com- HTTP/1.1", 35) == 0);
     MASSERT(len == 35);
 
@@ -994,7 +995,7 @@ static const char
     set_hdr_rec(&tx, SLT_BereqHeader, 0, &rec_host);
     rec_url.tag = SLT_BereqURL;
     rec_proto.tag = SLT_BereqProtocol;
-    format_r_backend(&tx, &args, &str, &len);
+    format_r_backend(&tx, &bargs, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com- HTTP/1.1", 35) == 0);
     MASSERT(len == 35);
 
@@ -1003,7 +1004,7 @@ static const char
     rec_host.tag = SLT_ReqHeader;
     set_rec(&tx, SLT_ReqURL, &rec_url);
     clear_rec(&tx, SLT_ReqProtocol);
-    format_r_client(&tx, &args, &str, &len);
+    format_r_client(&tx, &cargs, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
     MASSERT(len == 38);
 
@@ -1011,7 +1012,7 @@ static const char
     rec_host.tag = SLT_BereqHeader;
     set_rec(&tx, SLT_BereqURL, &rec_url);
     clear_rec(&tx, SLT_BereqProtocol);
-    format_r_backend(&tx, &args, &str, &len);
+    format_r_backend(&tx, &bargs, &str, &len);
     MASSERT(strncmp(str, "GET http://www.foobar.com/foo HTTP/1.0", 38) == 0);
     MASSERT(len == 38);
 
@@ -1082,6 +1083,7 @@ static const char
     set_hdr_rec(&tx, SLT_Timestamp, 0, &rec);
     tm = localtime(&t);
     MAN(strftime(strftime_s, config.max_reclen, fmt, tm));
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Start:");
     format_t(&tx, &args, &str, &len);
     MAN(str);
     explen = strlen(strftime_s);
@@ -1118,6 +1120,7 @@ static const char
     init_rec_chunk(SLT_Timestamp, &r1, &c1);
     set_record_data(&r1, &c1, TS_RESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 1, &r1);
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Resp:");
     format_T_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0", 1) == 0);
     MASSERT(len == 1);
@@ -1125,6 +1128,7 @@ static const char
     init_rec_chunk(SLT_Timestamp, &r2, &c2);
     set_record_data(&r2, &c2, TS_BERESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 0, &r2);
+    set_arg_hdr_idx(&args, SLT_Timestamp, "BerespBody:");
     format_T_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0", 1) == 0);
     MASSERT(len == 1);
@@ -1359,6 +1363,7 @@ static const char
     add_hdr_include(1, SLT_Timestamp, "Start:");
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Start:");
 
     init_rec_chunk(SLT_Timestamp, &rec, &chunk);
     set_record_data(&rec, &chunk, T1, SLT_Timestamp);
@@ -1418,6 +1423,7 @@ static const char
     init_rec_chunk(SLT_Timestamp, &rec_req, &chunk_req);
     set_record_data(&rec_req, &chunk_req, TS_PROCESS_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 1, &rec_req);
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Process:");
     format_Xttfb_client(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0.000166", 8) == 0);
     MASSERT(len == 8);
@@ -1427,6 +1433,7 @@ static const char
     set_record_data(&rec_bereq, &chunk_bereq, TS_BERESP_HDR_PAYLOAD,
                     SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 0, &rec_bereq);
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Beresp:");
     format_Xttfb_backend(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "0.002837", 8) == 0);
     MASSERT(len == 8);
@@ -1551,6 +1558,7 @@ static const char
     init_rec_chunk(SLT_VCL_Log, &rec, &chunk);
     set_record_data(&rec, &chunk, "foo: bar", SLT_VCL_Log);
     set_hdr_rec(&tx, SLT_VCL_Log, 0, &rec);
+    set_arg_hdr_idx(&args, SLT_VCL_Log, "foo:");
     format_VCL_Log(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "bar", 3) == 0);
     MASSERT(len == 3);
@@ -1586,6 +1594,7 @@ static const char
     add_record_data(&tx, SLT_FetchError, &rec, &chunk, "no backend connection");
     args.tag = SLT_FetchError;
     args.fld = -1;
+    args.hdr_idx = -1;
     format_SLT(&tx, &args, &str, &len);
     MAN(str);
     MASSERT(strncmp(str, "no backend connection", 21) == 0);
@@ -1631,7 +1640,7 @@ static const char
     set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 0, &rec);
     args.tag = SLT_Timestamp;
-    args.name = strdup("Resp:");
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Resp:");
     str = NULL;
     len = 0;
     format_SLT(&tx, &args, &str, &len);
@@ -1647,6 +1656,7 @@ static const char
     add_record_data(&tx, SLT_ReqAcct, &rec, &chunk, "277 0 277 319 0 319");
     args.tag = SLT_ReqAcct;
     args.fld = 3;
+    args.hdr_idx = -1;
     format_SLT(&tx, &args, &str, &len);
     MASSERT(strncmp(str, "319", 3) == 0);
     MASSERT(len == 3);
@@ -1669,7 +1679,7 @@ static const char
     set_record_data(&rec, &chunk, TS_RESP_PAYLOAD, SLT_Timestamp);
     set_hdr_rec(&tx, SLT_Timestamp, 0, &rec);
     args.tag = SLT_Timestamp;
-    args.name = strdup("Resp:");
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Resp:");
     args.fld = 0;
     str = NULL;
     len = 0;
@@ -1679,7 +1689,7 @@ static const char
     MASSERT(len == strlen("1427799478.166798"));
 
     /* header not found */
-    args.name = strdup("Foo");
+    set_arg_hdr_idx(&args, SLT_Timestamp, "Foo:");
     args.fld = -1;
     str = NULL;
     len = 0;

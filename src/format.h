@@ -35,6 +35,7 @@ typedef struct arg_t {
     char *name;
     enum VSL_tag_e tag;
     int fld;
+    int hdr_idx;
 } arg_t;
 
 typedef void formatter_f(const tx_t *tx, const arg_t *args, char **s,
@@ -42,7 +43,7 @@ typedef void formatter_f(const tx_t *tx, const arg_t *args, char **s,
 
 char *get_payload(const rec_t *rec);
 rec_t *get_tag(const tx_t *tx, enum VSL_tag_e tag);
-char *get_hdr(const tx_t *tx, enum VSL_tag_e tag, const char *hdr);
+char *get_hdr(const tx_t *tx, enum VSL_tag_e tag, int hdr_idx);
 char *get_fld(char *str, int n, size_t *len);
 char *get_rec_fld(const rec_t *rec, int n, size_t *len);
 int hdrcmp(const void *s1, const void *s2);
