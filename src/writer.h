@@ -34,10 +34,4 @@
 /* local freelist - return space in chunks */
 struct txhead_s wrt_freetx;
 
-/*
- * Set to the write timeout, and indicates the time elapsed after the
- * select() call.
- */
-struct timeval to;
-
 void wrt_write(tx_t *tx);

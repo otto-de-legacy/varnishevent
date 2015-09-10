@@ -43,7 +43,6 @@
 #include "config.h"
 
 #include "varnishevent.h"
-#include "vtim.h"
 
 #include "vas.h"
 #include "vdef.h"
@@ -162,11 +161,9 @@ CONF_Add(const char *lval, const char *rval)
     }
 
     if (strcmp(lval, "output.timeout") == 0) {
-        double to;
-        int err = conf_getDouble(rval, &to);
+        int err = conf_getDouble(rval, &config.output_timeout);
         if (err != 0)
             return err;
-        config.output_timeout = VTIM_timeval(to);
         return(0);
     }
 
@@ -228,8 +225,7 @@ CONF_Init(void)
     config.chunk_size = DEFAULT_CHUNK_SIZE;
 
     config.append = 0;
-    config.output_timeout.tv_sec = 0;
-    config.output_timeout.tv_usec = 0;
+    config.output_timeout = 0.;
 }
 
 static int
@@ -326,9 +322,7 @@ CONF_Dump(void)
     confdump("output.file = %s",
              EMPTY(config.output_file) ? "stdout" : config.output_file);
     confdump("append = %u", config.append);
-    confdump("output.timeout = %f",
-             config.output_timeout.tv_sec
-             + (double) config.output_timeout.tv_usec / 1e-6);
+    confdump("output.timeout = %f", config.output_timeout);
     confdump("cformat = %s", VSB_data(config.cformat));
     confdump("bformat = %s", VSB_data(config.bformat));
     confdump("rformat = %s", VSB_data(config.rformat));

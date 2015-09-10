@@ -169,7 +169,7 @@ struct config {
 
     char	output_file[PATH_MAX + 1];
     unsigned	append;
-    struct timeval output_timeout;
+    double	output_timeout;
 
     /* VSL 'r' argument */
     char	varnish_bindump[PATH_MAX + 1];

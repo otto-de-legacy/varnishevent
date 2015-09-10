@@ -34,8 +34,8 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
-#include <sys/select.h>
-#include <sys/time.h>
+#include <sys/stat.h>
+#include <poll.h>
 #include <errno.h>
 
 #include "varnishevent.h"
@@ -76,9 +76,8 @@ static unsigned	wrt_nfree_tx, wrt_nfree_recs, wrt_nfree_chunks;
 static struct vsb *os;
 
 static FILE *fo;
-static int fd;
-static fd_set set;
-static struct timeval *timeout = NULL;
+static struct pollfd fds[1];
+static int blocking = 0, timeout = -1;
 static char *obuf = NULL;
 static pthread_mutex_t reopen_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -102,29 +101,27 @@ static writer_data_t wrt_data;
 static unsigned run, reopen = 0, tx_thresh, rec_thresh, chunk_thresh;
 
 static int
-set_fdset(void)
-{
-    errno = 0;
-    fd = fileno(fo);
-    if (fd == -1)
-        return errno;
-    FD_ZERO(&set);
-    FD_SET(fd, &set);
-    return 0;
-}
-
-static int
 open_log(void)
 {
+    struct stat st;
+
     if (EMPTY(config.output_file) || strcmp(config.output_file, "-") == 0)
         fo = stdout;
-    else if ((fo = fopen(config.output_file, config.append ? "a" : "w"))
-              == NULL)
-        return errno;
+    else {
+        if ((fo = fopen(config.output_file, config.append ? "a" : "w"))
+            == NULL)
+            return errno;
+        if (stat(config.output_file, &st) < 0)
+            return errno;
+        if (S_ISDIR(st.st_mode))
+            return EISDIR;
+        blocking = !S_ISREG(st.st_mode);
+        if (blocking) {
+            fds[0].fd = fileno(fo);
+            fds[0].events = POLLOUT;
+        }
+    }
 
-    if (set_fdset() != 0)
-        return errno;
-    
     if (obuf != NULL)
         free(obuf);
     obuf = (char *) malloc(config.output_bufsiz);
@@ -165,13 +162,15 @@ wrt_return_freelist(void)
 void
 wrt_write(tx_t *tx)
 {
-    int errnum;
+    int ready = 1;
     
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     assert(tx->state == TX_SUBMITTED);
 
     AZ(pthread_mutex_lock(&reopen_lock));
     if (reopen && fo != stdout) {
+        int errnum;
+
         wrt_return_freelist();
         if (fflush(fo) != 0)
             LOG_Log(LOG_ERR, "Cannot flush to %s, DATA DISCARDED: %s",
@@ -190,50 +189,52 @@ wrt_write(tx_t *tx)
     }
     AZ(pthread_mutex_unlock(&reopen_lock));
 
-    VRMB();
     VSB_clear(os);
+    VRMB();
     FMT_Format(tx, os);
     VSB_finish(os);
     assert(tx->state == TX_WRITTEN);
 
-    if (timeout != NULL)
-        to = config.output_timeout;
-    if ((errnum = select(fd + 1, NULL, &set, NULL, timeout)) == -1) {
-        LOG_Log(LOG_ERR,
-                "Error waiting for ready output %d (%s), DATA DISCARDED: %s",
-                errno, strerror(errno), VSB_data(os));
-        errors++;
-        if (set_fdset() != 0) {
-            LOG_Log(LOG_ALERT,
-                    "Cannot reset fd set after select() error, exiting: %s",
-                    strerror(errno));
-            exit(EXIT_FAILURE);
+    if (blocking) {
+        int nfds;
+
+        ready = 0;
+        do {
+            nfds = poll(fds, 1, timeout);
+            if (nfds < 0)
+                assert(errno == EAGAIN || errno == EINTR);
+        } while (nfds < 0);
+        AZ(fds[0].revents & POLLNVAL);
+        if (fds[0].revents & POLLERR) {
+            LOG_Log(LOG_ERR,
+                    "Error waiting for ready output %d (%s), "
+                    "DATA DISCARDED: %s", errno, strerror(errno), VSB_data(os));
+            errors++;
+        }
+        else if (nfds == 0) {
+            wrt_return_freelist();
+            LOG_Log(LOG_ERR,
+                    "Timeout waiting for ready output, DATA DISCARDED: %s",
+                    VSB_data(os));
+            timeouts++;
+        }
+        else if (nfds != 1)
+            WRONG("More than one ready file descriptor for output");
+        else {
+            AN(fds[0].revents & POLLOUT);
+            ready = 1;
         }
     }
-    else if (errnum == 0) {
-        wrt_return_freelist();
-        LOG_Log(LOG_ERR,
-                "Timeout waiting for ready output, DATA DISCARDED: %s",
-                VSB_data(os));
-        timeouts++;
-        if (set_fdset() != 0) {
-            LOG_Log(LOG_ALERT, "Cannot reset fd set after timeout, exiting: %s",
-                    strerror(errno));
-            exit(EXIT_FAILURE);
+    if (ready) {
+        if (fprintf(fo, "%s", VSB_data(os)) < 0) {
+            LOG_Log(LOG_ERR, "Output error %d (%s), DATA DISCARDED: %s",
+                    errno, strerror(errno), VSB_data(os));
+            errors++;
         }
-    }
-    else if (errnum != 1)
-        WRONG("More than one ready file descriptor for output");
-    else if (!FD_ISSET(fd, &set))
-        WRONG("Wrong file descriptor found ready for output");
-    else if (fprintf(fo, "%s", VSB_data(os)) < 0) {
-        LOG_Log(LOG_ERR, "Output error %d (%s), DATA DISCARDED: %s",
-                errno, strerror(errno), VSB_data(os));
-        errors++;
-    }
-    else {
-        writes++;
-        bytes += VSB_len(os);
+        else {
+            writes++;
+            bytes += VSB_len(os);
+        }
     }
 
     /* clean up */
@@ -330,11 +331,8 @@ WRT_Init(void)
     /* XXX: fixed size? */
     os = VSB_new_auto();
 
-    if (config.output_timeout.tv_sec != 0
-        || config.output_timeout.tv_usec != 0) {
-        to = config.output_timeout;
-        timeout = &to;
-    }
+    if (config.output_timeout != 0.)
+        timeout = config.output_timeout * 1e3;
 
     tx_thresh = config.max_data >> 1;
     rec_thresh = nrecords >> 1;

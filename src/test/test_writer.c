@@ -31,12 +31,14 @@
 
 #include "../varnishevent.h"
 #include "../writer.h"
+#include "../vtim.h"
 #include "minunit.h"
 
 int tests_run = 0;
 static char errmsg[BUFSIZ];
 
-#define THRESHOLD 1000
+#define N 1000
+#define THRESHOLD 1e-3
 
 void
 RDR_Stats(void)
@@ -60,11 +62,10 @@ static char
     VSB_clear(config.cformat);
     MAZ(FMT_Init(&errmsg[0]));
 
-    strcpy(config.log_file, "-");
+    strcpy(config.log_file, "/dev/null");
     MAZ(LOG_Open("test_writer"));
 
-    config.output_timeout.tv_sec = 1;
-    config.output_timeout.tv_usec = 0;
+    config.output_timeout = 1.;
 
     MAZ(WRT_Init());
 
@@ -78,13 +79,14 @@ static char
     node.rec = NULL;
     node.hdrs = NULL;
 
-    for (int i = 0; i < THRESHOLD; i++) {
+    for (int i = 0; i < N; i++) {
+        double t = VTIM_mono();
         tx.state = TX_SUBMITTED;
         tx.type = VSL_t_req;
 
+        t = VTIM_mono();
         wrt_write(&tx);
-        MAZ(to.tv_sec);
-        MASSERT(1e6 - to.tv_usec < THRESHOLD);
+        MASSERT(VTIM_mono() - t < THRESHOLD);
     }
     return NULL;
 }
