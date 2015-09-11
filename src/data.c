@@ -49,15 +49,13 @@
 #define __offsetof(st, m) offsetof(st,m)
 
 /* Preprend head2 before head1, result in head1, head2 empty afterward */
-#define	VSTAILQ_PREPEND(head1, head2, type, fld) do {           \
+#define	VSTAILQ_PREPEND(head1, head2) do {                      \
         if (VSTAILQ_EMPTY((head2)))                             \
             break;                                              \
 	if (VSTAILQ_EMPTY((head1)))                             \
             (head1)->vstqh_last = (head2)->vstqh_last;          \
-	else {                                                  \
-            struct type *l = VSTAILQ_LAST(head2, type, fld);    \
-            VSTAILQ_NEXT(l, fld) = VSTAILQ_FIRST((head1));      \
-        }                                                       \
+	else                                                    \
+            *(head2)->vstqh_last = VSTAILQ_FIRST((head1));      \
         VSTAILQ_FIRST((head1)) = VSTAILQ_FIRST((head2));        \
         VSTAILQ_INIT((head2));                                  \
 } while (0)
@@ -338,7 +336,7 @@ DATA_Take_Free##type(struct type##head_s *dst)          \
     unsigned nfree;                                     \
                                                         \
     AZ(pthread_mutex_lock(&free##type##_lock));         \
-    VSTAILQ_PREPEND(dst, &free##type##head, type##_t, freelist); \
+    VSTAILQ_PREPEND(dst, &free##type##head);            \
     nfree = global_nfree_##type;                        \
     global_nfree_##type = 0;                            \
     AZ(pthread_mutex_unlock(&free##type##_lock));       \
@@ -358,7 +356,7 @@ void                                                                    \
 DATA_Return_Free##type(struct type##head_s *returned, unsigned nreturned) \
 {                                                                       \
     AZ(pthread_mutex_lock(&free##type##_lock));                         \
-    VSTAILQ_PREPEND(&free##type##head, returned, type##_t, freelist);   \
+    VSTAILQ_PREPEND(&free##type##head, returned);                       \
     global_nfree_##type += nreturned;                                   \
     AZ(pthread_mutex_unlock(&free##type##_lock));                       \
 }
