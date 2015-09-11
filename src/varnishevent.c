@@ -949,7 +949,8 @@ main(int argc, char *argv[])
     if (term && status != DISPATCH_EOF && flush && vslq != NULL) {
         LOG_Log0(LOG_NOTICE, "Flushing transactions");
         take_free();
-        VSLQ_Flush(vslq, event, NULL);
+        while (VSLQ_Flush(vslq, event, NULL) != DISPATCH_RETURN_OK)
+            ;
     }
 
     WRT_Halt();
