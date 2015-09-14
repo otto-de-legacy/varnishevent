@@ -45,6 +45,7 @@
 #include "miniobj.h"
 #include "vsb.h"
 #include "vmb.h"
+#include "vtim.h"
 
 typedef enum {
     WRT_NOTSTARTED = 0,
@@ -88,6 +89,7 @@ static unsigned long waits = 0;
 static unsigned long writes = 0;
 static unsigned long errors = 0;
 static unsigned long timeouts = 0;
+static double pollt = 0., writet = 0.;
 
 typedef struct writer_data_s {
     unsigned magic;
@@ -200,7 +202,9 @@ wrt_write(tx_t *tx)
 
         ready = 0;
         do {
+            double start = VTIM_mono();
             nfds = poll(fds, 1, timeout);
+            pollt += VTIM_mono() - start;
             if (nfds < 0)
                 assert(errno == EAGAIN || errno == EINTR);
         } while (nfds < 0);
@@ -226,7 +230,10 @@ wrt_write(tx_t *tx)
         }
     }
     if (ready) {
-        if (fprintf(fo, "%s", VSB_data(os)) < 0) {
+        double start = VTIM_mono();
+        int ret = fprintf(fo, "%s", VSB_data(os));
+        writet += VTIM_mono() - start;
+        if (ret < 0) {
             LOG_Log(LOG_ERR, "Output error %d (%s), DATA DISCARDED: %s",
                     errno, strerror(errno), VSB_data(os));
             errors++;
@@ -352,10 +359,12 @@ void
 WRT_Stats(void)
 {
     LOG_Log(LOG_INFO,
-        "Writer (%s): seen=%lu writes=%lu bytes=%lu errors=%lu timeouts=%lu"
-        " waits=%lu free_tx=%u free_rec=%u free_chunk=%u",
+            "Writer (%s): seen=%lu writes=%lu bytes=%lu errors=%lu timeouts=%lu"
+            " waits=%lu free_tx=%u free_rec=%u free_chunk=%u pollt=%.6f"
+            " writet=%.6f",
             statename[wrt_data.state], deqs, writes, bytes, errors, timeouts,
-            waits, wrt_nfree_tx, wrt_nfree_recs, wrt_nfree_chunks);
+            waits, wrt_nfree_tx, wrt_nfree_recs, wrt_nfree_chunks, pollt,
+            writet);
 }
 
 int
