@@ -19,7 +19,7 @@ test_data_LDADD = \
 	../data.$(OBJEXT) \
 	../format.$(OBJEXT) \
 	../strfTIM.$(OBJEXT) \
-	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ -lm -lvarnish
+	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
 
 test_format_SOURCES = \
 	minunit.h \
@@ -31,7 +31,7 @@ test_format_LDADD = \
 	../base64.$(OBJEXT) \
 	../data.$(OBJEXT) \
 	../format.$(OBJEXT) \
-	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ -lm -lvarnish
+	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
 
 test_writer_SOURCES = \
 	minunit.h \
@@ -47,7 +47,7 @@ test_writer_LDADD = \
 	../spscq.$(OBJEXT) \
 	../strfTIM.$(OBJEXT) \
 	../writer.$(OBJEXT) \
-	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ -lvarnish
+	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
 
 test_strfTIM_SOURCES = \
 	minunit.h \
@@ -56,4 +56,4 @@ test_strfTIM_SOURCES = \
 
 test_strfTIM_LDADD = \
 	../strfTIM.$(OBJEXT) \
-	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ -lm -lvarnish
+	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
