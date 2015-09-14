@@ -52,9 +52,9 @@ typedef struct compiled_fmt_t {
     unsigned n;
 } compiled_fmt_t;
 
-static struct vsb payload_storage, * const payload = &payload_storage,
-    *scratch;
+static struct vsb *scratch;
 
+static char *payload;
 static char empty[] = "";
 static char hit[] = "hit";
 static char miss[] = "miss";
@@ -90,20 +90,20 @@ get_payload(const rec_t *rec)
     if (rec->len <= config.chunk_size)
         return chunk->data;
 
-    VSB_clear(payload);
+    assert(rec->len <= config.max_reclen);
     int n = rec->len;
+    char *p = payload;
     while (n > 0) {
         CHECK_OBJ_NOTNULL(chunk, CHUNK_MAGIC);
         int cp = n;
         if (cp > config.chunk_size)
             cp = config.chunk_size;
-        VSB_bcat(payload, chunk->data, cp);
+        memcpy(p, chunk->data, cp);
+        p += cp;
         n -= cp;
         chunk = VSTAILQ_NEXT(chunk, chunklist);
     }
-    assert(VSB_len(payload) == rec->len);
-    VSB_finish(payload);
-    return VSB_data(payload);
+    return payload;
 }
 
 /*
@@ -1332,7 +1332,9 @@ FMT_Init(char *err)
     int idx = 0;
     char **chdrtbl = NULL, **bhdrtbl = NULL, **rhdrtbl = NULL;
 
-    AN(VSB_new(payload, NULL, config.max_reclen + 1, VSB_FIXEDLEN));
+    payload = malloc(config.max_reclen);
+    if (payload == NULL)
+        return ENOMEM;
     scratch = VSB_new_auto();
     AN(scratch);
 
@@ -1510,7 +1512,7 @@ void
 FMT_Fini(void)
 {
     VSB_delete(scratch);
-    VSB_delete(payload);
+    free(payload);
 
     free_incl(cincl);
     free_incl(bincl);
