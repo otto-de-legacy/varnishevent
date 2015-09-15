@@ -341,9 +341,9 @@ WRT_Init(void)
     if (config.output_timeout != 0.)
         timeout = config.output_timeout * 1e3;
 
-    tx_thresh = config.max_data >> 1;
-    rec_thresh = nrecords >> 1;
-    chunk_thresh = nchunks >> 1;
+    tx_thresh = config.max_data >> 2;
+    rec_thresh = nrecords >> 2;
+    chunk_thresh = nchunks >> 2;
 
     run = 1;
     return 0;
