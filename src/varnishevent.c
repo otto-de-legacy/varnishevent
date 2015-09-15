@@ -145,7 +145,6 @@ RDR_Stats(void)
 int
 RDR_Depleted(void)
 {
-    VWMB();
     return (rdr_tx_free < tx_thresh) || (rdr_rec_free < rec_thresh)
         || (rdr_chunk_free < chunk_thresh);
 }
