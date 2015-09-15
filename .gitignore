@@ -35,3 +35,7 @@ src/varnishevent
 src/vcs_version.h
 *.1
 stamp-h1
+src/test/*.log
+src/test/*.trs
+compile
+test-driver
