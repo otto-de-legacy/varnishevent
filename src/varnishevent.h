@@ -164,12 +164,18 @@ include_t *hdr_include_tbl[MAX_VSL_TAG];
 pthread_cond_t  spscq_ready_cond;
 pthread_mutex_t spscq_ready_lock;
 
+/* Reader waits for this condition if any of the freelists are exhausted.
+   Writer signals the condition when it returns freelists. */
+pthread_cond_t  data_ready_cond;
+pthread_mutex_t data_ready_lock;
+
 struct config {
     char	log_file[PATH_MAX + 1];
 
     char	output_file[PATH_MAX + 1];
     unsigned	append;
     double	output_timeout;
+    double	reader_timeout;
 
     /* VSL 'r' argument */
     char	varnish_bindump[PATH_MAX + 1];
@@ -199,6 +205,7 @@ struct config {
 /* varnishevent.c */
 void RDR_Stats(void);
 int RDR_Depleted(void);
+int RDR_Waiting(void);
 
 /* config.c */
 void CONF_Init(void);

@@ -136,11 +136,23 @@ open_log(void)
     return 0;
 }
 
+static void
+wrt_signal_data_ready(void)
+{
+    if (RDR_Waiting()) {
+        AZ(pthread_mutex_lock(&data_ready_lock));
+        if (RDR_Waiting())
+            AZ(pthread_cond_signal(&data_ready_cond));
+        AZ(pthread_mutex_unlock(&data_ready_lock));
+    }
+}
+
 static inline void
 wrt_return_freelist(void)
 {
     if (wrt_nfree_chunks > 0) {
         DATA_Return_Freechunk(&wrt_freechunks, wrt_nfree_chunks);
+        wrt_signal_data_ready();
         LOG_Log(LOG_DEBUG, "Writer: returned %u chunks to free list",
                 wrt_nfree_chunks);
         wrt_nfree_chunks = 0;
@@ -148,6 +160,7 @@ wrt_return_freelist(void)
     }
     if (wrt_nfree_recs > 0) {
         DATA_Return_Freerec(&wrt_freerecs, wrt_nfree_recs);
+        wrt_signal_data_ready();
         LOG_Log(LOG_DEBUG, "Writer: returned %u records to free list",
                 wrt_nfree_recs);
         wrt_nfree_recs = 0;
@@ -155,6 +168,7 @@ wrt_return_freelist(void)
     }
     if (wrt_nfree_tx > 0) {
         DATA_Return_Freetx(&wrt_freetx, wrt_nfree_tx);
+        wrt_signal_data_ready();
         LOG_Log(LOG_DEBUG, "Writer: returned %u tx to free list", wrt_nfree_tx);
         wrt_nfree_tx = 0;
         assert(VSTAILQ_EMPTY(&wrt_freetx));
@@ -250,7 +264,7 @@ wrt_write(tx_t *tx)
 
     assert(tx->state == TX_FREE);
 
-    if (RDR_Depleted() || wrt_nfree_tx > tx_thresh
+    if (RDR_Waiting() || RDR_Depleted() || wrt_nfree_tx > tx_thresh
         || wrt_nfree_recs > rec_thresh || wrt_nfree_chunks > chunk_thresh)
         wrt_return_freelist();
 }
@@ -296,7 +310,7 @@ static void
         /*
 	 * run is guaranteed to be fresh after the lock
 	 */
-        if (run) {
+        if (run && !RDR_Waiting()) {
             waits++;
             AZ(pthread_cond_wait(&spscq_ready_cond, &spscq_ready_lock));
         }

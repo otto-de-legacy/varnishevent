@@ -92,10 +92,10 @@ const char *version = PACKAGE_TARNAME "-" PACKAGE_VERSION " revision "  \
     VCS_Version " branch " VCS_Branch;
 
 static unsigned len_hi = 0, closed = 0, overrun = 0, ioerr = 0, reacquire = 0,
-    tx_thresh, rec_thresh, chunk_thresh;
+    tx_thresh, rec_thresh, chunk_thresh, waiting = 0;
 
 static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
-    no_free_rec = 0, no_free_chunk = 0, eol = 0;
+    no_free_rec = 0, no_free_chunk = 0, eol = 0, waits = 0;
 
 /* Hack, because we cannot have #ifdef in the macro definition SIGDISP */
 #define _UNDEFINED(SIG) ((#SIG)[0] == 0)
@@ -127,19 +127,22 @@ static unsigned rdr_tx_free = 0;
 
 static int tx_type_log[VSL_t__MAX], debug = 0;
 static char tx_type_name[VSL_t__MAX];
+static const char *statename[] = { "running", "waiting" };
 
 static double idle_pause = MAX_IDLE_PAUSE;
 
 void
 RDR_Stats(void)
 {
-    LOG_Log(LOG_INFO, "Reader: seen=%lu submitted=%lu free_tx=%u free_rec=%u "
-            "free_chunk=%u no_free_tx=%lu no_free_rec=%lu no_free_chunk=%lu "
-            "len_hi=%u len_overflows=%lu eol=%lu idle_pause=%.06f closed=%u "
-            "overrun=%u ioerr=%u reacquire=%u",
-            seen, submitted, rdr_tx_free, rdr_rec_free, rdr_chunk_free,
-            no_free_tx, no_free_rec, no_free_chunk, len_hi, len_overflows,
-            eol, idle_pause, closed, overrun, ioerr, reacquire);
+    LOG_Log(LOG_INFO, "Reader (%s): seen=%lu submitted=%lu free_tx=%u "
+            "free_rec=%u free_chunk=%u no_free_tx=%lu no_free_rec=%lu "
+            "no_free_chunk=%lu len_hi=%u len_overflows=%lu eol=%lu "
+            "idle_pause=%.06f waits=%lu closed=%u overrun=%u ioerr=%u "
+            "reacquire=%u",
+            statename[waiting], seen, submitted, rdr_tx_free, rdr_rec_free,
+            rdr_chunk_free, no_free_tx, no_free_rec, no_free_chunk, len_hi,
+            len_overflows, eol, idle_pause, waits, closed, overrun, ioerr,
+            reacquire);
 }
 
 int
@@ -147,6 +150,12 @@ RDR_Depleted(void)
 {
     return (rdr_tx_free < tx_thresh) || (rdr_rec_free < rec_thresh)
         || (rdr_chunk_free < chunk_thresh);
+}
+
+int
+RDR_Waiting(void)
+{
+    return waiting;
 }
 
 static inline void
@@ -159,6 +168,25 @@ signal_spscq_ready(void)
     }
 }
 
+static void
+data_wait(void)
+{
+    assert(config.reader_timeout > 0.);
+    if (!WRT_Waiting()) {
+        struct timespec ts;
+        int ret;
+
+        AZ(pthread_mutex_lock(&data_ready_lock));
+        waits++;
+        waiting = 1;
+        ts = VTIM_timespec(VTIM_real() + config.reader_timeout);
+        ret = pthread_cond_timedwait(&data_ready_cond, &data_ready_lock, &ts);
+        assert(ret == 0 || ret == ETIMEDOUT);
+        waiting = 0;
+        AZ(pthread_mutex_unlock(&data_ready_lock));
+    }
+}
+
 static inline chunk_t
 *take_chunk(void)
 {
@@ -167,8 +195,14 @@ static inline chunk_t
     if (VSTAILQ_EMPTY(&rdr_chunk_freelist)) {
         signal_spscq_ready();
         rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
-        if (VSTAILQ_EMPTY(&rdr_chunk_freelist))
-            return NULL;
+        if (VSTAILQ_EMPTY(&rdr_chunk_freelist)) {
+            if (config.reader_timeout <= 0.)
+                return NULL;
+            data_wait();
+            rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
+            if (VSTAILQ_EMPTY(&rdr_chunk_freelist))
+                return NULL;
+        }
         if (debug)
             LOG_Log(LOG_DEBUG, "Reader: took %u free chunks", rdr_chunk_free);
     }
@@ -187,8 +221,14 @@ static inline rec_t
     if (VSTAILQ_EMPTY(&rdr_rec_freelist)) {
         signal_spscq_ready();
         rdr_rec_free = DATA_Take_Freerec(&rdr_rec_freelist);
-        if (VSTAILQ_EMPTY(&rdr_rec_freelist))
-            return NULL;
+        if (VSTAILQ_EMPTY(&rdr_rec_freelist)) {
+            if (config.reader_timeout <= 0.)
+                return NULL;
+            data_wait();
+            rdr_rec_free = DATA_Take_Freerec(&rdr_rec_freelist);
+            if (VSTAILQ_EMPTY(&rdr_rec_freelist))
+                return NULL;
+        }
         if (debug)
             LOG_Log(LOG_DEBUG, "Reader: took %u free records", rdr_rec_free);
     }
@@ -207,8 +247,14 @@ static inline tx_t
     if (VSTAILQ_EMPTY(&rdr_tx_freelist)) {
         signal_spscq_ready();
         rdr_tx_free = DATA_Take_Freetx(&rdr_tx_freelist);
-        if (VSTAILQ_EMPTY(&rdr_tx_freelist))
-            return NULL;
+        if (VSTAILQ_EMPTY(&rdr_tx_freelist)) {
+            if (config.reader_timeout <= 0.)
+                return NULL;
+            data_wait();
+            rdr_tx_free = DATA_Take_Freetx(&rdr_tx_freelist);
+            if (VSTAILQ_EMPTY(&rdr_tx_freelist))
+                return NULL;
+        }
         if (debug)
             LOG_Log(LOG_DEBUG, "Reader: took %u free tx", rdr_tx_free);
     }
@@ -800,6 +846,8 @@ main(int argc, char *argv[])
 
     AZ(pthread_cond_init(&spscq_ready_cond, NULL));
     AZ(pthread_mutex_init(&spscq_ready_lock, NULL));
+    AZ(pthread_cond_init(&data_ready_cond, NULL));
+    AZ(pthread_mutex_init(&data_ready_lock, NULL));
 
     if (config.monitor_interval > 0)
         MON_Start();
@@ -960,6 +1008,8 @@ main(int argc, char *argv[])
     FMT_Fini();
     AZ(pthread_cond_destroy(&spscq_ready_cond));
     AZ(pthread_mutex_destroy(&spscq_ready_lock));
+    AZ(pthread_cond_destroy(&data_ready_cond));
+    AZ(pthread_mutex_destroy(&data_ready_lock));
     if (pfh != NULL) {
         errno = 0;
         if (VPF_Remove(pfh) != 0)

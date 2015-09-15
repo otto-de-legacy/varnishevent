@@ -50,6 +50,12 @@ RDR_Depleted(void)
     return 0;
 }
 
+int
+RDR_Waiting(void)
+{
+    return 0;
+}
+
 static char
 *test_timeout(void)
 {

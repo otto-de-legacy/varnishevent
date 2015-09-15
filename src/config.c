@@ -128,6 +128,16 @@ conf_getDouble(const char *rval, double *d)
         return(0);                               \
     }
 
+#define confDouble(name,fld)                    \
+    if (strcmp(lval, name) == 0) {              \
+        double d;                               \
+        int err = conf_getDouble(rval, &d);     \
+        if (err != 0)                           \
+            return err;                         \
+        config.fld = d;                         \
+        return(0);                              \
+    }
+
 int
 CONF_Add(const char *lval, const char *rval)
 {
@@ -150,6 +160,9 @@ CONF_Add(const char *lval, const char *rval)
     confUnsigned("output.bufsiz", output_bufsiz);
     confUnsigned("append", append);
 
+    confDouble("output.timeout", output_timeout);
+    confDouble("reader.timeout", reader_timeout);
+
     if (strcmp(lval, "syslog.facility") == 0) {
         if ((ret = conf_getFacility(rval)) < 0)
             return EINVAL;
@@ -157,13 +170,6 @@ CONF_Add(const char *lval, const char *rval)
         bprintf(config.syslog_facility_name, "%s", rval);
         char *p = &config.syslog_facility_name[0];
         do { *p = toupper(*p); } while (*++p);
-        return(0);
-    }
-
-    if (strcmp(lval, "output.timeout") == 0) {
-        int err = conf_getDouble(rval, &config.output_timeout);
-        if (err != 0)
-            return err;
         return(0);
     }
 
@@ -226,6 +232,7 @@ CONF_Init(void)
 
     config.append = 0;
     config.output_timeout = 0.;
+    config.reader_timeout = 0.;
 }
 
 static int
@@ -323,6 +330,7 @@ CONF_Dump(void)
              EMPTY(config.output_file) ? "stdout" : config.output_file);
     confdump("append = %u", config.append);
     confdump("output.timeout = %f", config.output_timeout);
+    confdump("reader.timeout = %f", config.reader_timeout);
     confdump("cformat = %s", VSB_data(config.cformat));
     confdump("bformat = %s", VSB_data(config.bformat));
     confdump("rformat = %s", VSB_data(config.rformat));
