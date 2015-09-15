@@ -258,6 +258,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         if (debug)
             LOG_Log(LOG_DEBUG, "Tx: [%u %c]", t->vxid, tx_type_name[t->type]);
 
+        seen++;
         tx = take_tx();
         if (tx == NULL) {
             no_free_tx++;
@@ -393,7 +394,6 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 
         assert(tx->state == TX_OPEN);
         tx->state = TX_DONE;
-        seen++;
         MON_StatsUpdate(STATS_DONE, nrec, total_chunks);
         if (tx_occ > tx_occ_hi)
             tx_occ_hi = tx_occ;
