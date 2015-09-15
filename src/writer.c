@@ -250,6 +250,7 @@ wrt_write(tx_t *tx)
 
     assert(tx->state == TX_FREE);
 
+    VRMB();
     if (RDR_Depleted() || wrt_nfree_tx > tx_thresh
         || wrt_nfree_recs > rec_thresh || wrt_nfree_chunks > chunk_thresh)
         wrt_return_freelist();
