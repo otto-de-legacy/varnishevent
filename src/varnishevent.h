@@ -284,7 +284,7 @@ void MON_Output(void);
 int FMT_Init(char *err);
 int FMT_GetMaxIdx(void);
 int FMT_Estimate_RecsPerTx(void);
-void FMT_Format(tx_t *tx, struct vsb *os);
+char *FMT_Format(tx_t *tx);
 void FMT_Fini(void);
 
 /* handler.c */

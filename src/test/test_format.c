@@ -1869,13 +1869,12 @@ static const char
 *test_FMT_interface(void)
 {
 #define NTAGS 25
-    char err[BUFSIZ], strftime_s[BUFSIZ];
+    char err[BUFSIZ], strftime_s[BUFSIZ], *os;
     int status;
     tx_t tx;
     rec_node_t node[NTAGS], *nptr[NTAGS];
     rec_t rec[NTAGS];
     chunk_t c[NTAGS];
-    struct vsb *os;
     struct tm *tm;
     time_t t = 1427743146;
 
@@ -1921,8 +1920,6 @@ static const char
             break;
         }
 
-    os = VSB_new_auto();
-    MAN(os);
 
     init_tx(&tx, node, nptr);
     tx.state = TX_SUBMITTED;
@@ -1945,19 +1942,16 @@ static const char
     add_record_data(&tx, SLT_RespStatus, &rec[9],  &c[9], "200");
     add_record_data(&tx, SLT_ReqAcct,    &rec[10], &c[10], REQACCT_PAYLOAD);
 
-    FMT_Format(&tx, os);
-    VSB_finish(os);
+    os = FMT_Format(&tx);
 #define EXP_DEFAULT_OUTPUT "127.0.0.1 - varnish [%d/%b/%Y:%T %z] "\
         "\"GET http://bazquux.com/foo HTTP/1.1\" 200 105 "\
         "\"http://foobar.com/\" \"Mozilla\"\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_DEFAULT_OUTPUT, tm));
-    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
-             VSB_data(os), strftime_s);
+    VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
 
     /* Client format with all formatters */
     FMT_Fini();
-    VSB_clear(os);
 
 #define FULL_CLIENT_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x "\
@@ -2030,8 +2024,7 @@ static const char
         }
 
     setup_full_client_tx(&tx, node, nptr, rec, c);
-    FMT_Format(&tx, os);
-    VSB_finish(os);
+    os = FMT_Format(&tx);
 #define EXP_FULL_CLIENT_OUTPUT "105 c 15963 HTTP/1.1 127.0.0.1 60 foohdr "\
         "barhdr - GET 283 bar=baz&quux=wilco GET "\
         "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
@@ -2040,12 +2033,10 @@ static const char
         "1429213569.602005 0.000000 0.000000 60 0.000125 4711 1147\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
-    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
-             VSB_data(os), strftime_s);
+    VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
 
     /* Backend format with all formatters */
     FMT_Fini();
-    VSB_clear(os);
 
 #define FULL_BACKEND_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x %{VCL_Log:baz}x "\
@@ -2109,8 +2100,7 @@ static const char
         }
 
     setup_full_backend_tx(&tx, node, nptr, rec, c);
-    FMT_Format(&tx, os);
-    VSB_finish(os);
+    os = FMT_Format(&tx);
 #define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
         "283 foohdr barhdr - GET 60 bar=baz&quux=wilco GET "\
         "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
@@ -2119,12 +2109,10 @@ static const char
         "1429210777.728290 0.000048 0.000048 283 0.000048 4711 1147\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
-    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
-             VSB_data(os), strftime_s);
+    VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
 
     /* Both backend and client formats */
     FMT_Fini();
-    VSB_clear(os);
 
     VSB_clear(config.cformat);
     VSB_cpy(config.cformat, FULL_CLIENT_FMT);
@@ -2225,25 +2213,19 @@ static const char
         }
 
     setup_full_client_tx(&tx, node, nptr, rec, c);
-    FMT_Format(&tx, os);
-    VSB_finish(os);
+    os = FMT_Format(&tx);
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
-    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
-             VSB_data(os), strftime_s);
+    VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
 
     setup_full_backend_tx(&tx, node, nptr, rec, c);
-    VSB_clear(os);
-    FMT_Format(&tx, os);
-    VSB_finish(os);
+    os = FMT_Format(&tx);
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
-    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
-             VSB_data(os), strftime_s);
+    VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
 
     /* Raw format */
     FMT_Fini();
-    VSB_clear(os);
 
 #define FULL_RAW_FMT "%t %{%F-%T.%i}t %{tag:Backend_health}x %{vxid}x"
     VSB_clear(config.rformat);
@@ -2274,14 +2256,12 @@ static const char
 #define HEALTH_PAYLOAD "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 " \
         "HTTP/1.1 200 OK"
     add_record_data(&tx, SLT_Backend_health, &rec[0],  &c[0], HEALTH_PAYLOAD);
-    FMT_Format(&tx, os);
-    VSB_finish(os);
+    os = FMT_Format(&tx);
 #define EXP_FULL_RAW_OUTPUT "[%d/%b/%Y:%T %z] %F-%T.529143 "\
         "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 HTTP/1.1 200 OK 4711\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_RAW_OUTPUT, tm));
-    VMASSERT(strcmp(VSB_data(os), strftime_s) == 0, "'%s' != '%s'",
-             VSB_data(os), strftime_s);
+    VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
 
     /* Illegal backend formats */
     FMT_Fini();

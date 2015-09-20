@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <limits.h>
 
 #include "vapi/vsl.h"
 #include "vas.h"
@@ -45,16 +46,23 @@
 #include "format.h"
 #include "strfTIM.h"
 
+#ifdef PAGE_SIZE
+#define OBUF_SIZE PAGE_SIZE
+#else
+#define OBUF_SIZE 4096
+#endif
+
 typedef struct compiled_fmt_t {
     char **str;
     formatter_f **formatter;
     arg_t *args;
+    int *strlen;
     unsigned n;
 } compiled_fmt_t;
 
 static struct vsb *scratch;
 
-static char *payload;
+static char *payload, *obuf;
 static char empty[] = "";
 static char hit[] = "hit";
 static char miss[] = "miss";
@@ -63,6 +71,8 @@ static char pipe[] = "pipe";
 static char error[] = "error";
 static char dash[] = "-";
 static char buf[BUFSIZ];
+
+static size_t obuf_sz = OBUF_SIZE;
 
 typedef struct inc_t {
     char *hdr;
@@ -754,17 +764,24 @@ static void
 add_fmt(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
         formatter_f formatter, const char *name, enum VSL_tag_e tag, int fld)
 {
-    fmt->str[n] = (char *) malloc(VSB_len(os) + 1);
-    AN(fmt->str[n]);
+    if (VSB_len(os) > 0) {
+        fmt->str[n] = (char *) malloc(VSB_len(os) + 1);
+        AN(fmt->str[n]);
+        VSB_finish(os);
+        strcpy(fmt->str[n], VSB_data(os));
+        fmt->strlen[n] = VSB_len(os);
+    }
+    else {
+        fmt->str[n] = NULL;
+        fmt->strlen[n] = 0;
+    }
+    VSB_clear(os);
     if (name == NULL)
         fmt->args[n].name = NULL;
     else {
         fmt->args[n].name = strdup(name);
         AN(fmt->args[n].name);
     }
-    VSB_finish(os);
-    strcpy(fmt->str[n], VSB_data(os));
-    VSB_clear(os);
     fmt->formatter[n] = formatter;
     fmt->args[n].tag = tag;
     fmt->args[n].fld = fld;
@@ -919,6 +936,11 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
     }
     fmt->args = (arg_t *) calloc(n, sizeof(arg_t));
     if (fmt->args == NULL) {
+        strcpy(err, strerror(errno));
+        return 0;
+    }
+    fmt->strlen = (int *) calloc(n, sizeof(int));
+    if (fmt->strlen == NULL) {
         strcpy(err, strerror(errno));
         return 0;
     }
@@ -1332,6 +1354,9 @@ FMT_Init(char *err)
     int idx = 0;
     char **chdrtbl = NULL, **bhdrtbl = NULL, **rhdrtbl = NULL;
 
+    obuf = calloc(OBUF_SIZE, sizeof(char));
+    if (obuf == NULL)
+        return ENOMEM;
     payload = malloc(config.max_reclen);
     if (payload == NULL)
         return ENOMEM;
@@ -1427,10 +1452,22 @@ FMT_Estimate_RecsPerTx(void)
     return recs_per_tx;
 }
 
-void
-FMT_Format(tx_t *tx, struct vsb *os)
+static inline void
+fmt_resize(size_t curlen)
+{
+    if (curlen > obuf_sz) {
+        obuf_sz >>= 1;
+        obuf = realloc(obuf, obuf_sz);
+        AN(obuf);
+    }
+}
+
+char *
+FMT_Format(tx_t *tx)
 {
     compiled_fmt_t fmt;
+    char *p = obuf;
+    size_t curlen = 0;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     assert(tx->state == TX_SUBMITTED);
@@ -1451,21 +1488,33 @@ FMT_Format(tx_t *tx, struct vsb *os)
 
     tx->state = TX_FORMATTING;
 
+    *p = '\0';
     for (int i = 0; i < fmt.n; i++) {
         char *s = NULL;
         size_t len = 0;
 
-        if (fmt.str[i] != NULL)
-            VSB_cat(os, fmt.str[i]);
+        if (fmt.str[i] != NULL) {
+            curlen += fmt.strlen[i];
+            fmt_resize(curlen);
+            memcpy(p, fmt.str[i], fmt.strlen[i]);
+            p += fmt.strlen[i];
+        }
         if (fmt.formatter[i] != NULL) {
             (fmt.formatter[i])(tx, &fmt.args[i], &s, &len);
-            if (s != NULL && len != 0)
-                VSB_bcat(os, s, len);
+            if (s != NULL && len != 0) {
+                curlen += len;
+                fmt_resize(curlen);
+                memcpy(p, s, len);
+                p += len;
+            }
         }
     }
+    *p = '\0';
 
     assert(tx->state == TX_FORMATTING);
     tx->state = TX_WRITTEN;
+
+    return obuf;
 }
 
 static void
@@ -1491,6 +1540,7 @@ free_format(compiled_fmt_t *fmt)
             free(fmt->args[i].name);
     }
     free(fmt->str);
+    free(fmt->strlen);
     free(fmt->formatter);
     free(fmt->args);
 }
@@ -1511,6 +1561,7 @@ free_incl(includehead_t inclhead[])
 void
 FMT_Fini(void)
 {
+    free(obuf);
     VSB_delete(scratch);
     free(payload);
 

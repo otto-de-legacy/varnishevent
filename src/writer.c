@@ -74,8 +74,6 @@ chunkhead_t wrt_freechunks;
 
 static unsigned	wrt_nfree_tx, wrt_nfree_recs, wrt_nfree_chunks;
 
-static struct vsb *os;
-
 static FILE *fo;
 static struct pollfd fds[1];
 static int blocking = 0, timeout = -1;
@@ -178,6 +176,7 @@ wrt_return_freelist(void)
 void
 wrt_write(tx_t *tx)
 {
+    char *os;
     int ready = 1;
     
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
@@ -205,10 +204,8 @@ wrt_write(tx_t *tx)
     }
     AZ(pthread_mutex_unlock(&reopen_lock));
 
-    VSB_clear(os);
     VRMB();
-    FMT_Format(tx, os);
-    VSB_finish(os);
+    os = FMT_Format(tx);
     assert(tx->state == TX_WRITTEN);
 
     if (blocking) {
@@ -226,14 +223,13 @@ wrt_write(tx_t *tx)
         if (fds[0].revents & POLLERR) {
             LOG_Log(LOG_ERR,
                     "Error waiting for ready output %d (%s), "
-                    "DATA DISCARDED: %s", errno, strerror(errno), VSB_data(os));
+                    "DATA DISCARDED: %s", errno, strerror(errno), os);
             errors++;
         }
         else if (nfds == 0) {
             wrt_return_freelist();
             LOG_Log(LOG_ERR,
-                    "Timeout waiting for ready output, DATA DISCARDED: %s",
-                    VSB_data(os));
+                    "Timeout waiting for ready output, DATA DISCARDED: %s", os);
             timeouts++;
         }
         else if (nfds != 1)
@@ -245,16 +241,16 @@ wrt_write(tx_t *tx)
     }
     if (ready) {
         double start = VTIM_mono();
-        int ret = fprintf(fo, "%s", VSB_data(os));
+        int ret = fprintf(fo, "%s", os);
         writet += VTIM_mono() - start;
         if (ret < 0) {
             LOG_Log(LOG_ERR, "Output error %d (%s), DATA DISCARDED: %s",
-                    errno, strerror(errno), VSB_data(os));
+                    errno, strerror(errno), os);
             errors++;
         }
         else {
             writes++;
-            bytes += VSB_len(os);
+            bytes += strlen(os);
         }
     }
 
@@ -349,9 +345,6 @@ WRT_Init(void)
     wrt_data.magic = WRITER_DATA_MAGIC;
     wrt_data.state = WRT_NOTSTARTED;
 
-    /* XXX: fixed size? */
-    os = VSB_new_auto();
-
     if (config.output_timeout != 0.)
         timeout = config.output_timeout * 1e3;
 
@@ -425,6 +418,5 @@ WRT_Fini(void)
     AZ(run);
     fclose(fo);
     free(obuf);
-    VSB_delete(os);
     AZ(pthread_mutex_destroy(&reopen_lock));
 }
