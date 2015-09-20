@@ -494,6 +494,32 @@ format_s_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
     format_slt(tx, SLT_BerespStatus, -1, -1, s, len);
 }
 
+static inline const char *
+fmt_parse_unsigned(const char *t, unsigned *num)
+{
+    unsigned new;
+    *num = 0;
+    while (isdigit(*t)) {
+        new = *num * 10 + (*t++ - '0');
+        if (new < *num)
+            return NULL;
+        *num = new;
+    }
+    return t;
+}
+
+static inline int
+fmt_parse_tim(const char *ts, unsigned *secs, unsigned *usecs)
+{
+    const char *t = fmt_parse_unsigned(ts, secs);
+    if (t == NULL || *t != '.')
+        return 0;
+    t++;
+    if (fmt_parse_unsigned(t, usecs) == NULL)
+        return 0;
+    return 1;
+}
+
 static inline void
 format_tim(const tx_t *tx, int start_idx, const char *fmt, char **s,
            size_t *len)
@@ -511,7 +537,7 @@ format_tim(const tx_t *tx, int start_idx, const char *fmt, char **s,
         ts = get_fld(data, 0, len);
         if (ts == NULL)
             return;
-        if (sscanf(ts, "%d.%u", &secs, &usecs) != 2)
+        if (!fmt_parse_tim(ts, &secs, &usecs))
             return;
         assert(usecs < 1000000);
         t = (time_t) secs;
