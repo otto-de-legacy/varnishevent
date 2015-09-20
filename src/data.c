@@ -444,7 +444,7 @@ DATA_Dump(void)
                 continue;
             }
             if (rec_node->rec != NULL) {
-                data_dump_rec(i, j, -1, rec, data);
+                data_dump_rec(i, j, -1, rec_node->rec, data);
                 continue;
             }
             if (rec_node->hdrs == NULL)

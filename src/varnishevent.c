@@ -267,7 +267,7 @@ static inline tx_t
     return (tx);
 }
 
-static inline void
+static void
 take_free(void)
 {
     rdr_tx_free += DATA_Take_Freetx(&rdr_tx_freelist);
@@ -898,6 +898,8 @@ main(int argc, char *argv[])
 
     /* Main loop */
     term = 0;
+    last_t = VTIM_mono();
+    status = DISPATCH_CONTINUE;
     while (!term) {
         status = VSLQ_Dispatch(vslq, event, NULL);
         switch(status) {
