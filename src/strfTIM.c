@@ -33,11 +33,11 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "strfTIM.h"
 
 #include "vas.h"
-#include "vsb.h"
 
 /*
  * cf. vtim.c/VTIM:timespec in libvarnish
@@ -55,38 +55,39 @@ double2timeval(double t)
 size_t
 strfTIM(char *s, size_t max, const char *fmt, struct tm *tm, unsigned usec)
 {
-        struct vsb *vsb = VSB_new(NULL, NULL, max, VSB_FIXEDLEN);
         const char *p;
-        size_t n;
+        char newfmt[max], *f = newfmt;
+        size_t n, len = 0;
 
         assert(usec < 1000000);
         for (p = fmt; *p; p++) {
                 if (*p != '%') {
-                        VSB_putc(vsb, *p);
+                        len++;
+                        if (len > max)
+                            return 0;
+                        *f++ = *p;
                         continue;
                 }
                 p++;
-                if (*p == '%') {
-                        VSB_cat(vsb, "%%");
-                        continue;
-                }
                 if (*p != 'i') {
-                        VSB_putc(vsb, '%');
-                        VSB_putc(vsb, *p);
+                        len += 2;
+                        if (len > max)
+                            return 0;
+                        *f++ = '%';
+                        *f++ = *p;
                         continue;
                 }
-
-                VSB_printf(vsb, "%06u", usec);
+                len += 6;
+                if (len > max)
+                    return 0;
+                sprintf(f, "%06u", usec);
+                f += 6;
         }
-        VSB_finish(vsb);
+        if (len + 1 > max)
+            return 0;
+        *f = '\0';
 
-        if (VSB_error(vsb)) {
-                VSB_delete(vsb);
-                return 0;
-        }
-
-        n = strftime(s, max, VSB_data(vsb), tm);
-        VSB_delete(vsb);
+        n = strftime(s, max, newfmt, tm);
         return n;
 }
 
