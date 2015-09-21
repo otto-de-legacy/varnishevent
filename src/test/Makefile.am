@@ -1,12 +1,12 @@
 AM_CPPFLAGS = @VARNISH_CFLAGS@ -I ${ac_varnish_pkgdataincludedir}
 
-TESTS = test_data test_strfTIM test_format test_writer ncsa.sh vslarg.sh \
-	regress.sh
+TESTS = test_data test_strfTIM test_hdrtrie test_format test_writer ncsa.sh \
+	vslarg.sh regress.sh
 
 # artifactes of the regression test
 CLEANFILES = test.log output.log
 
-check_PROGRAMS = test_data test_strfTIM test_format test_writer
+check_PROGRAMS = test_data test_strfTIM test_format test_writer test_hdrtrie
 
 test_data_SOURCES = \
 	minunit.h \
@@ -56,4 +56,13 @@ test_strfTIM_SOURCES = \
 
 test_strfTIM_LDADD = \
 	../strfTIM.$(OBJEXT) \
+	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
+
+test_hdrtrie_SOURCES = \
+	minunit.h \
+	../hdrtrie.h \
+	test_hdrtrie.c
+
+test_hdrtrie_LDADD = \
+	../hdrtrie.$(OBJEXT) \
 	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
