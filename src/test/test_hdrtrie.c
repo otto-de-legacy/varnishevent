@@ -392,6 +392,13 @@ static char
     MASSERT(HDR_FindIdx(hdrt, "X-Forwarded-H:") == -1);
     MASSERT(HDR_FindIdx(hdrt, "X-Forwarded-P:") == -1);
 
+    hdrt = HDR_InsertIdx(NULL, "Beresp", 0);
+    hdrt = HDR_InsertIdx(hdrt, "BerespBody", 1);
+    hdrt = HDR_InsertIdx(hdrt, "Bereq", 2);
+    MASSERT(HDR_FindIdx(hdrt, "Beresp:") == 0);
+    MASSERT(HDR_FindIdx(hdrt, "BerespBody:") == 1);
+    MASSERT(HDR_FindIdx(hdrt, "Bereq:") == 2);
+
     return NULL;
 }
 
@@ -430,6 +437,91 @@ static char
     hdrt = HDR_InsertIdx(hdrt, "X-Forwarded-Proto", 4);
     MASSERT(HDR_N(hdrt) == 4);
 
+    hdrt = HDR_InsertIdx(NULL, "Beresp", 0);
+    hdrt = HDR_InsertIdx(hdrt, "BerespBody", 1);
+    hdrt = HDR_InsertIdx(hdrt, "Bereq", 2);
+    MASSERT(HDR_N(hdrt) == 3);
+
+    return NULL;
+}
+
+static char
+*test_HDR_List(void)
+{
+    struct hdrt_node *hdrt;
+    struct vsb *sb = VSB_new_auto();
+
+    printf("... testing HDR_List()\n");
+
+    HDR_List(NULL, sb);
+    VSB_finish(sb);
+    MASSERT(VSB_error(sb) == 0);
+    MASSERT(VSB_len(sb) == 0);
+
+    VSB_clear(sb);
+    hdrt = HDR_InsertIdx(NULL, "Foo", 4711);
+    HDR_List(hdrt, sb);
+    VSB_finish(sb);
+    MASSERT(VSB_error(sb) == 0);
+    MASSERT(strcasecmp(VSB_data(sb), "Foo,") == 0);
+
+#define EXP "Accept,Accept-Charset,Accept-Datetime,Accept-Encoding," \
+            "Accept-Language,"
+    VSB_clear(sb);
+    hdrt = HDR_InsertIdx(NULL, "Accept-Encoding", 1);
+    hdrt = HDR_InsertIdx(hdrt, "Accept", 2);
+    hdrt = HDR_InsertIdx(hdrt, "Accept-Charset", 3);
+    hdrt = HDR_InsertIdx(hdrt, "Accept-Language", 4);
+    hdrt = HDR_InsertIdx(hdrt, "Accept-Datetime", 5);
+    HDR_List(hdrt, sb);
+    VSB_finish(sb);
+    MASSERT(VSB_error(sb) == 0);
+    MASSERT(strcasecmp(VSB_data(sb), EXP) == 0);
+#undef EXP
+
+#define EXP "Content-Disposition,Content-Encoding,Content-Language," \
+            "Content-Length,Content-Location,Content-MD5,Content-Range," \
+            "Content-Type,"
+    VSB_clear(sb);
+    hdrt = HDR_InsertIdx(NULL, "Content-Disposition", 1);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Encoding", 2);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Language", 3);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Length", 4);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Location", 5);
+    hdrt = HDR_InsertIdx(hdrt, "Content-MD5", 6);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Range", 7);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Type", 8);
+    HDR_List(hdrt, sb);
+    VSB_finish(sb);
+    MASSERT(VSB_error(sb) == 0);
+    MASSERT(strcasecmp(VSB_data(sb), EXP) == 0);
+#undef EXP
+
+#define EXP "X-Csrf-Token,X-Forwarded-For,X-Forwarded-Host,X-Forwarded-Proto,"
+    VSB_clear(sb);
+    hdrt = HDR_InsertIdx(NULL, "X-Csrf-Token", 1);
+    hdrt = HDR_InsertIdx(hdrt, "X-Forwarded-For", 2);
+    hdrt = HDR_InsertIdx(hdrt, "X-Forwarded-Host", 3);
+    hdrt = HDR_InsertIdx(hdrt, "X-Forwarded-Proto", 4);
+    HDR_List(hdrt, sb);
+    VSB_finish(sb);
+    MASSERT(VSB_error(sb) == 0);
+    MASSERT(strcasecmp(VSB_data(sb), EXP) == 0);
+#undef EXP
+
+#define EXP "Bereq,Beresp,BerespBody,"
+    VSB_clear(sb);
+    hdrt = HDR_InsertIdx(NULL, "Beresp", 0);
+    hdrt = HDR_InsertIdx(hdrt, "BerespBody", 1);
+    hdrt = HDR_InsertIdx(hdrt, "Bereq", 2);
+    HDR_List(hdrt, sb);
+    VSB_finish(sb);
+    MASSERT(VSB_error(sb) == 0);
+    MASSERT(strcasecmp(VSB_data(sb), EXP) == 0);
+#undef EXP
+
+    VSB_delete(sb);
+
     return NULL;
 }
 
@@ -462,6 +554,7 @@ static const char
     mu_run_test(test_HDR_FindIdx);
     mu_run_test(test_HDR_InsertIdx);
     mu_run_test(test_HDR_N);
+    mu_run_test(test_HDR_List);
     mu_run_test(test_HDR_Fini);
     return NULL;
 }

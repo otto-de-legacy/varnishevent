@@ -44,6 +44,7 @@
 
 #include "varnishevent.h"
 #include "format.h"
+#include "hdrtrie.h"
 #include "strfTIM.h"
 
 #ifdef PAGE_SIZE
@@ -153,7 +154,7 @@ get_hdr(const tx_t *tx, enum VSL_tag_e tag, int hdr_idx)
     char *c;
 
     assert(hdr_idx >= 0);
-    assert(hdr_idx < hdr_include_tbl[tag]->n);
+    assert(hdr_idx <= hidx[tag]);
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     assert(tx->state == TX_FORMATTING);
     idx = tag2idx[tag];
@@ -827,7 +828,7 @@ add_fmt_name(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
     add_fmt(fmt, os, n, formatter, name, SLT__Bogus, -1);
 }
 
-static char *
+static inline char *
 strdup_add_colon(const char *s)
 {
     int len;
@@ -843,14 +844,26 @@ strdup_add_colon(const char *s)
     return dst;
 }
 
+/* XXX: reject illegal header names */
+static void
+add_hdr(const compiled_fmt_t *fmt,  enum VSL_tag_e tag, const char *hdr,
+        unsigned n)
+{
+    char *hdr_colon = strdup_add_colon(hdr);
+    if (HDR_FindIdx(hdr_trie[tag], hdr_colon) == -1) {
+        hidx[tag]++;
+        hdr_trie[tag] = HDR_InsertIdx(hdr_trie[tag], hdr, hidx[tag]);
+    }
+    fmt->args[n].hdr_idx = HDR_FindIdx(hdr_trie[tag], hdr_colon);
+    free(hdr_colon);
+}
+
 static void
 add_fmt_hdr(const compiled_fmt_t *fmt, struct vsb *os, unsigned n,
-            formatter_f formatter, enum VSL_tag_e tag, const char *hdr,
-            char **hdrtbl)
+            formatter_f formatter, enum VSL_tag_e tag, const char *hdr)
 {
-    AN(hdrtbl);
     add_fmt(fmt, os, n, formatter, NULL, tag, -1);
-    hdrtbl[n] = strdup_add_colon(hdr);
+    add_hdr(fmt, tag, hdr, n);
 }
 
 #define FMT(type, format_ltr)                           \
@@ -936,14 +949,13 @@ add_cb_tag_incl(enum VSL_transaction_e type, enum VSL_tag_e tag,
 
 static int
 compile_fmt(char * const format, compiled_fmt_t * const fmt,
-            enum VSL_transaction_e type, char ***hdrtbl, char *err)
+            enum VSL_transaction_e type, char *err)
 {
     const char *p;
     unsigned n = 1;
     struct vsb *os;
 
     assert(type == VSL_t_req || type == VSL_t_bereq || type == VSL_t_raw);
-    AZ(*hdrtbl);
 
     for (p = format; *p != '\0'; p++)
         if (*p == '%')
@@ -972,8 +984,6 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
     }
     for (int i = 0; i < n; i++)
         fmt->args[i].hdr_idx = -1;
-    *hdrtbl = calloc(n, sizeof(char *));
-    AN(*hdrtbl);
 
     n = 0;
     os = VSB_new_auto();
@@ -1020,7 +1030,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             
         case 'D':
             add_fmt_hdr(fmt, os, n, FMT(type, format_D), SLT_Timestamp,
-                        NAME(type, "Resp", "BerespBody"), *hdrtbl);
+                        NAME(type, "Resp", "BerespBody"));
             add_cb_tag_incl(type, SLT_Timestamp, "Resp", "BerespBody");
             n++;
             break;
@@ -1077,8 +1087,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
         case 'r':
             add_fmt_hdr(fmt, os, n, FMT(type, format_r),
-                        TAG(type, SLT_ReqHeader, SLT_BereqHeader), "Host",
-                        *hdrtbl);
+                        TAG(type, SLT_ReqHeader, SLT_BereqHeader), "Host");
             add_cb_tag(type, SLT_ReqMethod, SLT_BereqMethod, NULL);
             add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, "Host");
             add_cb_tag(type, SLT_ReqURL, SLT_BereqURL, NULL);
@@ -1093,15 +1102,18 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             break;
 
         case 't':
-            add_fmt_hdr(fmt, os, n, format_t, SLT_Timestamp, "Start", *hdrtbl);
-            if (type != VSL_t_raw)
+            if (type != VSL_t_raw) {
+                add_fmt_hdr(fmt, os, n, format_t, SLT_Timestamp, "Start");
                 add_tag(type, SLT_Timestamp, "Start");
+            }
+            else
+                add_formatter(fmt, os, n, format_t);
             n++;
             break;
 
         case 'T':
             add_fmt_hdr(fmt, os, n, FMT(type, format_T), SLT_Timestamp,
-                        "Start", *hdrtbl);
+                        "Start");
             add_tag(type, SLT_Timestamp, "Start");
             n++;
             break;
@@ -1115,7 +1127,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
         case 'u':
             add_fmt_hdr(fmt, os, n, FMT(type, format_u),
                         TAG(type, SLT_ReqHeader, SLT_BereqHeader),
-                        "Authorization", *hdrtbl);
+                        "Authorization");
             add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, "Authorization");
             n++;
             break;
@@ -1137,8 +1149,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             switch (ltr) {
             case 'i':
                 add_fmt_hdr(fmt, os, n, FMT(type, format_Xi),
-                            TAG(type, SLT_ReqHeader, SLT_BereqHeader), fname,
-                            *hdrtbl);
+                            TAG(type, SLT_ReqHeader, SLT_BereqHeader), fname);
                 add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, fname);
                 n++;
                 p = tmp;
@@ -1146,7 +1157,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             case 'o':
                 add_fmt_hdr(fmt, os, n, FMT(type, format_Xo),
                             TAG(type, SLT_RespHeader, SLT_BerespHeader),
-                            fname, *hdrtbl);
+                            fname);
                 add_cb_tag(type, SLT_RespHeader, SLT_BerespHeader, fname);
                 n++;
                 p = tmp;
@@ -1154,8 +1165,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             case 't':
                 add_fmt_name(fmt, os, n, format_Xt, fname);
                 if (type != VSL_t_raw) {
-                    (*hdrtbl)[n] = strdup("Start:");
-                    AN((*hdrtbl)[n]);
+                    add_hdr(fmt, SLT_Timestamp, "Start", n);
                     fmt->args[n].tag = SLT_Timestamp;
                     add_tag(type, SLT_Timestamp, "Start");
                 }
@@ -1165,8 +1175,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
             case 'x':
                 if (strcmp(fname, "Varnish:time_firstbyte") == 0) {
                     add_fmt_hdr(fmt, os, n, FMT(type, format_Xttfb),
-                                SLT_Timestamp, NAME(type, "Process", "Beresp"),
-                                *hdrtbl);
+                                SLT_Timestamp, NAME(type, "Process", "Beresp"));
                     add_cb_tag_incl(type, SLT_Timestamp, "Process", "Beresp");
                 }
                 else if (strcmp(fname, "Varnish:hitmiss") == 0) {
@@ -1199,7 +1208,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     // Format: %{VCL_Log:keyname}x
                     // Logging: std.log("keyname:value")
                     add_fmt_hdr(fmt, os, n, format_VCL_Log, SLT_VCL_Log,
-                                fname+8, *hdrtbl);
+                                fname+8);
                     add_tag(type, SLT_VCL_Log, fname+8);
                 }
                 else if (strncmp(fname, "tag:", 4) == 0) {
@@ -1235,10 +1244,8 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                         fld_nr = atoi(fld);
                     }
                     add_fmt(fmt, os, n, format_SLT, NULL, t, fld_nr);
-                    if (hdr != NULL) {
-                        (*hdrtbl)[n] = strdup_add_colon(hdr);
-                        AN((*hdrtbl)[n]);
-                    }
+                    if (hdr != NULL)
+                        add_hdr(fmt, t, hdr, n);
                     add_tag(type, t, hdr);
                 }
                 else if (strncmp(fname, "vxid", 4) == 0) {
@@ -1280,105 +1287,23 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
     return 0;
 }
 
-int
-hdrcmp(const void *s1, const void *s2)
-{
-    return strcasecmp(* (char * const *) s1, * (char * const *) s2);
-}
-
 static void
-fmt_build_include_tbls(const includehead_t *inclhead, int *idx)
+fmt_compute_indices(const includehead_t *inclhead, int *idx)
 {
-    int hdrs_per_idx[MAX_VSL_TAG] = { 0 };
-    inc_t *incl;
-
     for (int i = 0; i < MAX_VSL_TAG; i++) {
         if (VSTAILQ_EMPTY(&inclhead[i]))
             continue;
-        VSTAILQ_FOREACH(incl, &inclhead[i], inclist)
-            if (incl->hdr != NULL) {
-                incl->dup = 0;
-                /* Don't add duplicate headers from a previous format */
-                if (hdr_include_tbl[i] != NULL) {
-                    CHECK_OBJ(hdr_include_tbl[i], INCLUDE_MAGIC);
-                    for (int j = 0; j < hdr_include_tbl[i]->n; j++)
-                        if (strcasecmp(incl->hdr, hdr_include_tbl[i]->hdr[j])
-                            == 0) {
-                            incl->dup = 1;
-                            break;
-                        }
-                }
-                if (!incl->dup)
-                    hdrs_per_idx[i]++;
-            }
         if (tag2idx[i] < 0)
             tag2idx[i] = (*idx)++;
     }
-
-    for (int i = 0; i < MAX_VSL_TAG; i++) {
-        int hdr_idx = 0;
-
-        if (hdrs_per_idx[i] == 0)
-            continue;
-
-        if (hdr_include_tbl[i] != NULL) {
-            CHECK_OBJ(hdr_include_tbl[i], INCLUDE_MAGIC);
-            assert(hdr_include_tbl[i]->n > 0);
-            AN(hdr_include_tbl[i]->hdr);
-            hdr_idx = hdr_include_tbl[i]->n;
-            hdr_include_tbl[i]->hdr
-                = realloc(hdr_include_tbl[i]->hdr,
-                          (hdr_idx + hdrs_per_idx[i]) * sizeof(char *));
-        }
-        else {
-            ALLOC_OBJ(hdr_include_tbl[i], INCLUDE_MAGIC);
-            AN(hdr_include_tbl[i]);
-            hdr_include_tbl[i]->hdr = (char **) calloc(hdrs_per_idx[i],
-                                                       sizeof(char *));
-        }
-        AN(hdr_include_tbl[i]->hdr);
-        VSTAILQ_FOREACH(incl, &inclhead[i], inclist) {
-            assert(incl->hdr != NULL);
-            if (incl->dup)
-                continue;
-            hdr_include_tbl[i]->hdr[hdr_idx] = strdup(incl->hdr);
-            AN(hdr_include_tbl[i]->hdr[hdr_idx]);
-            hdr_idx++;
-        }
-        hdr_include_tbl[i]->n = hdr_idx;
-        qsort(hdr_include_tbl[i]->hdr, hdr_idx, sizeof(char *), hdrcmp);
-    }
     if (*idx > max_idx)
         max_idx = *idx;
-}
-
-static void
-fmt_set_hdr_indices(compiled_fmt_t *fmt, char **hdrtbl)
-{
-    AN(hdrtbl);
-    for (int i = 0; i < fmt->n; i++) {
-        if (hdrtbl[i] == NULL)
-            continue;
-        fmt->args[i].hdr_idx = DATA_FindHdrIdx(fmt->args[i].tag, hdrtbl[i]);
-    }
-}
-
-static void
-fmt_free_hdrtbl(int n, char ***hdrtbl)
-{
-    AN(*hdrtbl);
-    for (int i = 0; i < n; i++)
-        if ((*hdrtbl)[i] != NULL)
-            free((*hdrtbl)[i]);
-    free(*hdrtbl);
-    *hdrtbl = NULL;
 }
 
 int
 FMT_Init(char *err)
 {
     int idx = 0;
-    char **chdrtbl = NULL, **bhdrtbl = NULL, **rhdrtbl = NULL;
 
     obuf = calloc(OBUF_SIZE, sizeof(char));
     if (obuf == NULL)
@@ -1390,9 +1315,12 @@ FMT_Init(char *err)
     AN(scratch);
 
     memset(tag2idx, -1, sizeof(tag2idx));
-    for (int i = 0; i < MAX_VSL_TAG; i++)
-        hdr_include_tbl[i] = NULL;
     max_idx = 0;
+
+    for (int i = 0; i < MAX_VSL_TAG; i++) {
+        hdr_trie[i] = NULL;
+        hidx[i] = -1;
+    }
 
     for (int i = 0; i < MAX_VSL_TAG; i++) {
         VSTAILQ_INIT(&cincl[i]);
@@ -1401,40 +1329,24 @@ FMT_Init(char *err)
     }
 
     if (!VSB_EMPTY(config.cformat)) {
-        if (compile_fmt(VSB_data(config.cformat), &cformat, VSL_t_req, &chdrtbl,
-                        err)
+        if (compile_fmt(VSB_data(config.cformat), &cformat, VSL_t_req, err)
             != 0)
             return EINVAL;
-        fmt_build_include_tbls(cincl, &idx);
+        fmt_compute_indices(cincl, &idx);
     }
 
     if (!VSB_EMPTY(config.bformat)) {
-        if (compile_fmt(VSB_data(config.bformat), &bformat, VSL_t_bereq,
-                        &bhdrtbl, err)
+        if (compile_fmt(VSB_data(config.bformat), &bformat, VSL_t_bereq, err)
             != 0)
             return EINVAL;
-        fmt_build_include_tbls(bincl, &idx);
+        fmt_compute_indices(bincl, &idx);
     }
 
     if (!VSB_EMPTY(config.rformat)) {
-        if (compile_fmt(VSB_data(config.rformat), &rformat, VSL_t_raw, &rhdrtbl,
-                        err)
+        if (compile_fmt(VSB_data(config.rformat), &rformat, VSL_t_raw, err)
             != 0)
             return EINVAL;
-        fmt_build_include_tbls(rincl, &idx);
-    }
-
-    if (!VSB_EMPTY(config.cformat)) {
-        fmt_set_hdr_indices(&cformat, chdrtbl);
-        fmt_free_hdrtbl(cformat.n, &chdrtbl);
-    }
-    if (!VSB_EMPTY(config.bformat)) {
-        fmt_set_hdr_indices(&bformat, bhdrtbl);
-        fmt_free_hdrtbl(bformat.n, &bhdrtbl);
-    }
-    if (!VSB_EMPTY(config.rformat)) {
-        fmt_set_hdr_indices(&rformat, rhdrtbl);
-        fmt_free_hdrtbl(rformat.n, &rhdrtbl);
+        fmt_compute_indices(rincl, &idx);
     }
 
     return 0;
@@ -1544,20 +1456,6 @@ FMT_Format(tx_t *tx)
 }
 
 static void
-free_hdr_include(void)
-{
-    for (int i = 0; i < MAX_VSL_TAG; i++)
-        if (hdr_include_tbl[i] != NULL) {
-            CHECK_OBJ(hdr_include_tbl[i], INCLUDE_MAGIC);
-            for (int j = 0; j < hdr_include_tbl[i]->n; j++) {
-                AN(hdr_include_tbl[i]->hdr[j]);
-                free(hdr_include_tbl[i]->hdr[j]);
-            }
-            FREE_OBJ(hdr_include_tbl[i]);
-        }
-}
-
-static void
 free_format(compiled_fmt_t *fmt)
 {
     for (int i = 0; i < fmt->n; i++) {
@@ -1594,8 +1492,6 @@ FMT_Fini(void)
     free_incl(cincl);
     free_incl(bincl);
     free_incl(rincl);
-
-    free_hdr_include();
 
     if (!VSB_EMPTY(config.cformat))
         free_format(&cformat);

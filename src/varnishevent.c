@@ -362,7 +362,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             if (tx->recs[idx]->rec != NULL)
                 continue;
             if (tx->recs[idx]->hdrs != NULL) {
-                hdr_idx = DATA_FindHdrIdx(tag, p);
+                hdr_idx = HDR_FindIdx(hdr_trie[tag], p);
                 if (hdr_idx == -1)
                     continue;
                 if (tx->recs[idx]->hdrs[hdr_idx] != NULL)
@@ -549,7 +549,6 @@ main(int argc, char *argv[])
     struct VSM_data *vsm = NULL;
     struct VSL_cursor *cursor;
     enum VSL_grouping_e grouping = VSL_g_vxid;
-    struct vsb *hdrs = VSB_new_auto();
     unsigned long last_seen = 0;
     double last_t;
 
@@ -822,19 +821,15 @@ main(int argc, char *argv[])
         int idx = tag2idx[i];
         if (idx == -1)
             continue;
-        if (hdr_include_tbl[i] == NULL)
+        if (hdr_trie[i] == NULL)
             LOG_Log(LOG_INFO, "Reading tag %s", VSL_tags[i]);
         else {
-            include_t *inc = hdr_include_tbl[i];
-            CHECK_OBJ_NOTNULL(inc, INCLUDE_MAGIC);
-            VSB_clear(hdrs);
-            for (int j = 0; j < inc->n; j++) {
-                VSB_cat(hdrs, inc->hdr[j]);
-                VSB_cat(hdrs, ",");
-            }
+            struct vsb *hdrs = VSB_new_auto();
+            HDR_List(hdr_trie[i], hdrs);
             VSB_finish(hdrs);
             LOG_Log(LOG_INFO, "Reading tags %s with headers: %s", VSL_tags[i],
                     VSB_data(hdrs));
+            VSB_delete(hdrs);
         }
     }
 

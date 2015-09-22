@@ -112,22 +112,35 @@ HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr, int idx)
         n = hdr_next(*h);
         assert(n >= 0 && n < 64);
         hdrt->next[n] = HDR_InsertIdx(hdrt->next[n], ++h, idx);
+        CHECK_OBJ_NOTNULL(hdrt->next[n], HDRT_NODE_MAGIC);
     }
     else if (*h == '\0') {
         n = hdr_next(*s);
         assert(n >= 0 && n < 64);
         *s = '\0';
         hdrt->next[n] = HDR_InsertIdx(hdrt->next[n], ++s, hdrt->idx);
+        CHECK_OBJ_NOTNULL(hdrt->next[n], HDRT_NODE_MAGIC);
         hdrt->idx = idx;
     }
     else {
+        /* XXX: this memcpy/memset stuff is ugly, better allocate the next
+           table on the heap and just move pointers, which is also
+           probably more cache-friendly. */
+        struct hdrt_node *s_next[64];
+
         n = hdr_next(*s);
         assert(n >= 0 && n < 64);
         *s = '\0';
+        memcpy(s_next, hdrt->next, 64 * sizeof(struct hdrt_next *));
+        memset(hdrt->next, 0, 64 * sizeof(struct hdrt_next *));
         hdrt->next[n] = HDR_InsertIdx(hdrt->next[n], ++s, hdrt->idx);
+        CHECK_OBJ_NOTNULL(hdrt->next[n], HDRT_NODE_MAGIC);
+        memcpy(hdrt->next[n]->next, s_next, 64 * sizeof(struct hdrt_next *));
         n = hdr_next(*h);
         assert(n >= 0 && n < 64);
+        AZ(hdrt->next[n]);
         hdrt->next[n] = HDR_InsertIdx(hdrt->next[n], ++h, idx);
+        CHECK_OBJ_NOTNULL(hdrt->next[n], HDRT_NODE_MAGIC);
         hdrt->idx = -1;
     }
     
@@ -148,6 +161,58 @@ HDR_N(struct hdrt_node *hdrt)
         if (hdrt->next[i] != NULL)
             n += HDR_N(hdrt->next[i]);
     return n;
+}
+
+static struct vsb *
+vsb_dup(struct vsb *vsb)
+{
+    struct vsb *dup = VSB_new_auto();
+    char *str;
+
+    VSB_finish(vsb);
+    str = strdup(VSB_data(vsb));
+    VSB_cpy(dup, str);
+    VSB_clear(vsb);
+    VSB_cpy(vsb, str);
+    free(str);
+    return dup;
+}
+
+static void
+hdr_traverse(struct hdrt_node *hdrt, struct vsb *sb, struct vsb *prefix)
+{
+    struct vsb *current;
+
+    if (hdrt == NULL)
+        return;
+    CHECK_OBJ(hdrt, HDRT_NODE_MAGIC);
+    AN(hdrt->str);
+    current = vsb_dup(prefix);
+    VSB_cat(current, hdrt->str);
+    if (hdrt->idx >= 0) {
+        struct vsb *word = vsb_dup(current);
+        VSB_finish(word);
+        VSB_cat(sb, VSB_data(word));
+        VSB_cat(sb, ",");
+        VSB_delete(word);
+    }
+    for (int i = 0; i < 64; i++)
+        if (hdrt->next[i] != NULL) {
+            struct vsb *next = vsb_dup(current);
+            char c = i + 32;
+            if (i + 32 == ':')
+                c = '~';
+            VSB_putc(next, tolower(c));
+            hdr_traverse(hdrt->next[i], sb, next);
+        }
+    VSB_delete(current);
+}
+
+void
+HDR_List(struct hdrt_node *hdrt, struct vsb *sb)
+{
+    struct vsb *p = VSB_new_auto();
+    hdr_traverse(hdrt, sb, p);
 }
 
 void

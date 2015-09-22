@@ -72,30 +72,21 @@ reset_tag2idx(int n, ...)
 }
 
 static void
-reset_hdr_include(void)
+reset_hdrs(void)
 {
     for (int i = 0; i < MAX_VSL_TAG; i++)
-        hdr_include_tbl[i] = NULL;
+        if (hdr_trie[i] != NULL) {
+            HDR_Fini(hdr_trie[i]);
+            hdr_trie[i] = NULL;
+        }
 }
 
 static void
-add_hdr_include(int n, enum VSL_tag_e tag, ...)
+add_hdr(enum VSL_tag_e tag, const char *hdr, int idx)
 {
-    va_list hdrs;
-    include_t *inc;
-
-    inc = (include_t *) calloc(1, sizeof(include_t));
-    inc->magic = INCLUDE_MAGIC;
-    inc->n = n;
-    inc->hdr = (char **) calloc(n, sizeof(char *));
-    va_start(hdrs, tag);
-    for (int i = 0; i < n; i++)  {
-        const char *hdr = va_arg(hdrs, const char *);
-        inc->hdr[i] = strdup(hdr);
-    }
-    va_end(hdrs);
-    qsort(inc->hdr, n, sizeof(char *), hdrcmp);
-    hdr_include_tbl[tag] = inc;
+    hdr_trie[tag] = HDR_InsertIdx(hdr_trie[tag], hdr, idx);
+    if (idx > hidx[tag])
+        hidx[tag] = idx;
 }
 
 static void
@@ -169,11 +160,11 @@ add_record_data(tx_t *tx, enum VSL_tag_e tag, rec_t *rec, chunk_t *chunk,
 static void
 init_hdr_recs(tx_t *tx, enum VSL_tag_e tag)
 {
-    include_t *inc = hdr_include_tbl[tag];
     int idx = tag2idx[tag];
 
     tx->recs[idx]->rec = NULL;
-    tx->recs[idx]->hdrs = (rec_t **) calloc(inc->n, sizeof(rec_t *));
+    tx->recs[idx]->hdrs = (rec_t **) calloc(HDR_N(hdr_trie[tag]),
+                                            sizeof(rec_t *));
 }
 
 static void
@@ -211,7 +202,7 @@ clear_hdr(tx_t *tx, enum VSL_tag_e tag, int hdr_idx)
 static inline void
 set_arg_hdr_idx(arg_t *arg, enum VSL_tag_e tag, const char *hdr)
 {
-    arg->hdr_idx = DATA_FindHdrIdx(tag, hdr);
+    arg->hdr_idx = HDR_FindIdx(hdr_trie[tag], hdr);
 }
 
 /* N.B.: Always run the tests in this order */
@@ -360,7 +351,6 @@ static const char
 #define NHDRS 5
     tx_t tx;
     const char *h[] = { "Bar", "Baz", "Foo", "Garply", "Xyzzy" };
-    include_t inc;
     rec_node_t node[MAX_IDX], *n[MAX_IDX];
     rec_t recs[MAX_IDX * NHDRS], *rhdrs[MAX_IDX][NHDRS];
     chunk_t c[MAX_IDX * NHDRS], *c2;
@@ -369,19 +359,17 @@ static const char
     printf("... testing get_hdr()\n");
 
     max_idx = MAX_IDX;
-    inc.magic = INCLUDE_MAGIC;
-    inc.n = NHDRS;
-    inc.hdr = (char **) calloc(NHDRS, sizeof(char *));
-    for (int i = 0; i < NHDRS; i++)
-        inc.hdr[i] = strdup(h[i]);
     for (int i = 0; i < MAX_VSL_TAG; i++)
         if (i < MAX_IDX) {
             tag2idx[i] = i;
-            hdr_include_tbl[i] = &inc;
+            for (int j = 0; j < NHDRS; j++)
+                hdr_trie[i] = HDR_InsertIdx(hdr_trie[i], h[j], j);
+            hidx[i] = NHDRS - 1;
         }
         else {
             tag2idx[i] = -1;
-            hdr_include_tbl[i] = NULL;
+            hdr_trie[i] = NULL;
+            hidx[i] = -1;
         }
 
     tx.magic = TX_MAGIC;
@@ -637,8 +625,9 @@ static const char
 
     reset_tag2idx(NTAGS, SLT_Timestamp);
     MASSERT(max_idx == NTAGS);
-    reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "BerespBody", "Resp");
+    reset_hdrs();
+    add_hdr(SLT_Timestamp, "BerespBody", 0);
+    add_hdr(SLT_Timestamp, "Resp", 1);
 
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
@@ -912,9 +901,9 @@ static const char
                   SLT_ReqProtocol, SLT_BereqMethod, SLT_BereqHeader,
                   SLT_BereqURL, SLT_BereqProtocol);
     MASSERT(max_idx == NTAGS);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_ReqHeader, "Host");
-    add_hdr_include(1, SLT_BereqHeader, "Host");
+    reset_hdrs();
+    add_hdr(SLT_ReqHeader, "Host", 0);
+    add_hdr(SLT_BereqHeader, "Host", 0);
     init_tx(&tx, node, nptr);
     init_hdr_recs(&tx, SLT_ReqHeader);
     init_hdr_recs(&tx, SLT_BereqHeader);
@@ -1071,8 +1060,8 @@ static const char
 
     reset_tag2idx(NTAGS, SLT_Timestamp);
     MASSERT(max_idx == NTAGS);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_Timestamp, "Start");
+    reset_hdrs();
+    add_hdr(SLT_Timestamp, "Start", 0);
 
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
@@ -1111,8 +1100,9 @@ static const char
 
     reset_tag2idx(NTAGS, SLT_Timestamp);
     MASSERT(max_idx == NTAGS);
-    reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "BerespBody", "Resp");
+    reset_hdrs();
+    add_hdr(SLT_Timestamp, "BerespBody", 0);
+    add_hdr(SLT_Timestamp, "Resp", 1);
 
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
@@ -1196,9 +1186,9 @@ static const char
 
     reset_tag2idx(2, SLT_ReqHeader, SLT_BereqHeader);
     MASSERT(max_idx == 2);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_ReqHeader, "Authorization");
-    add_hdr_include(1, SLT_BereqHeader, "Authorization");
+    reset_hdrs();
+    add_hdr(SLT_ReqHeader, "Authorization", 0);
+    add_hdr(SLT_BereqHeader, "Authorization", 0);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_ReqHeader);
     init_hdr_recs(&tx, SLT_BereqHeader);
@@ -1266,9 +1256,9 @@ static const char
 
     reset_tag2idx(2, SLT_ReqHeader, SLT_BereqHeader);
     MASSERT(max_idx == 2);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_ReqHeader, "Foo");
-    add_hdr_include(1, SLT_BereqHeader, "Foo");
+    reset_hdrs();
+    add_hdr(SLT_ReqHeader, "Foo", 0);
+    add_hdr(SLT_BereqHeader, "Foo", 0);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_ReqHeader);
     init_hdr_recs(&tx, SLT_BereqHeader);
@@ -1308,9 +1298,9 @@ static const char
 
     reset_tag2idx(2, SLT_RespHeader, SLT_BerespHeader);
     MASSERT(max_idx == 2);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_RespHeader, "Baz");
-    add_hdr_include(1, SLT_BerespHeader, "Baz");
+    reset_hdrs();
+    add_hdr(SLT_RespHeader, "Baz", 0);
+    add_hdr(SLT_BerespHeader, "Baz", 0);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_RespHeader);
     init_hdr_recs(&tx, SLT_BerespHeader);
@@ -1359,8 +1349,8 @@ static const char
 
     reset_tag2idx(1, SLT_Timestamp);
     MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_Timestamp, "Start:");
+    reset_hdrs();
+    add_hdr(SLT_Timestamp, "Start", 0);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
     set_arg_hdr_idx(&args, SLT_Timestamp, "Start:");
@@ -1414,8 +1404,9 @@ static const char
 
     reset_tag2idx(1, SLT_Timestamp);
     MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(2, SLT_Timestamp, "Beresp:", "Process:");
+    reset_hdrs();
+    add_hdr(SLT_Timestamp, "Beresp", 0);
+    add_hdr(SLT_Timestamp, "Process", 1);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
 
@@ -1549,8 +1540,8 @@ static const char
 
     reset_tag2idx(1, SLT_VCL_Log);
     MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_VCL_Log, "foo:");
+    reset_hdrs();
+    add_hdr(SLT_VCL_Log, "foo", 0);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_VCL_Log);
     args.name = hdr;
@@ -1632,8 +1623,8 @@ static const char
     /* header selector */
     reset_tag2idx(1, SLT_Timestamp);
     MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_Timestamp, "Resp");
+    reset_hdrs();
+    add_hdr(SLT_Timestamp, "Resp", 0);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
     init_rec_chunk(SLT_Timestamp, &rec, &chunk);
@@ -1671,8 +1662,8 @@ static const char
     /* header and field selector */
     reset_tag2idx(1, SLT_Timestamp);
     MASSERT(max_idx == 1);
-    reset_hdr_include();
-    add_hdr_include(1, SLT_Timestamp, "Resp");
+    reset_hdrs();
+    add_hdr(SLT_Timestamp, "Resp", 0);
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_Timestamp);
     init_rec_chunk(SLT_Timestamp, &rec, &chunk);
@@ -1746,26 +1737,39 @@ static const char
 
 #define ASSERT_TAG_NOHDR(idx) do {              \
         MASSERT(tag2idx[idx] != -1);            \
-        MASSERT(hdr_include_tbl[idx] == NULL);  \
-    } while(0)                                  \
+        MASSERT(hdr_trie[idx] == NULL);         \
+        MASSERT(hidx[idx] == -1);               \
+    } while(0)
 
 #define ASSERT_TAG_HDR(idx) do {                \
         MASSERT(tag2idx[idx] != -1);            \
-        MASSERT(hdr_include_tbl[idx] != NULL);  \
+        MASSERT(hdr_trie[idx] != NULL);         \
+        MASSERT(hidx[idx] >= 0);                \
     } while(0)
 
 #define ASSERT_NOTAG_NOHDR(idx) do {            \
         MASSERT(tag2idx[idx] == -1);            \
-        MASSERT(hdr_include_tbl[idx] == NULL);  \
+        MASSERT(hdr_trie[idx] == NULL);         \
+        MASSERT(hidx[idx] == -1);               \
     } while(0)
 
-#define CHECK_HDRS(idx, ...) do {                                       \
-	const char *hdrs[] = {__VA_ARGS__};                             \
-	int sz = sizeof(hdrs)/sizeof(hdrs[0]);                          \
-	MASSERT(hdr_include_tbl[idx]->n == sz);                         \
-	for (int j = 0; j < sz; j++ )                                   \
-	    MASSERT(strcmp(hdrs[j], hdr_include_tbl[idx]->hdr[j]) == 0); \
-	} while (0)
+#define CHECK_HDRS(idx, ...) do {                               \
+	const char *hdrs[] = {__VA_ARGS__};                     \
+	int sz = sizeof(hdrs)/sizeof(hdrs[0]);                  \
+	MASSERT(HDR_N(hdr_trie[idx]) == sz);                    \
+        MASSERT(hidx[idx] == sz - 1);                           \
+	for (int j = 0; j < sz; j++ ) {                         \
+            int _idx = HDR_FindIdx(hdr_trie[idx], hdrs[j]);     \
+	    MASSERT(_idx >= 0);                                 \
+	    MASSERT(_idx <= hidx[idx]);                         \
+        }                                                       \
+    } while (0)
+
+static int
+get_hdr_idx(enum VSL_tag_e tag, const char *hdr)
+{
+    return HDR_FindIdx(hdr_trie[tag], hdr);
+}
 
 static void
 setup_full_client_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[],
@@ -1778,7 +1782,7 @@ setup_full_client_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[],
     tx->type = VSL_t_req;
 
     init_hdr_recs(tx, SLT_Timestamp);
-    set_hdr_data(tx, &rec[0], &c[0], DATA_FindHdrIdx(SLT_Timestamp, "Start:"),
+    set_hdr_data(tx, &rec[0], &c[0], get_hdr_idx(SLT_Timestamp, "Start:"),
                  SLT_Timestamp, T1);
     add_record_data(tx, SLT_ReqStart,    &rec[1], &c[1], REQSTART_PAYLOAD);
     add_record_data(tx, SLT_ReqMethod,   &rec[2], &c[2], "GET");
@@ -1786,31 +1790,31 @@ setup_full_client_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[],
     add_record_data(tx, SLT_ReqProtocol, &rec[4], &c[4], PROTOCOL_PAYLOAD);
     init_hdr_recs(tx, SLT_ReqHeader);
     set_hdr_data(tx, &rec[5], &c[5],
-                 DATA_FindHdrIdx(SLT_ReqHeader, "Authorization:"),
+                 get_hdr_idx(SLT_ReqHeader, "Authorization:"),
                  SLT_ReqHeader, BASIC_AUTH_PAYLOAD);
-    set_hdr_data(tx, &rec[6], &c[6], DATA_FindHdrIdx(SLT_ReqHeader, "Host:"),
+    set_hdr_data(tx, &rec[6], &c[6], get_hdr_idx(SLT_ReqHeader, "Host:"),
                  SLT_ReqHeader, "Host: foobar.com");
-    set_hdr_data(tx, &rec[7], &c[7], DATA_FindHdrIdx(SLT_ReqHeader, "Foo:"),
+    set_hdr_data(tx, &rec[7], &c[7], get_hdr_idx(SLT_ReqHeader, "Foo:"),
                  SLT_ReqHeader, "Foo: foohdr");
     add_record_data(tx, SLT_RespStatus, &rec[9],  &c[9], "200");
     add_record_data(tx, SLT_ReqAcct,    &rec[10], &c[10], REQACCT_PAYLOAD);
-    set_hdr_data(tx, &rec[11], &c[11], DATA_FindHdrIdx(SLT_Timestamp, "Resp:"),
+    set_hdr_data(tx, &rec[11], &c[11], get_hdr_idx(SLT_Timestamp, "Resp:"),
                  SLT_Timestamp, TS_RESP_PAYLOAD);
     init_hdr_recs(tx, SLT_RespHeader);
-    set_hdr_data(tx, &rec[12], &c[12], DATA_FindHdrIdx(SLT_RespHeader, "Bar:"),
+    set_hdr_data(tx, &rec[12], &c[12], get_hdr_idx(SLT_RespHeader, "Bar:"),
                  SLT_RespHeader, "Bar: barhdr");
     set_hdr_data(tx, &rec[13], &c[13],
-                 DATA_FindHdrIdx(SLT_Timestamp, "Process:"), SLT_Timestamp,
+                 get_hdr_idx(SLT_Timestamp, "Process:"), SLT_Timestamp,
                  TS_PROCESS_PAYLOAD);
     init_hdr_recs(tx, SLT_VCL_Log);
-    set_hdr_data(tx, &rec[15], &c[15], DATA_FindHdrIdx(SLT_VCL_Log, "baz:"),
+    set_hdr_data(tx, &rec[15], &c[15], get_hdr_idx(SLT_VCL_Log, "baz:"),
                  SLT_VCL_Log, "baz: logload");
     add_record_data(tx, SLT_VCL_acl, &rec[16], &c[16],
                     "MATCH ACL \"10.0.0.0\"/8");
     add_record_data(tx, SLT_Debug, &rec[17], &c[17], "");
     rec[17].len = 10;
     memcpy(c[17].data, "foo\0\xFF bar\0", 10);
-    set_hdr_data(tx, &rec[18], &c[18], DATA_FindHdrIdx(SLT_Timestamp, "Req:"),
+    set_hdr_data(tx, &rec[18], &c[18], get_hdr_idx(SLT_Timestamp, "Req:"),
                  SLT_Timestamp, TS_REQ_PAYLOAD);
 }
 
@@ -1827,7 +1831,7 @@ setup_full_backend_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[],
     tx->type = VSL_t_bereq;
 
     init_hdr_recs(tx, SLT_Timestamp);
-    set_hdr_data(tx, &rec[0], &c[0], DATA_FindHdrIdx(SLT_Timestamp, "Start:"),
+    set_hdr_data(tx, &rec[0], &c[0], get_hdr_idx(SLT_Timestamp, "Start:"),
                  SLT_Timestamp, T1);
     add_record_data(tx, SLT_Backend,       &rec[1], &c[1], BACKEND_PAYLOAD);
     add_record_data(tx, SLT_BereqMethod,   &rec[2], &c[2], "GET");
@@ -1836,32 +1840,32 @@ setup_full_backend_tx(tx_t *tx, rec_node_t node[], rec_node_t *nptr[],
 
     init_hdr_recs(tx, SLT_BereqHeader);
     set_hdr_data(tx, &rec[5], &c[5],
-                 DATA_FindHdrIdx(SLT_BereqHeader, "Authorization:"),
+                 get_hdr_idx(SLT_BereqHeader, "Authorization:"),
                  SLT_BereqHeader, BASIC_AUTH_PAYLOAD);
-    set_hdr_data(tx, &rec[6], &c[6], DATA_FindHdrIdx(SLT_BereqHeader, "Host:"),
+    set_hdr_data(tx, &rec[6], &c[6], get_hdr_idx(SLT_BereqHeader, "Host:"),
                  SLT_BereqHeader, "Host: foobar.com");
-    set_hdr_data(tx, &rec[7], &c[7], DATA_FindHdrIdx(SLT_BereqHeader, "Foo:"),
+    set_hdr_data(tx, &rec[7], &c[7], get_hdr_idx(SLT_BereqHeader, "Foo:"),
                  SLT_BereqHeader, "Foo: foohdr");
     add_record_data(tx, SLT_BerespStatus, &rec[9],  &c[9], "200");
     add_record_data(tx, SLT_BereqAcct,    &rec[10], &c[10], REQACCT_PAYLOAD);
     set_hdr_data(tx, &rec[11], &c[11],
-                 DATA_FindHdrIdx(SLT_Timestamp, "Beresp:"), SLT_Timestamp,
+                 get_hdr_idx(SLT_Timestamp, "Beresp:"), SLT_Timestamp,
                  TS_BERESP_HDR_PAYLOAD);
     init_hdr_recs(tx, SLT_BerespHeader);
     set_hdr_data(tx, &rec[12], &c[12],
-                 DATA_FindHdrIdx(SLT_BerespHeader, "Bar:"), SLT_BerespHeader,
+                 get_hdr_idx(SLT_BerespHeader, "Bar:"), SLT_BerespHeader,
                  "Bar: barhdr");
     set_hdr_data(tx, &rec[13], &c[13],
-                 DATA_FindHdrIdx(SLT_Timestamp, "BerespBody:"), SLT_Timestamp,
+                 get_hdr_idx(SLT_Timestamp, "BerespBody:"), SLT_Timestamp,
                  TS_BERESP_PAYLOAD);
     init_hdr_recs(tx, SLT_VCL_Log);
-    set_hdr_data(tx, &rec[15], &c[15], DATA_FindHdrIdx(SLT_VCL_Log, "baz:"),
+    set_hdr_data(tx, &rec[15], &c[15], get_hdr_idx(SLT_VCL_Log, "baz:"),
                  SLT_VCL_Log, "baz: logload");
     add_record_data(tx, SLT_Fetch_Body, &rec[16], &c[16], "2 chunked stream");
     add_record_data(tx, SLT_Debug, &rec[17], &c[17], "");
     rec[17].len = 10;
     memcpy(c[17].data, "foo\0\xFF bar\0", 10);
-    set_hdr_data(tx, &rec[18], &c[18], DATA_FindHdrIdx(SLT_Timestamp, "Bereq:"),
+    set_hdr_data(tx, &rec[18], &c[18], get_hdr_idx(SLT_Timestamp, "Bereq:"),
                  SLT_Timestamp, TS_BEREQ_PAYLOAD);
 }
 
@@ -1881,7 +1885,7 @@ static const char
     printf("... testing FMT_*() interface\n");
 
     reset_tag2idx(0);
-    reset_hdr_include();
+    reset_hdrs();
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
 
@@ -1909,17 +1913,16 @@ static const char
             break;
         case SLT_ReqHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Authorization", "Host", "Referer", "User-agent");
+            CHECK_HDRS(i, "Authorization:", "Host:", "Referer:", "User-agent:");
             break;
         case SLT_Timestamp:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Start");
+            CHECK_HDRS(i, "Start:");
             break;
         default:
             ASSERT_NOTAG_NOHDR(i);
             break;
         }
-
 
     init_tx(&tx, node, nptr);
     tx.state = TX_SUBMITTED;
@@ -2004,19 +2007,19 @@ static const char
             break;
         case SLT_ReqHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            CHECK_HDRS(i, "Authorization:", "Foo:", "Host:");
             break;
         case SLT_RespHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Bar");
+            CHECK_HDRS(i, "Bar:");
             break;
         case SLT_VCL_Log:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "baz");
+            CHECK_HDRS(i, "baz:");
             break;
         case SLT_Timestamp:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Process", "Req", "Resp", "Start");
+            CHECK_HDRS(i, "Process:", "Req:", "Resp:", "Start:");
             break;
         default:
             ASSERT_NOTAG_NOHDR(i);
@@ -2080,19 +2083,19 @@ static const char
             break;
         case SLT_BereqHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            CHECK_HDRS(i, "Authorization:", "Foo:", "Host:");
             break;
         case SLT_BerespHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Bar");
+            CHECK_HDRS(i, "Bar:");
             break;
         case SLT_VCL_Log:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "baz");
+            CHECK_HDRS(i, "baz:");
             break;
         case SLT_Timestamp:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Bereq", "Beresp", "BerespBody", "Start");
+            CHECK_HDRS(i, "Bereq:", "Beresp:", "BerespBody:", "Start:");
             break;
         default:
             ASSERT_NOTAG_NOHDR(i);
@@ -2163,20 +2166,20 @@ static const char
             break;
         case SLT_ReqHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            CHECK_HDRS(i, "Authorization:", "Foo:", "Host:");
             break;
         case SLT_RespHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Bar");
+            CHECK_HDRS(i, "Bar:");
             break;
         case SLT_VCL_Log:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "baz");
+            CHECK_HDRS(i, "baz:");
             break;
         case SLT_Timestamp:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Bereq", "Beresp", "BerespBody", "Process", "Req",
-                       "Resp", "Start");
+            CHECK_HDRS(i, "Bereq:", "Beresp:", "BerespBody:", "Process:",
+                       "Req:", "Resp:", "Start:");
             break;
         case SLT_BereqMethod:
             ASSERT_TAG_NOHDR(i);
@@ -2201,11 +2204,11 @@ static const char
             break;
         case SLT_BereqHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Authorization", "Foo", "Host");
+            CHECK_HDRS(i, "Authorization:", "Foo:", "Host:");
             break;
         case SLT_BerespHeader:
             ASSERT_TAG_HDR(i);
-            CHECK_HDRS(i, "Bar");
+            CHECK_HDRS(i, "Bar:");
             break;
         default:
             ASSERT_NOTAG_NOHDR(i);

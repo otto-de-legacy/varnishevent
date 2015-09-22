@@ -40,6 +40,8 @@
 #include <signal.h>
 #include <sys/time.h>
 
+#include "hdrtrie.h"
+
 #include "vapi/vsl.h"
 #include "vqueue.h"
 #include "vsb.h"
@@ -150,14 +152,7 @@ typedef VSTAILQ_HEAD(txhead_s, tx_t) txhead_t;
 unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi,
     global_nfree_tx, global_nfree_rec, global_nfree_chunk;
 
-typedef struct include_s {
-    unsigned magic;
-#define INCLUDE_MAGIC 0x4dd6fe3b
-    char **hdr;
-    int n;
-} include_t;
-
-include_t *hdr_include_tbl[MAX_VSL_TAG];
+struct hdrt_node *hdr_trie[MAX_VSL_TAG];
 
 /* Writer (consumer) waits for this condition when the SPSC queue is empty.
    Reader (producer) signals the condition after enqueue. */
@@ -247,7 +242,6 @@ unsigned DATA_Take_Freechunk(struct chunkhead_s *dst);
 void DATA_Return_Freetx(struct txhead_s *returned, unsigned nreturned);
 void DATA_Return_Freerec(struct rechead_s *returned, unsigned nreturned);
 void DATA_Return_Freechunk(struct chunkhead_s *returned, unsigned nreturned);
-int DATA_FindHdrIdx(enum VSL_tag_e, const char *hdr);
 void DATA_Dump(void);
 
 /* writer.c */

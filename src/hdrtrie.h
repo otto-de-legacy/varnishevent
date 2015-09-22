@@ -29,6 +29,11 @@
  *
  */
 
+#ifndef HDRTRIE_H_INCLUDED
+#define HDRTRIE_H_INCLUDED
+
+#include "vsb.h"
+
 struct hdrt_node {
     unsigned		magic;
 #define HDRT_NODE_MAGIC 0x970ec029
@@ -41,4 +46,7 @@ int HDR_FindIdx(struct hdrt_node *hdrt, const char *hdr);
 struct hdrt_node *HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr,
                                 int idx);
 int HDR_N(struct hdrt_node *hdrt);
+void HDR_List(struct hdrt_node *hdrt, struct vsb *sb);
 void HDR_Fini(struct hdrt_node *hdrt);
+
+#endif

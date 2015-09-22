@@ -39,6 +39,7 @@
 
 #include "varnishevent.h"
 #include "data.h"
+#include "hdrtrie.h"
 
 #include "vas.h"
 #include "miniobj.h"
@@ -254,21 +255,20 @@ DATA_Init(void)
             CHECK_OBJ(txn[i].recs[j], REC_NODE_MAGIC);
         }
         for (int j = 0; j < MAX_VSL_TAG; j++) {
-            include_t *inc;
-            int idx;
+            int idx, nhdrs;
 
             idx = tag2idx[j];
             if (idx == -1)
                 continue;
             assert(idx < max_idx);
-            if ((inc = hdr_include_tbl[j]) == NULL) {
+            nhdrs = HDR_N(hdr_trie[j]);
+            if (nhdrs == 0) {
                 txn[i].recs[idx]->hdrs = NULL;
                 continue;
             }
-            CHECK_OBJ(inc, INCLUDE_MAGIC);
-            txn[i].recs[idx]->hdrs = (rec_t **) calloc(inc->n + 1,
+            txn[i].recs[idx]->hdrs = (rec_t **) calloc(nhdrs + 1,
                                                        sizeof(rec_t *));
-            txn[i].recs[idx]->hdrs[inc->n] = magic_end_rec;
+            txn[i].recs[idx]->hdrs[nhdrs] = magic_end_rec;
         }
 	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
     }
@@ -281,49 +281,6 @@ DATA_Init(void)
     atexit(data_Cleanup);
     
     return(0);
-}
-
-static inline int
-data_get_hdr_idx(char **hdrs, size_t n, const char *s, size_t len)
-{
-    int low = 0, high = n - 1;
-
-    while (high >= low) {
-        int i, cmp;
-        i = (high + low) >> 1;
-        if ((cmp = strncasecmp(s, hdrs[i], len)) == 0)
-            return i;
-        else if (cmp < 0)
-            high = i - 1;
-        else
-            low = i + 1;
-    }
-    return -1;
-}
-
-int
-DATA_FindHdrIdx(enum VSL_tag_e tag, const char *hdr)
-{
-    const char *b, *e, *s;
-
-    if (hdr_include_tbl[tag] == NULL)
-        return -1;
-    CHECK_OBJ(hdr_include_tbl[tag], INCLUDE_MAGIC);
-    b = hdr;
-    while (*b && isspace(*b))
-        b++;
-    e = b;
-    while (*e && *e != ':' && !isspace(*e))
-        e++;
-    s = e;
-    while (*s && isspace(*s))
-        s++;
-    if (*s != ':')
-        return -1;
-    if (e - b == 0)
-        return -1;
-    return data_get_hdr_idx(hdr_include_tbl[tag]->hdr,
-                            hdr_include_tbl[tag]->n, b, e - b);
 }
 
 /* 

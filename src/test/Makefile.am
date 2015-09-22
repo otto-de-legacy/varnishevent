@@ -19,6 +19,7 @@ test_data_LDADD = \
 	../data.$(OBJEXT) \
 	../format.$(OBJEXT) \
 	../strfTIM.$(OBJEXT) \
+	../hdrtrie.$(OBJEXT) \
 	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
 
 test_format_SOURCES = \
@@ -30,6 +31,7 @@ test_format_LDADD = \
 	../strfTIM.$(OBJEXT) \
 	../base64.$(OBJEXT) \
 	../data.$(OBJEXT) \
+	../hdrtrie.$(OBJEXT) \
 	../format.$(OBJEXT) \
 	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
 
@@ -46,6 +48,7 @@ test_writer_LDADD = \
 	../base64.$(OBJEXT) \
 	../spscq.$(OBJEXT) \
 	../strfTIM.$(OBJEXT) \
+	../hdrtrie.$(OBJEXT) \
 	../writer.$(OBJEXT) \
 	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
 
