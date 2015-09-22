@@ -396,6 +396,44 @@ static char
 }
 
 static char
+*test_HDR_N(void)
+{
+    struct hdrt_node *hdrt;
+
+    printf("... testing HDR_N()\n");
+
+    MAZ(HDR_N(NULL));
+
+    hdrt = HDR_InsertIdx(NULL, "Foo", 4711);
+    MASSERT(HDR_N(hdrt) == 1);
+
+    hdrt = HDR_InsertIdx(NULL, "Accept-Encoding", 1);
+    hdrt = HDR_InsertIdx(hdrt, "Accept", 2);
+    hdrt = HDR_InsertIdx(hdrt, "Accept-Charset", 3);
+    hdrt = HDR_InsertIdx(hdrt, "Accept-Language", 4);
+    hdrt = HDR_InsertIdx(hdrt, "Accept-Datetime", 5);
+    MASSERT(HDR_N(hdrt) == 5);
+
+    hdrt = HDR_InsertIdx(NULL, "Content-Disposition", 1);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Encoding", 2);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Language", 3);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Length", 4);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Location", 5);
+    hdrt = HDR_InsertIdx(hdrt, "Content-MD5", 6);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Range", 7);
+    hdrt = HDR_InsertIdx(hdrt, "Content-Type", 8);
+    MASSERT(HDR_N(hdrt) == 8);
+
+    hdrt = HDR_InsertIdx(NULL, "X-Csrf-Token", 1);
+    hdrt = HDR_InsertIdx(hdrt, "X-Forwarded-For", 2);
+    hdrt = HDR_InsertIdx(hdrt, "X-Forwarded-Host", 3);
+    hdrt = HDR_InsertIdx(hdrt, "X-Forwarded-Proto", 4);
+    MASSERT(HDR_N(hdrt) == 4);
+
+    return NULL;
+}
+
+static char
 *test_HDR_Fini(void)
 {
     struct hdrt_node *hdrt;
@@ -423,6 +461,7 @@ static const char
 {
     mu_run_test(test_HDR_FindIdx);
     mu_run_test(test_HDR_InsertIdx);
+    mu_run_test(test_HDR_N);
     mu_run_test(test_HDR_Fini);
     return NULL;
 }

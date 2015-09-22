@@ -40,4 +40,5 @@ struct hdrt_node {
 int HDR_FindIdx(struct hdrt_node *hdrt, const char *hdr);
 struct hdrt_node *HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr,
                                 int idx);
+int HDR_N(struct hdrt_node *hdrt);
 void HDR_Fini(struct hdrt_node *hdrt);

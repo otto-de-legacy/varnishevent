@@ -134,6 +134,22 @@ HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr, int idx)
     return hdrt;
 }
 
+int
+HDR_N(struct hdrt_node *hdrt)
+{
+    int n = 0;
+
+    if (hdrt == NULL)
+        return 0;
+    CHECK_OBJ(hdrt, HDRT_NODE_MAGIC);
+    if (hdrt->idx >= 0)
+        n++;
+    for (int i = 0; i < 64; i++)
+        if (hdrt->next[i] != NULL)
+            n += HDR_N(hdrt->next[i]);
+    return n;
+}
+
 void
 HDR_Fini(struct hdrt_node *hdrt)
 {
