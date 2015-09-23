@@ -1457,7 +1457,7 @@ static inline void
 fmt_resize(size_t curlen)
 {
     if (curlen > obuf_sz) {
-        obuf_sz >>= 1;
+        do { obuf_sz <<= 1; } while (curlen > obuf_sz);
         obuf = realloc(obuf, obuf_sz);
         AN(obuf);
     }
