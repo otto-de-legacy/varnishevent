@@ -92,7 +92,7 @@ const char *version = PACKAGE_TARNAME "-" PACKAGE_VERSION " revision "  \
     VCS_Version " branch " VCS_Branch;
 
 static unsigned len_hi = 0, closed = 0, overrun = 0, ioerr = 0, reacquire = 0,
-    tx_thresh, rec_thresh, chunk_thresh, waiting = 0;
+    tx_thresh, rec_thresh, chunk_thresh;
 
 static unsigned long seen = 0, submitted = 0, len_overflows = 0, no_free_tx = 0,
     no_free_rec = 0, no_free_chunk = 0, eol = 0, waits = 0;
@@ -127,9 +127,27 @@ static unsigned rdr_tx_free = 0;
 
 static int tx_type_log[VSL_t__MAX], debug = 0;
 static char tx_type_name[VSL_t__MAX];
-static const char *statename[] = { "running", "waiting" };
 
 static double idle_pause = MAX_IDLE_PAUSE;
+
+typedef enum {
+    RDR_INITIALIZING = 0,
+    RDR_RUNNING,
+    RDR_WAITING,
+    RDR_SLEEPING,
+    RDR_SHUTTINGDOWN,
+    RDR_STATE_E_LIMIT
+} rdr_state_e;
+
+static const char* statename[RDR_STATE_E_LIMIT] = { 
+    [RDR_INITIALIZING]	= "initializing",
+    [RDR_RUNNING]	= "running",
+    [RDR_WAITING]	= "waiting",
+    [RDR_SLEEPING]	= "sleeping",
+    [RDR_SHUTTINGDOWN]	= "shutting down",
+};
+
+static rdr_state_e state = RDR_INITIALIZING;
 
 void
 RDR_Stats(void)
@@ -139,7 +157,7 @@ RDR_Stats(void)
             "no_free_chunk=%lu len_hi=%u len_overflows=%lu eol=%lu "
             "idle_pause=%.06f waits=%lu closed=%u overrun=%u ioerr=%u "
             "reacquire=%u",
-            statename[waiting], seen, submitted, rdr_tx_free, rdr_rec_free,
+            statename[state], seen, submitted, rdr_tx_free, rdr_rec_free,
             rdr_chunk_free, no_free_tx, no_free_rec, no_free_chunk, len_hi,
             len_overflows, eol, idle_pause, waits, closed, overrun, ioerr,
             reacquire);
@@ -155,7 +173,7 @@ RDR_Depleted(void)
 int
 RDR_Waiting(void)
 {
-    return waiting;
+    return state == RDR_WAITING;
 }
 
 static inline void
@@ -178,11 +196,11 @@ data_wait(void)
 
         AZ(pthread_mutex_lock(&data_ready_lock));
         waits++;
-        waiting = 1;
+        state = RDR_WAITING;
         ts = VTIM_timespec(VTIM_real() + config.reader_timeout);
         ret = pthread_cond_timedwait(&data_ready_cond, &data_ready_lock, &ts);
         assert(ret == 0 || ret == ETIMEDOUT);
-        waiting = 0;
+        state = RDR_RUNNING;
         AZ(pthread_mutex_unlock(&data_ready_lock));
     }
 }
@@ -895,6 +913,7 @@ main(int argc, char *argv[])
     term = 0;
     last_t = VTIM_mono();
     status = DISPATCH_CONTINUE;
+    state = RDR_RUNNING;
     while (!term) {
         status = VSLQ_Dispatch(vslq, event, NULL);
         switch(status) {
@@ -919,7 +938,9 @@ main(int argc, char *argv[])
                     idle_pause = 1e-6;
                 last_t = t;
             }
+            state = RDR_SLEEPING;
             VTIM_sleep(idle_pause);
+            state = RDR_RUNNING;
             if (!flush)
                 continue;
             break;
@@ -991,6 +1012,7 @@ main(int argc, char *argv[])
         }
     }
 
+    state = RDR_SHUTTINGDOWN;
     if (term && status != DISPATCH_EOF && flush && vslq != NULL) {
         LOG_Log0(LOG_NOTICE, "Flushing transactions");
         take_free();
