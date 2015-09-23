@@ -200,6 +200,7 @@ AC_CHECK_FUNCS([timegm])
 AC_CHECK_FUNCS([nanosleep])
 AC_CHECK_FUNCS([setppriv])
 AC_CHECK_FUNCS([getline])
+AC_CHECK_FUNCS([pthread_setname_np])
 
 save_LIBS="${LIBS}"
 LIBS="${PTHREAD_LIBS}"

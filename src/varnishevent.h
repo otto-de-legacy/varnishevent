@@ -68,6 +68,14 @@
 #define DEFAULT_CFORMAT \
     "%h %l %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-agent}i\""
 
+#ifdef HAVE_PTHREAD_SETNAME_NP
+#define thread_setname(thr,name) pthread_setname_np((thr),(name))
+#elif defined(HAVE_PTHREAD_SET_NAME_NP)
+#define thread_setname(thr,name) pthread_set_name_np((thr),(name))
+#else
+#define thread_setname(thr,name) do { (void)(thr); (void)(name); } while(0)
+#endif
+
 struct sigaction default_action;
 
 int tag2idx[MAX_VSL_TAG];

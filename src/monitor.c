@@ -29,6 +29,8 @@
  *
  */
 
+#include "config.h"
+
 #include <syslog.h>
 #include <pthread.h>
 #include <errno.h>
@@ -73,6 +75,7 @@ monitor_cleanup(void *arg)
 static void *
 monitor_main(void *arg)
 {
+    thread_setname(pthread_self(), "vevent_monitor");
     LOG_Log(LOG_NOTICE, "Monitor thread running every %u secs",
         config.monitor_interval);
     run = 1;

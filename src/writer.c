@@ -30,6 +30,8 @@
  *
  */
 
+#include "config.h"
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -273,6 +275,7 @@ static void
 
     LOG_Log0(LOG_NOTICE, "Writer thread starting");
     CHECK_OBJ_NOTNULL(wrt, WRITER_DATA_MAGIC);
+    thread_setname(pthread_self(), "vevent_writer");
     wrt->state = WRT_INITIALIZING;
 
     VSTAILQ_INIT(&wrt_freetx);
