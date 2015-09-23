@@ -72,6 +72,7 @@ static char pipe[] = "pipe";
 static char error[] = "error";
 static char dash[] = "-";
 static char buf[BUFSIZ];
+static char hdr_char[256] = { 0 };
 
 static size_t obuf_sz = OBUF_SIZE;
 
@@ -85,6 +86,50 @@ typedef VSTAILQ_HEAD(includehead_s, inc_t) includehead_t;
 
 static compiled_fmt_t cformat, bformat, rformat;
 static includehead_t cincl[MAX_VSL_TAG], bincl[MAX_VSL_TAG], rincl[MAX_VSL_TAG];
+
+/*
+ * Header field names are HTTP 'tokens': ASCII except for control chars
+ * and the listed separators.
+ * RFC 7230 section 3.2, RFC 2616 sections 2.2 and 4.2
+ */
+static void
+init_hdr_char(void)
+{
+    for (int i = 0; i < 256; i++) {
+        if (isascii(i))
+            hdr_char[i] = 1;
+        if (iscntrl(i))
+            hdr_char[i] = 0;
+    }
+    hdr_char['('] = 0;
+    hdr_char[')'] = 0;
+    hdr_char['<'] = 0;
+    hdr_char['>'] = 0;
+    hdr_char['@'] = 0;
+    hdr_char[','] = 0;
+    hdr_char[';'] = 0;
+    hdr_char[':'] = 0;
+    hdr_char['\\'] = 0;
+    hdr_char['"'] = 0;
+    hdr_char['/'] = 0;
+    hdr_char['['] = 0;
+    hdr_char[']'] = 0;
+    hdr_char['?'] = 0;
+    hdr_char['='] = 0;
+    hdr_char['{'] = 0;
+    hdr_char['}'] = 0;
+    hdr_char[' '] = 0;
+    hdr_char['\t'] = 0;
+}
+
+static int
+isheader(const char *h)
+{
+    while (*h)
+        if (!hdr_char[(unsigned) *h++])
+            return 0;
+    return 1;
+}
 
 char *
 get_payload(const rec_t *rec)
@@ -844,11 +889,11 @@ strdup_add_colon(const char *s)
     return dst;
 }
 
-/* XXX: reject illegal header names */
 static void
 add_hdr(const compiled_fmt_t *fmt,  enum VSL_tag_e tag, const char *hdr,
         unsigned n)
 {
+    assert(isheader(hdr));
     char *hdr_colon = strdup_add_colon(hdr);
     if (HDR_FindIdx(hdr_trie[tag], hdr_colon) == -1) {
         hidx[tag]++;
@@ -1148,6 +1193,10 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
             switch (ltr) {
             case 'i':
+                if (!isheader(fname)) {
+                    sprintf(err, "illegal header name: '%s'", fname);
+                    return 1;
+                }
                 add_fmt_hdr(fmt, os, n, FMT(type, format_Xi),
                             TAG(type, SLT_ReqHeader, SLT_BereqHeader), fname);
                 add_cb_tag(type, SLT_ReqHeader, SLT_BereqHeader, fname);
@@ -1155,6 +1204,10 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 p = tmp;
                 break;
             case 'o':
+                if (!isheader(fname)) {
+                    sprintf(err, "illegal header name: '%s'", fname);
+                    return 1;
+                }
                 add_fmt_hdr(fmt, os, n, FMT(type, format_Xo),
                             TAG(type, SLT_RespHeader, SLT_BerespHeader),
                             fname);
@@ -1207,6 +1260,10 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     // output.
                     // Format: %{VCL_Log:keyname}x
                     // Logging: std.log("keyname:value")
+                    if (!isheader(fname + 8)) {
+                        sprintf(err, "illegal header name: '%s'", fname + 8);
+                        return 1;
+                    }
                     add_fmt_hdr(fmt, os, n, format_VCL_Log, SLT_VCL_Log,
                                 fname+8);
                     add_tag(type, SLT_VCL_Log, fname+8);
@@ -1244,8 +1301,13 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                         fld_nr = atoi(fld);
                     }
                     add_fmt(fmt, os, n, format_SLT, NULL, t, fld_nr);
-                    if (hdr != NULL)
+                    if (hdr != NULL) {
+                        if (!isheader(hdr)) {
+                            sprintf(err, "illegal header name: '%s'", hdr);
+                            return 1;
+                        }
                         add_hdr(fmt, t, hdr, n);
+                    }
                     add_tag(type, t, hdr);
                 }
                 else if (strncmp(fname, "vxid", 4) == 0) {
@@ -1317,6 +1379,7 @@ FMT_Init(char *err)
     memset(tag2idx, -1, sizeof(tag2idx));
     max_idx = 0;
 
+    init_hdr_char();
     for (int i = 0; i < MAX_VSL_TAG; i++) {
         hdr_trie[i] = NULL;
         hidx[i] = -1;

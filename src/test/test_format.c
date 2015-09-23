@@ -2306,6 +2306,23 @@ static const char
     MAN(status);
     MASSERT(strcmp(err, "Unknown format starting at: %a") == 0);
 
+    /* Illegal header name */
+    FMT_Fini();
+    VSB_clear(config.cformat);
+    VSB_cpy(config.cformat, "%{Foo:}i");
+    VSB_finish(config.cformat);
+    status = FMT_Init(err);
+    MAN(status);
+    MASSERT(strcmp(err, "illegal header name: 'Foo:'") == 0);
+
+    /* Peculiar but legal header name */
+    FMT_Fini();
+    VSB_clear(config.cformat);
+    VSB_cpy(config.cformat, "%{!#$%'*+.^_`|~}i");
+    VSB_finish(config.cformat);
+    status = FMT_Init(err);
+    MAZ(status);
+
     return NULL;
 }
 
