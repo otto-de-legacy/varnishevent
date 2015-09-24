@@ -180,6 +180,7 @@ wrt_write(tx_t *tx)
 {
     char *os;
     int ready = 1;
+    size_t len;
     
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     assert(tx->state == TX_SUBMITTED);
@@ -207,7 +208,7 @@ wrt_write(tx_t *tx)
     AZ(pthread_mutex_unlock(&reopen_lock));
 
     VRMB();
-    os = FMT_Format(tx);
+    os = FMT_Format(tx, &len);
     assert(tx->state == TX_WRITTEN);
 
     if (blocking) {
@@ -242,17 +243,19 @@ wrt_write(tx_t *tx)
         }
     }
     if (ready) {
+        errno = 0;
         double start = VTIM_mono();
-        int ret = fprintf(fo, "%s", os);
+        int items = fwrite(os, 1, len, fo);
         writet += VTIM_mono() - start;
-        if (ret < 0) {
+        if (ferror(fo) || items < len) {
             LOG_Log(LOG_ERR, "Output error %d (%s), DATA DISCARDED: %s",
                     errno, strerror(errno), os);
             errors++;
+            clearerr(fo);
         }
         else {
             writes++;
-            bytes += strlen(os);
+            bytes += len;
         }
     }
 

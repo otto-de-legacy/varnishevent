@@ -1464,11 +1464,10 @@ fmt_resize(size_t curlen)
 }
 
 char *
-FMT_Format(tx_t *tx)
+FMT_Format(tx_t *tx, size_t *curlen)
 {
     compiled_fmt_t fmt;
     char *p = obuf;
-    size_t curlen = 0;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     assert(tx->state == TX_SUBMITTED);
@@ -1490,21 +1489,22 @@ FMT_Format(tx_t *tx)
     tx->state = TX_FORMATTING;
 
     *p = '\0';
+    *curlen = 0;
     for (int i = 0; i < fmt.n; i++) {
         char *s = NULL;
         size_t len = 0;
 
         if (fmt.str[i] != NULL) {
-            curlen += fmt.strlen[i];
-            fmt_resize(curlen);
+            *curlen += fmt.strlen[i];
+            fmt_resize(*curlen);
             memcpy(p, fmt.str[i], fmt.strlen[i]);
             p += fmt.strlen[i];
         }
         if (fmt.formatter[i] != NULL) {
             (fmt.formatter[i])(tx, &fmt.args[i], &s, &len);
             if (s != NULL && len != 0) {
-                curlen += len;
-                fmt_resize(curlen);
+                *curlen += len;
+                fmt_resize(*curlen);
                 memcpy(p, s, len);
                 p += len;
             }

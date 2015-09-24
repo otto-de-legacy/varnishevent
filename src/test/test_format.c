@@ -1881,6 +1881,7 @@ static const char
     chunk_t c[NTAGS];
     struct tm *tm;
     time_t t = 1427743146;
+    size_t len;
 
     printf("... testing FMT_*() interface\n");
 
@@ -1945,13 +1946,14 @@ static const char
     add_record_data(&tx, SLT_RespStatus, &rec[9],  &c[9], "200");
     add_record_data(&tx, SLT_ReqAcct,    &rec[10], &c[10], REQACCT_PAYLOAD);
 
-    os = FMT_Format(&tx);
+    os = FMT_Format(&tx, &len);
 #define EXP_DEFAULT_OUTPUT "127.0.0.1 - varnish [%d/%b/%Y:%T %z] "\
         "\"GET http://bazquux.com/foo HTTP/1.1\" 200 105 "\
         "\"http://foobar.com/\" \"Mozilla\"\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_DEFAULT_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
+    MASSERT(len == strlen(strftime_s));
 
     /* Client format with all formatters */
     FMT_Fini();
@@ -2027,7 +2029,7 @@ static const char
         }
 
     setup_full_client_tx(&tx, node, nptr, rec, c);
-    os = FMT_Format(&tx);
+    os = FMT_Format(&tx, &len);
 #define EXP_FULL_CLIENT_OUTPUT "105 c 15963 HTTP/1.1 127.0.0.1 60 foohdr "\
         "barhdr - GET 283 bar=baz&quux=wilco GET "\
         "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
@@ -2037,6 +2039,7 @@ static const char
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
+    MASSERT(len == strlen(strftime_s));
 
     /* Backend format with all formatters */
     FMT_Fini();
@@ -2103,7 +2106,7 @@ static const char
         }
 
     setup_full_backend_tx(&tx, node, nptr, rec, c);
-    os = FMT_Format(&tx);
+    os = FMT_Format(&tx, &len);
 #define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
         "283 foohdr barhdr - GET 60 bar=baz&quux=wilco GET "\
         "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
@@ -2113,6 +2116,7 @@ static const char
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
+    MASSERT(len == strlen(strftime_s));
 
     /* Both backend and client formats */
     FMT_Fini();
@@ -2216,16 +2220,18 @@ static const char
         }
 
     setup_full_client_tx(&tx, node, nptr, rec, c);
-    os = FMT_Format(&tx);
+    os = FMT_Format(&tx, &len);
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
+    MASSERT(len == strlen(strftime_s));
 
     setup_full_backend_tx(&tx, node, nptr, rec, c);
-    os = FMT_Format(&tx);
+    os = FMT_Format(&tx, &len);
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
+    MASSERT(len == strlen(strftime_s));
 
     /* Raw format */
     FMT_Fini();
@@ -2259,12 +2265,13 @@ static const char
 #define HEALTH_PAYLOAD "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 " \
         "HTTP/1.1 200 OK"
     add_record_data(&tx, SLT_Backend_health, &rec[0],  &c[0], HEALTH_PAYLOAD);
-    os = FMT_Format(&tx);
+    os = FMT_Format(&tx, &len);
 #define EXP_FULL_RAW_OUTPUT "[%d/%b/%Y:%T %z] %F-%T.529143 "\
         "b Still healthy 4--X-RH 5 4 5 0.032728 0.035774 HTTP/1.1 200 OK 4711\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_RAW_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
+    MASSERT(len == strlen(strftime_s));
 
     /* Illegal backend formats */
     FMT_Fini();
