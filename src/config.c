@@ -153,7 +153,6 @@ CONF_Add(const char *lval, const char *rval)
     confVSB("syslog.ident", syslog_ident);
 
     confUnsigned("max.reclen", max_reclen);
-    confUnsigned("max.vcl_call", max_vcl_call);
     confUnsigned("chunk_size", chunk_size);
     confUnsigned("max.data", max_data);
     confUnsigned("monitor.interval", monitor_interval);
@@ -226,7 +225,6 @@ CONF_Init(void)
     config.output_bufsiz = BUFSIZ;
 
     config.max_reclen = DEFAULT_MAX_RECLEN;
-    config.max_vcl_call = DEFAULT_MAX_VCL_CALL;
     config.max_data = DEFAULT_MAX_DATA;
     config.chunk_size = DEFAULT_CHUNK_SIZE;
 
@@ -338,7 +336,6 @@ CONF_Dump(void)
     confdump("syslog.ident = %s", VSB_data(config.syslog_ident));
     confdump("monitor.interval = %u", config.monitor_interval);
     confdump("max.reclen = %u", config.max_reclen);
-    confdump("max.vcl_call = %u", config.max_vcl_call);
     confdump("max.data = %u", config.max_data);
     confdump("chunk.size = %u", config.chunk_size);
     confdump("output.bufsiz = %u", config.output_bufsiz);

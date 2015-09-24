@@ -53,15 +53,10 @@
 #define EMPTY(s) (s[0] == '\0')
 #define VSB_EMPTY(vsb) (VSB_len((vsb)) == 0)
 
-/* Defaults from Varnish 4.0.3 */
-#define DEFAULT_MAX_RECLEN 255	/* shm_reclen */
-#define DEFAULT_MAX_HEADERS 64	/* http_max_hdr */
-
-#define DEFAULT_MAX_VCL_CALL 10
+#define DEFAULT_MAX_RECLEN 255	/* default vsl_reclen in Varnish 4.0.3 */
 
 #define DEFAULT_CHUNK_SIZE 64
 #define DEFAULT_MAX_DATA 4096
-#define DEFAULT_PID_FILE "/var/run/varnishevent.pid"
 
 #define MAX_VSL_TAG SLT__MAX
 
@@ -193,13 +188,10 @@ struct config {
     struct vsb	*syslog_ident;
     unsigned    monitor_interval;
     
-    /* varnishd param shm_reclen */
+    /* varnishd param vsl_reclen */
     unsigned	max_reclen;
 
     unsigned	chunk_size;
-
-    unsigned	max_vcl_call;
-
     unsigned	max_data;    
 
     size_t	output_bufsiz;
