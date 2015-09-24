@@ -225,5 +225,6 @@ HDR_Fini(struct hdrt_node *hdrt)
     free(hdrt->str);
     for (int i = 0; i < 64; i++)
         HDR_Fini(hdrt->next[i]);
+    free(hdrt->next);
     FREE_OBJ(hdrt);
 }

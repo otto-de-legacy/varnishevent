@@ -1556,6 +1556,12 @@ FMT_Fini(void)
     free_incl(bincl);
     free_incl(rincl);
 
+    for (int i = 0; i < MAX_VSL_TAG; i++)
+        if (hdr_trie[i] != NULL) {
+            HDR_Fini(hdr_trie[i]);
+            hdr_trie[i] = NULL;
+        }
+
     if (!VSB_EMPTY(config.cformat))
         free_format(&cformat);
     if (!VSB_EMPTY(config.bformat))
