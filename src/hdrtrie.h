@@ -38,7 +38,7 @@ struct hdrt_node {
     unsigned		magic;
 #define HDRT_NODE_MAGIC 0x970ec029
     char		*str;
-    struct hdrt_node	*next[64];
+    struct hdrt_node	**next;
     int			idx;
 };
 

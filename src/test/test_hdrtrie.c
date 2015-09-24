@@ -55,11 +55,12 @@ static char
 
     printf("... testing HDR_FindIdx()\n");
 
-    for (int i = 0; i < NODES; i++)
+    for (int i = 0; i < NODES; i++) {
         hdrt[i].magic = HDRT_NODE_MAGIC;
+        hdrt[i].next = calloc(64, sizeof(struct hdrt_node *));
+    }
 
     hdrt[0].str = strdup("Foo");
-    memset(&hdrt[0].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[0].idx = 4711;
 
     MASSERT(HDR_FindIdx(&hdrt[0], "Foo:") == 4711);
@@ -83,7 +84,6 @@ static char
     hdrt[0].next[next_idx('-')] = &hdrt[1];
 
     hdrt[1].str = strdup("");
-    memset(&hdrt[1].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[1].next[next_idx('C')] = &hdrt[2];
     hdrt[1].next[next_idx('E')] = &hdrt[3];
     hdrt[1].next[next_idx('L')] = &hdrt[4];
@@ -91,19 +91,15 @@ static char
     hdrt[1].idx = -1;
 
     hdrt[2].str = strdup("harset");
-    memset(&hdrt[2].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[2].idx = 1;
 
     hdrt[3].str = strdup("ncoding");
-    memset(&hdrt[3].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[3].idx = 2;
 
     hdrt[4].str = strdup("anguage");
-    memset(&hdrt[4].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[4].idx = 3;
 
     hdrt[5].str = strdup("atetime");
-    memset(&hdrt[5].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[5].idx = 4;
 
     MASSERT(HDR_FindIdx(&hdrt[0], "Accept:") == 4711);
@@ -125,7 +121,7 @@ static char
     MASSERT(HDR_FindIdx(&hdrt[0], "Accept-Charse:") == -1);
 
     hdrt[0].str = strdup("Content-");
-    memset(&hdrt[0].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[0].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[0].next[next_idx('D')] = &hdrt[1];
     hdrt[0].next[next_idx('E')] = &hdrt[2];
     hdrt[0].next[next_idx('L')] = &hdrt[3];
@@ -135,42 +131,38 @@ static char
     hdrt[0].idx = -1;
 
     hdrt[1].str = strdup("isposition");
-    memset(&hdrt[1].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[1].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[1].idx = 1;
 
     hdrt[2].str = strdup("ncoding");
-    memset(&hdrt[2].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[2].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[2].idx = 2;
 
     hdrt[3].str = strdup("");
-    memset(&hdrt[3].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[3].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[3].next[next_idx('A')] = &hdrt[7];
     hdrt[3].next[next_idx('E')] = &hdrt[8];
     hdrt[3].next[next_idx('O')] = &hdrt[9];
     hdrt[3].idx = -1;
 
     hdrt[4].str = strdup("D5");
-    memset(&hdrt[4].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[4].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[4].idx = 3;
 
     hdrt[5].str = strdup("ange");
-    memset(&hdrt[5].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[5].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[5].idx = 4;
 
     hdrt[6].str = strdup("ype");
-    memset(&hdrt[6].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[6].idx = 5;
 
     hdrt[7].str = strdup("nguage");
-    memset(&hdrt[7].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[7].idx = 6;
 
     hdrt[8].str = strdup("ngth");
-    memset(&hdrt[8].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[8].idx = 7;
 
     hdrt[9].str = strdup("cation");
-    memset(&hdrt[9].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[9].idx = 8;
 
     MASSERT(HDR_FindIdx(&hdrt[0], "Content-Disposition:") == 1);
@@ -191,32 +183,32 @@ static char
     MASSERT(HDR_FindIdx(&hdrt[0], "Content-Foo:") == -1);
 
     hdrt[0].str = strdup("X-");
-    memset(&hdrt[0].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[0].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[0].next[next_idx('C')] = &hdrt[1];
     hdrt[0].next[next_idx('F')] = &hdrt[2];
     hdrt[0].idx = -1;
 
     hdrt[1].str = strdup("srf-Token");
-    memset(&hdrt[1].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[1].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[1].idx = 1;
 
     hdrt[2].str = strdup("orwarded-");
-    memset(&hdrt[2].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[2].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[2].next[next_idx('F')] = &hdrt[3];
     hdrt[2].next[next_idx('H')] = &hdrt[4];
     hdrt[2].next[next_idx('P')] = &hdrt[5];
     hdrt[2].idx = -1;
 
     hdrt[3].str = strdup("or");
-    memset(&hdrt[3].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[3].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[3].idx = 2;
 
     hdrt[4].str = strdup("ost");
-    memset(&hdrt[4].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[4].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[4].idx = 3;
 
     hdrt[5].str = strdup("roto");
-    memset(&hdrt[5].next, 0, 64 * sizeof(struct hdrt_node *));
+    memset(hdrt[5].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[5].idx = 4;
 
     MASSERT(HDR_FindIdx(&hdrt[0], "X-Csrf-Token:") == 1);

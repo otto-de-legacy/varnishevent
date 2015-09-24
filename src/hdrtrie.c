@@ -96,6 +96,9 @@ HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr, int idx)
         ALLOC_OBJ(hdrt, HDRT_NODE_MAGIC);
         AN(hdrt);
         hdrt->str = strdup(hdr);
+        AN(hdrt->str);
+        hdrt->next = calloc(64, sizeof(struct hdrt_node *));
+        AN(hdrt->next);
         hdrt->idx = idx;
         return hdrt;
     }
@@ -123,19 +126,17 @@ HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr, int idx)
         hdrt->idx = idx;
     }
     else {
-        /* XXX: this memcpy/memset stuff is ugly, better allocate the next
-           table on the heap and just move pointers, which is also
-           probably more cache-friendly. */
-        struct hdrt_node *s_next[64];
+        struct hdrt_node **s_next;
 
         n = hdr_next(*s);
         assert(n >= 0 && n < 64);
         *s = '\0';
-        memcpy(s_next, hdrt->next, 64 * sizeof(struct hdrt_next *));
-        memset(hdrt->next, 0, 64 * sizeof(struct hdrt_next *));
+        s_next = hdrt->next;
+        hdrt->next = calloc(64, sizeof(struct hdrt_next *));
+        AN(hdrt->next);
         hdrt->next[n] = HDR_InsertIdx(hdrt->next[n], ++s, hdrt->idx);
         CHECK_OBJ_NOTNULL(hdrt->next[n], HDRT_NODE_MAGIC);
-        memcpy(hdrt->next[n]->next, s_next, 64 * sizeof(struct hdrt_next *));
+        hdrt->next[n]->next = s_next;
         n = hdr_next(*h);
         assert(n >= 0 && n < 64);
         AZ(hdrt->next[n]);
