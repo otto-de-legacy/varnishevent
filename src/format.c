@@ -1488,8 +1488,9 @@ FMT_Format(tx_t *tx, size_t *curlen)
 
     tx->state = TX_FORMATTING;
 
+    /* Start curlen at 1, because we'll be appending a NUL byte */
     *p = '\0';
-    *curlen = 0;
+    *curlen = 1;
     for (int i = 0; i < fmt.n; i++) {
         char *s = NULL;
         size_t len = 0;
@@ -1511,6 +1512,7 @@ FMT_Format(tx_t *tx, size_t *curlen)
         }
     }
     *p = '\0';
+    *curlen -= 1;
 
     assert(tx->state == TX_FORMATTING);
     tx->state = TX_WRITTEN;
