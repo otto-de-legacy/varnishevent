@@ -2334,6 +2334,45 @@ static const char
 }
 
 static const char
+*test_long_output(void)
+{
+#define NFORMATS 8193
+#define XID 47114711
+#define xstr(s) #s
+#define str(s) xstr(s)
+    char err[1024], *os;
+    int status;
+    tx_t tx;
+    size_t len;
+    struct vsb *exp;
+
+    printf("... testing long formatted output\n");
+
+    exp = VSB_new_auto();
+    VSB_clear(config.cformat);
+    for (int i = 0; i < NFORMATS; i++) {
+        VSB_cat(config.cformat, "%{vxid}x");
+        VSB_cat(exp, str(XID));
+    }
+    VSB_putc(exp, '\n');
+    VSB_finish(config.cformat);
+    VSB_finish(exp);
+    status = FMT_Init(err);
+    VMASSERT(status == 0, "FMT_Init: %s", err);
+
+    tx.magic = TX_MAGIC;
+    tx.state = TX_SUBMITTED;
+    tx.type = VSL_t_req;
+    tx.vxid = 47114711;
+
+    os = FMT_Format(&tx, &len);
+    MASSERT(len == NFORMATS * (sizeof(str(XID)) - 1) + 1);
+    MASSERT(strncmp(os, VSB_data(exp), len) == 0);
+
+    return NULL;
+}
+
+static const char
 *all_tests(void)
 {
     mu_run_test(test_format_init);
@@ -2366,6 +2405,7 @@ static const char
     mu_run_test(test_format_p_vxid);
     mu_run_test(test_FMT_Fini);
     mu_run_test(test_FMT_interface);
+    mu_run_test(test_long_output);
 
     return NULL;
 }

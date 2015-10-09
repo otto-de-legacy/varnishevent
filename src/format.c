@@ -1454,20 +1454,21 @@ FMT_Estimate_RecsPerTx(void)
 }
 
 static inline void
-fmt_resize(size_t curlen)
+fmt_resize(size_t length)
 {
-    if (curlen > obuf_sz) {
-        do { obuf_sz <<= 1; } while (curlen > obuf_sz);
+    /* Add 1 since we'll be appending a NUL byte */
+    if (length + 1 > obuf_sz) {
+        do { obuf_sz <<= 1; } while (length + 1 > obuf_sz);
         obuf = realloc(obuf, obuf_sz);
         AN(obuf);
     }
 }
 
 char *
-FMT_Format(tx_t *tx, size_t *curlen)
+FMT_Format(tx_t *tx, size_t *length)
 {
     compiled_fmt_t fmt;
-    char *p = obuf;
+    size_t curlen = 0;
 
     CHECK_OBJ_NOTNULL(tx, TX_MAGIC);
     assert(tx->state == TX_SUBMITTED);
@@ -1488,31 +1489,27 @@ FMT_Format(tx_t *tx, size_t *curlen)
 
     tx->state = TX_FORMATTING;
 
-    /* Start curlen at 1, because we'll be appending a NUL byte */
-    *p = '\0';
-    *curlen = 1;
+    *obuf = '\0';
     for (int i = 0; i < fmt.n; i++) {
         char *s = NULL;
         size_t len = 0;
 
         if (fmt.str[i] != NULL) {
-            *curlen += fmt.strlen[i];
-            fmt_resize(*curlen);
-            memcpy(p, fmt.str[i], fmt.strlen[i]);
-            p += fmt.strlen[i];
+            fmt_resize(curlen + fmt.strlen[i]);
+            memcpy(obuf + curlen, fmt.str[i], fmt.strlen[i]);
+            curlen += fmt.strlen[i];
         }
         if (fmt.formatter[i] != NULL) {
             (fmt.formatter[i])(tx, &fmt.args[i], &s, &len);
             if (s != NULL && len != 0) {
-                *curlen += len;
-                fmt_resize(*curlen);
-                memcpy(p, s, len);
-                p += len;
+                fmt_resize(curlen + len);
+                memcpy(obuf + curlen, s, len);
+                curlen += len;
             }
         }
     }
-    *p = '\0';
-    *curlen -= 1;
+    obuf[curlen] = '\0';
+    *length = curlen;
 
     assert(tx->state == TX_FORMATTING);
     tx->state = TX_WRITTEN;
