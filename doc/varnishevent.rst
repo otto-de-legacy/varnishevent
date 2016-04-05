@@ -283,6 +283,12 @@ then:
   ``%{tag:Timestamp:Resp[1]}`` yields ``0.000195``
 
 
+REQUIREMENTS
+============
+
+This version of varnishevent requires Varnish 4.0.
+
+
 DATA BUFFERS
 ============
 
