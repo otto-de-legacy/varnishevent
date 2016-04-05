@@ -394,10 +394,6 @@ Parameter              CLI Option Description                                   
 ``max.reclen``                    The maximum length of a Varnish log entry in characters. Should be equal to the Varnish   255 (default ``shm_reclen`` in Varnish 4)
                                   parameter ``shm_reclen``.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``max.vcl_call``                  The maximum number of VCL_call/VCL_return entires recorded for a transaction in the       10
-                                  Varnish log, used to estimate the number of records required for transactions when the
-                                  ``%{Varnish:hitmiss}x`` or ``%{Varnish:handling}x`` formatters are specified.
----------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``log.file``                      Log file for status, warning, debug and error messages, and monitoring statistics. If '-' ``syslog(3)``
                                   is specified, then log messages are written to stdout.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
