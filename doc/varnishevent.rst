@@ -321,9 +321,12 @@ periodically.
 
 If the reader thread cannot obtain free data from the buffers --
 meaning that the buffers are full and the writer thread has not yet
-returned free data -- then the reader discards the transaction that is
-currently reading from the Varnish log. No data are buffered from the
-transaction, leading to a loss of data in the varnishevent output.
+returned free data -- then the reader may wait up to the interval set
+by ``reader.timeout``, if it is non-zero. If the timeout is zero, or
+if it expires and no free data become available, the reader discards
+the transaction that it is currently reading from the Varnish log. No
+data are buffered from the transaction, leading to a loss of data in
+the varnishevent output.
 
 Thus the configuration determines the memory footprint of
 varnishevent, and whether the buffers are large enough to accomodate
@@ -406,9 +409,14 @@ Parameter              CLI Option Description                                   
 ``syslog.ident``                  See ``syslog(3)``; this parameter is useful to distinguish ``varnishevent`` processes in  ``varnishevent``
                                   the syslog if more than one is running on the system.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``output.timeout``                Output timeout used by the writer thread. If the timeout is set and the output stream     0
-                                  is not ready when it elapses, the transaction to be output is discarded. If 0, the
+``output.timeout``                Output timeout in seconds used by the writer thread. If the timeout is set and the output 0
+                                  stream is not ready when it elapses, the transaction to be output is discarded. If 0, the
                                   writer waits indefinitely.
+---------------------- ---------- ----------------------------------------------------------------------------------------- -------
+``reader.timeout``                Timeout in seconds used by the reader thread to wait for free data. If the reader         0
+                                  encounters an empty free list and ``reader.timeout`` > 0, then it will wait until either
+                                  data become available, or the timeout expires. If 0, the reader discards the transaction
+                                  immediately.
 ====================== ========== ========================================================================================= =======
 
 LOGGING AND MONITORING
