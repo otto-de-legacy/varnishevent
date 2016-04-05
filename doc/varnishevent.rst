@@ -432,8 +432,8 @@ to the log (as configured with the parameter
 depending on how syslog is configured)::
 
  Data tables: len_tx=5000 len_rec=70000 len_chunk=4480000 tx_occ=0 rec_occ=0 chunk_occ=0 tx_occ_hi=4 rec_occ_hi=44 chunk_occ_hi=48 global_free_tx=0 global_free_rec=0 global_free_chunk=0
- Reader: seen=68 submitted=68 free_tx=5000 free_rec=70000 free_chunk=4480000 no_free_tx=0 no_free_rec=0 no_free_chunk=0 len_hi=1712 len_overflows=0 eol=67 idle_pause=0.010000 closed=0 overrun=0 ioerr=0 reacquire=0
- Writer (waiting): seen=68 writes=68 bytes=35881 errors=0 timeouts=0 waits=53 free_tx=0 free_rec=0 free_chunk=0
+ Reader:  (sleeping) seen=68 submitted=68 free_tx=5000 free_rec=70000 free_chunk=4480000 no_free_tx=0 no_free_rec=0 no_free_chunk=0 len_hi=1712 len_overflows=0 eol=67 idle_pause=0.010000 closed=0 overrun=0 ioerr=0 reacquire=0
+ Writer (waiting): seen=68 writes=68 bytes=35881 errors=0 timeouts=0 waits=53 free_tx=0 free_rec=0 free_chunk=0 pollt=0.000000 writet=0.000150
  Queue: max=5000 len=0 load=0.00 occ_hi=4
 
 The line prefixed by ``Data tables`` describes the data buffers. The
@@ -474,7 +474,20 @@ Field                 Description
 ===================== =============================================
 
 The line prefixed by ``Reader`` describes the state of the thread that
-reads from Varnish shared memory and writes to data tables. 
+reads from Varnish shared memory and writes to data tables. The thread
+is any one of these states:
+
+* ``initializing``
+* ``running``
+* ``sleeping``
+* ``waiting``
+* ``shutting down``
+
+The thread is in the ``sleeping`` state when it has reached the end
+of the Varnish log, and pauses briefly before attempting to read new
+data. It is in the ``waiting`` state when it has encountered an empty
+free list, and is waiting for either data to become free, or for the
+``reader.timeout`` to expire.
 
 A transaction is ``seen`` when it is read from the Varnish log, and
 ``submitted`` when it is queued for processing by the writer
@@ -572,6 +585,13 @@ Field               Description
 ``free_rec``        Current number of records in the writer's local free list
 ------------------- -----------------------------------------------------------
 ``free_chunk``      Current number of chunks in the writer's local free list
+------------------- -----------------------------------------------------------
+``pollt``           Cumulative time since startup (in seconds) that the writer
+                    thread has spent polling the output stream waiting for the
+                    ready state.
+------------------- -----------------------------------------------------------
+``writet``          Cumulative time since startup (in seconds) that the writer
+                    thread has spent writing data to the output stream.
 =================== ===========================================================
 
 The line prefixed by ``Queue`` describes the internal queue into which
