@@ -8,7 +8,7 @@ echo "... -g vxid"
 # For grouping, use the larger test log that has some backend transactions,
 # since the two groupings have the effect of exchanging the order of some
 # output lines (no difference with the smaller log).
-CKSUM=$( ../varnishevent -g vxid -r sw-doc.log -f varnishevent.conf | cksum)
+CKSUM=$( ../varnishevent -g vxid -r sw-doc.log -f varnishevent.conf -l /dev/null | cksum)
 
 # Same as default (no -g arg)
 if [ "$CKSUM" != '3954993142 22701195' ]; then
@@ -17,7 +17,7 @@ if [ "$CKSUM" != '3954993142 22701195' ]; then
 fi
 
 echo "... -g request"
-CKSUM=$( ../varnishevent -g request -r sw-doc.log -f varnishevent.conf | cksum)
+CKSUM=$( ../varnishevent -g request -r sw-doc.log -f varnishevent.conf -l /dev/null | cksum)
 
 if [ "$CKSUM" != '3202005014 22702923' ]; then
     echo "ERROR: -g request unexpected cksum: $CKSUM"
@@ -27,7 +27,7 @@ fi
 echo "... -g raw"
 # Timestamps for raw grouping are always the time at which the tx was read,
 # even for binary file reads. So we check against the last four columns.
-CKSUM=$( ../varnishevent -g raw -r varnish-doc.log -f raw.conf | awk '{print $(NF-3), $(NF-2), $(NF-1), $NF}' | cksum)
+CKSUM=$( ../varnishevent -g raw -r varnish-doc.log -f raw.conf -l /dev/null | awk '{print $(NF-3), $(NF-2), $(NF-1), $NF}' | cksum)
 
 if [ "$CKSUM" != '4287974290 4744' ]; then
     echo "ERROR: -g raw unexpected cksum: $CKSUM"
@@ -35,7 +35,7 @@ if [ "$CKSUM" != '4287974290 4744' ]; then
 fi
 
 # Cannot mix raw grouping with client and/or backend formats
-../varnishevent -g raw -f varnishevent.conf
+../varnishevent -g raw -f varnishevent.conf  -l /dev/null
 
 if [ "$?" != "1" ]; then
     echo "ERROR: -g raw with client/backend formats did not exit with failure as expected"
@@ -43,7 +43,7 @@ if [ "$?" != "1" ]; then
 fi
 
 echo '... -g session'
-../varnishevent -g session
+../varnishevent -g session -l /dev/null
 
 if [ "$?" != "1" ]; then
     echo "ERROR: -g session did not exit with failure as expected"
@@ -51,14 +51,14 @@ if [ "$?" != "1" ]; then
 fi
 
 echo "... -q query"
-CKSUM=$( ../varnishevent -q 'ReqURL ~ "_static"' -r varnish-doc.log | cksum)
+CKSUM=$( ../varnishevent -q 'ReqURL ~ "_static"' -r varnish-doc.log -l /dev/null | cksum)
 
 if [ "$CKSUM" != '2045926544 8190' ]; then
     echo "ERROR: -q query unexpected cksum: $CKSUM"
     exit 1
 fi
 
-../varnishevent -q 'ReqURL ~'
+../varnishevent -q 'ReqURL ~' -l /dev/null
 
 if [ "$?" != "1" ]; then
     echo "ERROR: -q query with illegal VSL query did not exit with failure as expected"
