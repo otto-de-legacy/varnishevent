@@ -7,7 +7,7 @@ Display Varnish log contents in formats for client, backend and other events
 ----------------------------------------------------------------------------
 
 :Author: Geoffrey Simmons
-:Date:   2015-04-22
+:Date:   2016-12-06
 :Version: 4.0
 :Manual section: 1
 
@@ -15,9 +15,12 @@ Display Varnish log contents in formats for client, backend and other events
 SYNOPSIS
 ========
 
-varnishevent [-a] [-d] [-D] [-f configfile] [-F format] [-g grouping]
-             [-L txlimit] [-n varnish_name] [-N vsmfile] [-P file]
-             [-q query] [-r file] [-T txtimeout] [-v] [-V] [-w file]
+::
+
+  varnishevent [-a] [-d] [-D] [-f configfile] [-F format] [-g grouping]
+               [-L txlimit] [-n varnish_name] [-N vsmfile] [-P file]
+               [-q query] [-r file] [-T txtimeout] [-v] [-V] [-w file]
+               [-l logfile]
 
 
 DESCRIPTION
@@ -76,6 +79,11 @@ OPTIONS
 -h
 
 	Print program usage and exit
+
+-l logfile
+
+	Write the application log to ``logfile``. By default,
+	syslog(3) is used.
 
 -L limit
 
@@ -403,7 +411,7 @@ Parameter              CLI Option Description                                   
 ``max.reclen``                    The maximum length of a Varnish log entry in characters. Should be equal to the Varnish   255 (default ``shm_reclen`` in Varnish 4)
                                   parameter ``shm_reclen``.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
-``log.file``                      Log file for status, warning, debug and error messages, and monitoring statistics. If '-' ``syslog(3)``
+``log.file``           ``-l``     Log file for status, warning, debug and error messages, and monitoring statistics. If '-' ``syslog(3)``
                                   is specified, then log messages are written to stdout.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``monitor.interval``              Interval in seconds at which monitoring statistics are emitted to the log (either         30

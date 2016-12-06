@@ -550,7 +550,8 @@ usage(int status)
             "usage: varnishevent [-adDhvV] [-f configfile] [-F format]\n"
             "                    [-g grouping] [-L txlimit] [-n name] \n"
             "                    [-N vsmfile] [-P pidfile] [-q query] \n"
-            "                    [-r binlog] [-T txtimeout] [-w outputfile]\n");
+            "                    [-r binlog] [-T txtimeout] [-w outputfile]\n"
+            "                    [-l logfile]\n");
     exit(status);
 }
 
@@ -559,7 +560,7 @@ main(int argc, char *argv[])
 {
     int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0, D_flag = 0;
     char *P_arg = NULL, *w_arg = NULL, *q_arg = NULL, *g_arg = NULL,
-        *n_arg = NULL, *N_arg = NULL, scratch[BUFSIZ];
+        *n_arg = NULL, *N_arg = NULL, *l_arg = NULL, scratch[BUFSIZ];
     char cli_config_filename[PATH_MAX + 1] = "";
     struct vpf_fh *pfh = NULL;
     struct VSL_data *vsl;
@@ -575,7 +576,7 @@ main(int argc, char *argv[])
     CONF_Init();
     read_default_config();
 
-    while ((c = getopt(argc, argv, "adDhvVP:w:F:g:f:q:r:n:N:L:T:")) != -1) {
+    while ((c = getopt(argc, argv, "adDhvVP:w:F:g:f:q:r:n:N:L:T:l:")) != -1) {
         switch (c) {
         case 'a':
             a_flag = 1;
@@ -623,6 +624,9 @@ main(int argc, char *argv[])
                 usage(EXIT_FAILURE);
             }
             bprintf(cli_config_filename, "%s", optarg);
+            break;
+        case 'l':
+            REPLACE(l_arg, optarg);
             break;
         case 'q':
             REPLACE(q_arg, optarg);
@@ -689,6 +693,8 @@ main(int argc, char *argv[])
     }
 #endif
 
+    if (l_arg != NULL)
+        bprintf(config.log_file, "%s", l_arg);
     if (LOG_Open(VSB_data(config.syslog_ident)) != 0) {
         exit(EXIT_FAILURE);
     }
