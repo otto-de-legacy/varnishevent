@@ -38,7 +38,7 @@
 
 int tests_run = 0;
 
-static inline int
+static int
 next_idx(char c)
 {
     int n = toupper(c) - 32;
