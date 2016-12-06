@@ -1192,6 +1192,7 @@ static const char
     init_tx_arg(&tx, node, nptr, &args);
     init_hdr_recs(&tx, SLT_ReqHeader);
     init_hdr_recs(&tx, SLT_BereqHeader);
+    args.hdr_idx = 0;
 
 #define BASIC_AUTH_PAYLOAD "Authorization: Basic dmFybmlzaDo0ZXZlcg=="
     init_rec_chunk(SLT_ReqHeader, &rec_req, &chunk_req);
