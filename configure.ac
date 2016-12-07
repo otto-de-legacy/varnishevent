@@ -52,20 +52,14 @@ AM_CONDITIONAL(HAVE_RST2HTML,[test "x$RST2HTML" != "xno"])
 # Check for pkg-config
 PKG_PROG_PKG_CONFIG
 
-PKG_CHECK_MODULES([VARNISH], [varnishapi >= 4.0.3],
-                  [ac_varnish_pkgdatadir=`$PKG_CONFIG --variable=pkgdatadir varnishapi`],
+PKG_CHECK_MODULES([VARNISH], [varnishapi >= 4.0.3], [],
                   [AC_MSG_ERROR([Varnish >= 4.0.3 installation is required])])
-if test "x$ac_varnish_pkgdatadir" = x; then
-   AC_MSG_ERROR([couldn't get Varnish data dir from pkg-config])
-fi
-ac_varnish_pkgincludedir=`$PKG_CONFIG --variable=pkgincludedir varnishapi`
-ac_varnish_libdir=`$PKG_CONFIG --variable=libdir varnishapi`
 AC_SUBST(VARNISH_CFLAGS)
 AC_SUBST(VARNISH_LIBS)
-AC_SUBST(VARNISH_PKG_INCLUDE, $ac_varnish_pkgincludedir)
-AC_SUBST(VARNISH_SHARE_INCLUDE, "$ac_varnish_pkgdatadir/include")
-AC_SUBST(VARNISH_PKG_LIB, $ac_varnish_libdir)
-AC_SUBST(VARNISH_LIBVARNISH_LIB, "-L$ac_varnish_libdir/varnish")
+PKG_CHECK_VAR([VARNISH_PKG_INCLUDE], [varnishapi], [pkgincludedir])
+AC_SUBST(VARNISH_SHARE_INCLUDE, "${VARNISH_PKG_INCLUDE}/include")
+PKG_CHECK_VAR(VARNISH_PKG_LIB, [varnishapi], [libdir])
+AC_SUBST(VARNISH_LIBVARNISH_LIB, "-L${VARNISH_PKG_LIB}/varnish")
 
 # Checks for header files.
 AC_HEADER_STDC
