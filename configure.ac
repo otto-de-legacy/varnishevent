@@ -1,7 +1,7 @@
 AC_PREREQ(2.59)
 AC_COPYRIGHT([Copyright (c) 2015 UPLEX Nils Goroll Systemoptimierung
 Copyright (c) 2015 Otto Gmbh & Co KG])
-AC_INIT([varnishevent], [4.1.0])
+AC_INIT([varnishevent], [4.1.1])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR(src/varnishevent.h)
 AM_CONFIG_HEADER(config.h)
@@ -52,8 +52,8 @@ AM_CONDITIONAL(HAVE_RST2HTML,[test "x$RST2HTML" != "xno"])
 # Check for pkg-config
 PKG_PROG_PKG_CONFIG
 
-PKG_CHECK_MODULES([VARNISH], [varnishapi >= 4.0.3], [],
-                  [AC_MSG_ERROR([Varnish >= 4.0.3 installation is required])])
+PKG_CHECK_MODULES([VARNISH], [varnishapi >= 4.0.3 varnishapi <= 4.0.4], [],
+                  [AC_MSG_ERROR([Varnish 4.0.3 or 4.0.4 is required])])
 AC_SUBST(VARNISH_CFLAGS)
 AC_SUBST(VARNISH_LIBS)
 PKG_CHECK_VAR([VARNISH_PKG_INCLUDE], [varnishapi], [pkgincludedir])
