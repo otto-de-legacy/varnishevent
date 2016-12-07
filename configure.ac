@@ -171,10 +171,24 @@ fi
 # libraries, set CFLAGS to what we want them to be for our own code
 
 # This corresponds to FreeBSD's WARNS level 6
-DEVELOPER_CFLAGS="-Wall -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wshadow -Wcast-align -Wunused-parameter -Wchar-subscripts -Winline -Wnested-externs -Wredundant-decls -Wformat"
+DEVELOPER_CFLAGS_NOINLINE="-Wall -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wshadow -Wcast-align -Wunused-parameter -Wchar-subscripts -Wnested-externs -Wredundant-decls -Wformat"
+DEVELOPER_CFLAGS="${DEVELOPER_CFLAGS_NOINLINE} -Winline"
 
 # Additional flags for GCC 4
 EXTRA_DEVELOPER_CFLAGS="-Wextra -Wno-missing-field-initializers -Wno-sign-compare"
+
+# AC_PROG_CC sets CFLAGS to '-g -O2' unless it is already set, so
+# there's no need to add -g. Disable or change by explicitly setting
+# CFLAGS. If this option is enabled, then -Og or -O0 becomes the last
+# optimization option, and hence takes precedence.
+if test "x$enable_debugging" != "xno"; then
+        CFLAGS="${CFLAGS} -fno-inline"
+        DEVELOPER_CFLAGS=${DEVELOPER_CFLAGS_NOINLINE}
+        AX_CHECK_COMPILE_FLAG([-Og],
+                [CFLAGS="${CFLAGS} -Og"],
+                [CFLAGS="${CFLAGS} -O0"],
+                [])
+fi
 
 # --enable-developer-warnings
 AC_ARG_ENABLE(developer-warnings,
@@ -184,7 +198,13 @@ AC_ARG_ENABLE(developer-warnings,
 # --enable-debugging-symbols
 AC_ARG_ENABLE(debugging-symbols,
 	AS_HELP_STRING([--enable-debugging-symbols],[enable debugging symbols (default is NO)]),
-	CFLAGS="${CFLAGS} -O0 -g -fno-inline")
+	CFLAGS="${CFLAGS} -g")
+
+# --enable-debugging
+AC_ARG_ENABLE(debugging,
+        AS_HELP_STRING([--enable-debugging],[enable debugging (default is NO)]),
+        [],
+        [enable_debugging=no])
 
 # --enable-extra-developer-warnings
 AC_ARG_ENABLE(extra-developer-warnings,
