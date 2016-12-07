@@ -96,21 +96,53 @@ AC_CHECK_HEADERS([pthread_np.h])
 AC_CHECK_HEADERS([stddef.h])
 AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([unistd.h])
+AC_CHECK_HEADERS([fcntl.h])
+AC_CHECK_HEADERS([limits.h])
+AC_CHECK_HEADERS([sys/file.h])
+AC_CHECK_HEADERS([sys/time.h])
+AC_CHECK_HEADERS([syslog.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
+AC_C_INLINE
+AC_C_RESTRICT
 
 # Checks for library functions.
 AC_TYPE_SIGNAL
 AC_TYPE_SIZE_T
+AC_TYPE_INT32_T
+AC_TYPE_MODE_T
+AC_TYPE_PID_T
+AC_TYPE_SSIZE_T
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([strerror])
 AC_FUNC_STRERROR_R
+AC_FUNC_ERROR_AT_LINE
+AC_FUNC_MALLOC
+AC_FUNC_MKTIME
+AC_FUNC_REALLOC
+AC_FUNC_STRTOD
 AC_CHECK_FUNCS([strptime])
 AC_CHECK_FUNCS([timegm])
 AC_CHECK_FUNCS([nanosleep])
 AC_CHECK_FUNCS([getline])
 AC_CHECK_FUNCS([pthread_setname_np])
+AC_CHECK_FUNCS([atexit])
+AC_CHECK_FUNCS([floor])
+AC_CHECK_FUNCS([ftruncate])
+AC_CHECK_FUNCS([gettimeofday])
+AC_CHECK_FUNCS([isascii])
+AC_CHECK_FUNCS([localtime_r])
+AC_CHECK_FUNCS([memchr])
+AC_CHECK_FUNCS([memset])
+AC_CHECK_FUNCS([strcasecmp])
+AC_CHECK_FUNCS([strchr])
+AC_CHECK_FUNCS([strdup])
+AC_CHECK_FUNCS([strncasecmp])
+AC_CHECK_FUNCS([strndup])
+AC_CHECK_FUNCS([strstr])
+AC_CHECK_FUNCS([strtol])
+AC_CHECK_FUNCS([strtoul])
 
 save_LIBS="${LIBS}"
 LIBS="${PTHREAD_LIBS}"
