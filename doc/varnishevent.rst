@@ -294,7 +294,7 @@ then:
 REQUIREMENTS
 ============
 
-This version of varnishevent requires Varnish 4.0.
+This version of varnishevent requires Varnish 4.0.3.
 
 
 DATA BUFFERS
