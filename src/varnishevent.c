@@ -718,7 +718,7 @@ main(int argc, char *argv[])
     /* XXX: also set grouping in config file */
     if (g_arg != NULL) {
         grouping = VSLQ_Name2Grouping(g_arg, -1);
-        if (grouping == -1 || grouping == -2) {
+        if ((int)grouping == -1 || (int)grouping == -2) {
             LOG_Log(LOG_CRIT, "Unknown grouping: %s", g_arg);
             exit(EXIT_FAILURE);
         }
