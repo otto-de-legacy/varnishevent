@@ -173,9 +173,6 @@ if test "x$PYTHON" = "xno"; then
   AC_MSG_ERROR([Python is needed to build Varnish, please install python.])
 fi
 
-# Check for linker script support
-gl_LD_VERSION_SCRIPT
-
 # Now that we're done using the compiler to look for functions and
 # libraries, set CFLAGS to what we want them to be for our own code
 
