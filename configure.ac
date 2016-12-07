@@ -203,24 +203,10 @@ fi
 # libraries, set CFLAGS to what we want them to be for our own code
 
 # This corresponds to FreeBSD's WARNS level 6
-DEVELOPER_CFLAGS_NOINLINE="-Wall -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wshadow -Wcast-align -Wunused-parameter -Wchar-subscripts -Wnested-externs -Wredundant-decls -Wformat"
-DEVELOPER_CFLAGS="${DEVELOPER_CFLAGS_NOINLINE} -Winline"
+DEVELOPER_CFLAGS="-Wall -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith -Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wshadow -Wcast-align -Wunused-parameter -Wchar-subscripts -Wnested-externs -Wredundant-decls -Wformat"
 
 # Additional flags for GCC 4
 EXTRA_DEVELOPER_CFLAGS="-Wextra -Wno-missing-field-initializers -Wno-sign-compare"
-
-# AC_PROG_CC sets CFLAGS to '-g -O2' unless it is already set, so
-# there's no need to add -g. Disable or change by explicitly setting
-# CFLAGS. If this option is enabled, then -Og or -O0 becomes the last
-# optimization option, and hence takes precedence.
-if test "x$enable_debugging" != "xno"; then
-        CFLAGS="${CFLAGS} -fno-inline"
-        DEVELOPER_CFLAGS=${DEVELOPER_CFLAGS_NOINLINE}
-        AX_CHECK_COMPILE_FLAG([-Og],
-                [CFLAGS="${CFLAGS} -Og"],
-                [CFLAGS="${CFLAGS} -O0"],
-                [])
-fi
 
 # --enable-developer-warnings
 AC_ARG_ENABLE(developer-warnings,
@@ -238,21 +224,23 @@ AC_ARG_ENABLE(debugging,
         [],
         [enable_debugging=no])
 
+# AC_PROG_CC sets CFLAGS to '-g -O2' unless it is already set, so
+# there's no need to add -g. Disable or change by explicitly setting
+# CFLAGS. If this option is enabled, then -Og or -O0 becomes the last
+# optimization option, and hence takes precedence.
+if test "x$enable_debugging" != "xno"; then
+        CFLAGS="${CFLAGS} -fno-inline"
+        CFLAGS=`echo ${CFLAGS} | sed -e 's/-Winline//'`
+        AX_CHECK_COMPILE_FLAG([-Og],
+                [CFLAGS="${CFLAGS} -Og"],
+                [CFLAGS="${CFLAGS} -O0"],
+                [])
+fi
+
 # --enable-extra-developer-warnings
 AC_ARG_ENABLE(extra-developer-warnings,
 	AS_HELP_STRING([--enable-extra-developer-warnings],[enable even stricter warnings (default is NO)]),
-	[],
-	[enable_extra_developer_warnings=no])
-
-if test "x$enable_stack_protector" != "xno"; then
-	save_CFLAGS="$CFLAGS"
-	CFLAGS="${CFLAGS} ${EXTRA_DEVELOPER_CFLAGS}"
-	AC_COMPILE_IFELSE(
-		[AC_LANG_PROGRAM([],[],[])],
-		[],
-		[AC_MSG_WARN([All of ${EXTRA_DEVELOPER_CFLAGS} not supported, disabling])
-		    CFLAGS="$save_CFLAGS"])
-fi
+	CFLAGS="${CFLAGS} ${EXTRA_DEVELOPER_CFLAGS}")
 
 # --enable-stack-protector
 AC_ARG_ENABLE(stack-protector,
