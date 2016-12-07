@@ -10,7 +10,5 @@ DISTCHECK_CONFIGURE_FLAGS = \
     --enable-developer-warnings \
     --enable-debugging-symbols \
     --enable-dependency-tracking \
-    --enable-diagnostics \
     --enable-extra-developer-warnings \
-    --enable-tests \
     --enable-werror

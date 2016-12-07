@@ -80,109 +80,30 @@ AC_SUBST(RT_LIBS)
 
 save_LIBS="${LIBS}"
 LIBS=""
-AC_CHECK_LIB(dl, dlopen)
-DL_LIBS="${LIBS}"
-LIBS="${save_LIBS}"
-AC_SUBST(DL_LIBS)
-
-save_LIBS="${LIBS}"
-LIBS=""
-AC_SEARCH_LIBS(initscr, [curses ncurses],
-	[have_curses=yes], [have_curses=no])
-CURSES_LIBS="${LIBS}"
-LIBS="${save_LIBS}"
-AC_SUBST(CURSES_LIBS)
-if test "$have_curses" = no; then
-	AC_MSG_WARN([curses not found; some tools will not be built])
-fi
-AC_CHECK_HEADERS([ncurses/curses.h curses.h])
-AM_CONDITIONAL([HAVE_CURSES], [test x$have_curses = xyes])
-
-save_LIBS="${LIBS}"
-LIBS=""
 AC_SEARCH_LIBS(pthread_create, [thr pthread c_r])
 PTHREAD_LIBS="${LIBS}"
 LIBS="${save_LIBS}"
 AC_SUBST(PTHREAD_LIBS)
-
-save_LIBS="${LIBS}"
-LIBS=""
-AC_CHECK_LIB(socket, socket)
-AC_CHECK_LIB(nsl, getaddrinfo)
-NET_LIBS="${LIBS}"
-LIBS="${save_LIBS}"
-AC_SUBST(NET_LIBS)
 
 AC_CHECK_LIBM
 AC_SUBST(LIBM)
 
 m4_ifndef([PKG_PROG_PKG_CONFIG], [m4_fatal([pkg.m4 missing, please install pkg-config])])
 PKG_PROG_PKG_CONFIG
-if test -n $PKG_CONFIG; then
-   PKG_CHECK_MODULES([PCRE], [libpcre])
-else
-   AC_CHECK_PROG(PCRE_CONFIG, pcre-config, pcre-config)
-   AC_ARG_WITH(pcre-config,
-               AS_HELP_STRING([--with-pcre-config=PATH],
-                              [Location of PCRE pcre-config (auto)]),
-               [pcre_config="$withval"],
-               [pcre_config=""])
-
-  if test "x$pcre_config" != "x" ; then
-    AC_MSG_CHECKING(for $pcre_config)
-
-    if test -f $pcre_config ; then
-      PCRE_CONFIG=$pcre_config
-      AC_MSG_RESULT(yes)
-    else
-      AC_MSG_RESULT(no - searching PATH)
-    fi
-  fi
-  if test "x$PCRE_CONFIG" = "x"; then
-    AC_CHECK_PROGS(PCRE_CONFIG, pcre-config)
-  fi
-  PCRE_CFLAGS=`$PCRE_CONFIG --cflags`
-  PCRE_LIBS=`$PCRE_CONFIG --libs`
-fi
-AC_SUBST(PCRE_CFLAGS)
-AC_SUBST(PCRE_LIBS)
-
-PKG_CHECK_MODULES([LIBEDIT], [libedit], 
-	[AC_DEFINE([HAVE_LIBEDIT], [1], [Define we have libedit])],
-	[AX_LIB_READLINE])
-if test "$ac_cv_have_readline" = no; then
-  AC_MSG_ERROR([libedit or readline not found])
-fi
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_HEADER_SYS_WAIT
 AC_HEADER_TIME
 AC_CHECK_HEADERS([sys/param.h])
 AC_CHECK_HEADERS([sys/types.h])
-AC_CHECK_HEADERS([sys/endian.h])
-AC_CHECK_HEADERS([sys/filio.h])
-AC_CHECK_HEADERS([sys/mount.h], [], [], [#include <sys/param.h>])
-AC_CHECK_HEADERS([sys/socket.h])
-AC_CHECK_HEADERS([sys/statvfs.h])
-AC_CHECK_HEADERS([sys/vfs.h])
-AC_CHECK_HEADERS([endian.h])
 AC_CHECK_HEADERS([execinfo.h])
-AC_CHECK_HEADERS([netinet/in.h])
 AC_CHECK_HEADERS([pthread_np.h])
 AC_CHECK_HEADERS([stddef.h])
 AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([unistd.h])
-AC_CHECK_HEADERS([priv.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
-AC_CHECK_MEMBERS([struct sockaddr.sa_len],,,[
-#include <sys/types.h>
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-])
 
 # Checks for library functions.
 AC_TYPE_SIGNAL
@@ -190,82 +111,16 @@ AC_TYPE_SIZE_T
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([strerror])
 AC_FUNC_STRERROR_R
-AC_CHECK_FUNCS([dladdr])
-AC_CHECK_FUNCS([socket])
 AC_CHECK_FUNCS([strptime])
-AC_CHECK_FUNCS([fmtcheck])
-AC_CHECK_FUNCS([getdtablesize])
-AC_CHECK_FUNCS([abort2])
 AC_CHECK_FUNCS([timegm])
 AC_CHECK_FUNCS([nanosleep])
-AC_CHECK_FUNCS([setppriv])
 AC_CHECK_FUNCS([getline])
 AC_CHECK_FUNCS([pthread_setname_np])
 
 save_LIBS="${LIBS}"
 LIBS="${PTHREAD_LIBS}"
 AC_CHECK_FUNCS([pthread_set_name_np])
-AC_CHECK_FUNCS([pthread_mutex_isowned_np])
-AC_CHECK_FUNCS([pthread_timedjoin_np])
 LIBS="${save_LIBS}"
-
-# sendfile is tricky: there are multiple versions, and most of them
-# don't work.
-case $target in
-*-*-freebsd*)
-	AC_CACHE_CHECK([whether sendfile works],
-	  [ac_cv_so_sendfile_works],
-	  [AC_RUN_IFELSE(
-	    [AC_LANG_PROGRAM([[
-	#include <sys/types.h>
-	#include <sys/socket.h>
-	#include <sys/uio.h>
-	    ]],[[
-		return (SF_SYNC == 0);
-	    ]])],
-	    [ac_cv_so_sendfile_works=yes],
-	    [ac_cv_so_sendfile_works=no])
-	  ])
-	;;
-#*-*-solaris*)
-#	save_LIBS="${LIBS}"
-#	LIBS="${NET_LIBS}"
-#	AC_CHECK_LIB(sendfile, sendfile)
-#	AC_CHECK_FUNCS([sendfile])
-#	AC_CHECK_FUNCS([sendfilev])
-#	NET_LIBS="${LIBS}"
-#	LIBS="${save_LIBS}"
-*)
-	AC_MSG_WARN([won't look for sendfile() on $target])
-	;;
-esac
-if test "$ac_cv_so_sendfile_works" = yes; then
-	AC_DEFINE([SENDFILE_WORKS], [1], [Define if SENDFILE works])
-fi
-
-# Support for visibility attribute 
-save_CFLAGS="${CFLAGS}" 
-CFLAGS="${CFLAGS} -Werror" 
-
-AC_CACHE_CHECK([whether we have support for visibility attributes], 
-	[ac_cv_have_viz], 
-	[AC_RUN_IFELSE( 
-		[AC_LANG_PROGRAM([[ 
-			#if ((__GNUC__-0) * 10 + __GNUC_MINOR__-0 >= 33) 
-			#  define ZLIB_INTERNAL __attribute__((visibility ("hidden"))) 
-			#else 
-			#  define ZLIB_INTERNAL 
-			#endif 
-			int ZLIB_INTERNAL foo; 
-		]],[])], 
-	[ac_cv_have_viz=yes], 
-	[ac_cv_have_viz=no]) 
-])
-if test "$ac_cv_have_viz" = no; then 
-	libvgz_extra_cflags="-DNO_VIZ" 
-	AC_SUBST(libvgz_extra_cflags) 
-fi 
-CFLAGS="${save_CFLAGS}" 
 
 # Use jemalloc on Linux
 JEMALLOC_SUBDIR=
@@ -290,25 +145,6 @@ esac
 AC_SUBST(JEMALLOC_SUBDIR)
 AC_SUBST(JEMALLOC_LDADD)
 
-# Userland slab allocator, available only on Solaris
-case $target in
-*-*-solaris*)
-	AC_CHECK_HEADERS([umem.h])
-	if test "$ac_cv_have_umem_h" = yes; then
-		save_LIBS="${LIBS}"
-		LIBS=""
-		AC_CHECK_LIB(umem, umem_alloc)
-		LIBUMEM="${LIBS}"
-		LIBS="${save_LIBS}"
-	fi
-	;;
-esac
-AC_SUBST(LIBUMEM)
-
-# These functions are provided by libcompat on platforms where they
-# are not available
-AC_CHECK_FUNCS([setproctitle])
-AC_CHECK_FUNCS([srandomdev])
 AC_CHECK_FUNCS([backtrace])
 # white lie - we don't actually test it
 AC_MSG_CHECKING([whether daemon() works])
@@ -331,131 +167,10 @@ AC_CHECK_FUNCS([clock_gettime])
 AC_CHECK_FUNCS([gethrtime]) 
 LIBS="${save_LIBS}"
 
-# --enable-kqueue
-AC_ARG_ENABLE(kqueue,
-    AS_HELP_STRING([--enable-kqueue],
-	[use kqueue if available (default is YES)]),
-    ,
-    [enable_kqueue=yes])
-
-if test "$enable_kqueue" = yes; then
-	AC_CHECK_FUNCS([kqueue])
-else
-	ac_cv_func_kqueue=no
-fi
-
-# --enable-epoll
-AC_ARG_ENABLE(epoll,
-    AS_HELP_STRING([--enable-epoll],
-	[use epoll if available (default is YES)]),
-    ,
-    [enable_epoll=yes])
-
-if test "$enable_epoll" = yes; then
-	AC_CHECK_FUNCS([epoll_ctl])
-else
-	ac_cv_func_epoll_ctl=no
-fi
-
-# --enable-ports
-AC_ARG_ENABLE(ports,
-    AS_HELP_STRING([--enable-ports],
-	[use ports if available (default is YES)]),
-    ,
-    [enable_ports=yes])
-
-if test "$enable_ports" = yes; then
-	AC_CHECK_FUNCS([port_create])
-else
-	ac_cv_func_port_create=no
-fi
-
-AM_MISSING_HAS_RUN
 AC_CHECK_PROGS(PYTHON, [python3 python3.1 python3.2 python2.7 python2.6 python2.5 python2 python], "no")
 if test "x$PYTHON" = "xno"; then
   AC_MSG_ERROR([Python is needed to build Varnish, please install python.])
 fi
-
-# Older Solaris versions define SO_{RCV,SND}TIMEO, but do not
-# implement them.
-#
-# Varnish will build and run without these, but connections will not
-# time out, which may leave Varnish vulnerable to denail-of-service
-# attacks which would not be possible on other platforms.
-#
-# Newer Solaris releases with the Volo framework (Solaris 11,
-# Opensolaris starting with onnv_106) do support SO_{RCV,SND}TIMEO
-# (see PSARC 2007/587, initially committed into onnv-gate /
-# OpenSolaris 8348:4137e18bfaf0 Thu Dec 11 20:04:13 2008)
-
-save_LIBS="${LIBS}"
-LIBS="${LIBS} ${NET_LIBS}"
-AC_CACHE_CHECK([whether SO_RCVTIMEO works],
-  [ac_cv_so_rcvtimeo_works],
-  [AC_RUN_IFELSE(
-    [AC_LANG_PROGRAM([[
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-    ]],[[
-int sd = socket(AF_INET, SOCK_STREAM, 0);
-struct timeval tv = { 1, 0 };
-if (setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) == 0) {
-    socklen_t l = sizeof tv;
-    if (getsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, &tv, &l) == 0) {
-        return (l != sizeof tv);
-    }
-}
-return 1;
-    ]])],
-    [ac_cv_so_rcvtimeo_works=yes],
-    [ac_cv_so_rcvtimeo_works=no])
-  ])
-if test "$ac_cv_so_rcvtimeo_works" = yes; then
-   AC_DEFINE([SO_RCVTIMEO_WORKS], [1], [Define if SO_RCVTIMEO works])
-fi
-LIBS="${save_LIBS}"
-
-save_LIBS="${LIBS}"
-LIBS="${LIBS} ${NET_LIBS}"
-AC_CACHE_CHECK([whether SO_SNDTIMEO works],
-  [ac_cv_so_sndtimeo_works],
-  [AC_RUN_IFELSE(
-    [AC_LANG_PROGRAM([[
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-    ]],[[
-int sd = socket(AF_INET, SOCK_STREAM, 0);
-struct timeval tv = { 1, 0 };
-if (setsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv) == 0) {
-    socklen_t l = sizeof tv;
-    if (getsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, &tv, &l) == 0) {
-        return (l != sizeof tv);
-    }
-}
-return 1;
-    ]])],
-    [ac_cv_so_sndtimeo_works=yes],
-    [ac_cv_so_sndtimeo_works=no])
-  ])
-if test "$ac_cv_so_sndtimeo_works" = yes; then
-   AC_DEFINE([SO_SNDTIMEO_WORKS], [1], [Define if SO_SNDTIMEO works])
-fi
-
-if test "$ac_cv_so_rcvtimeo_works" = no ||
-   test "$ac_cv_so_sndtimeo_works" = no; then
-	AC_MSG_WARN([connection timeouts will not work])
-fi
-LIBS="${save_LIBS}"
-
-# Run-time directory
-VARNISH_STATE_DIR='${localstatedir}/varnish'
-AC_SUBST(VARNISH_STATE_DIR)
-
-# Default configuration directory.
-varnishconfdir='${sysconfdir}/varnish'
-AC_SUBST(varnishconfdir)
 
 # Check for linker script support
 gl_LD_VERSION_SCRIPT
@@ -478,11 +193,6 @@ AC_ARG_ENABLE(developer-warnings,
 AC_ARG_ENABLE(debugging-symbols,
 	AS_HELP_STRING([--enable-debugging-symbols],[enable debugging symbols (default is NO)]),
 	CFLAGS="${CFLAGS} -O0 -g -fno-inline")
-
-# --enable-diagnostics
-AC_ARG_ENABLE(diagnostics,
-	AS_HELP_STRING([--enable-diagnostics],[enable run-time diagnostics (default is NO)]),
-	CFLAGS="${CFLAGS} -DDIAGNOSTICS")
 
 # --enable-extra-developer-warnings
 AC_ARG_ENABLE(extra-developer-warnings,
@@ -516,58 +226,10 @@ if test "x$enable_stack_protector" != "xno"; then
 		    CFLAGS="$save_CFLAGS"])
 fi
 
-# --enable-tests
-AC_ARG_ENABLE(tests,
-	AS_HELP_STRING([--enable-tests],[build test programs (default is NO)]))
-AM_CONDITIONAL([ENABLE_TESTS], [test x$enable_tests = xyes])
-
 # --enable-werror
 AC_ARG_ENABLE(werror,
 	AS_HELP_STRING([--enable-werror],[use -Werror (default is NO)]),
 	CFLAGS="${CFLAGS} -Werror")
-
-# Command line for compiling VCL code.  I wish there were a simple way
-# to figure this out dynamically without introducing a run-time
-# dependency on libtool.
-AC_ARG_VAR([VCC_CC], [C compiler command line for VCL code])
-if test "$ac_cv_env_VCC_CC_set" = "set"; then
-	VCC_CC="$ac_cv_env_VCC_CC_value"
-else
-	case $target in
-	*-*-solaris*)
-		case $PTHREAD_CC in
-		*gcc*)
-			VCC_CC="$PTHREAD_CC $OCFLAGS $PTHREAD_CFLAGS -fpic -shared -o %o %s"
-			break
-			;;
-		*cc)
-			VCC_CC="$PTHREAD_CC $OCFLAGS $PTHREAD_CFLAGS -Kpic -G -o %o %s"
-			;;
-		esac
-		;;
-	*-*-darwin*)
-		VCC_CC="exec cc $OCFLAGS -dynamiclib -Wl,-undefined,dynamic_lookup -o %o %s"
-		;;
-	*)
-		VCC_CC="exec $PTHREAD_CC $OCFLAGS $PTHREAD_CFLAGS -fpic -shared -Wl,-x -o %o %s"
-		;;
-	esac
-fi
-
-AC_DEFINE_UNQUOTED([VCC_CC],"$VCC_CC",[C compiler command line for VCL code])
-
-AM_CONDITIONAL([HAVE_TMPDIR], [test x$TMPDIR != x])
-
-# --enable-pcre-jit
-AC_ARG_ENABLE(pcre-jit,
-    AS_HELP_STRING([--enable-pcre-jit],
-	[use the PCRE JIT compiler (default is NO)]),
-    ,
-    [enable_pcre_jit=no])
-
-if test "$enable_pcre_jit" = yes; then
-   AC_DEFINE([USE_PCRE_JIT],[1],[use the PCRE JIT compiler])
-fi
 
 # Generate output
 AC_CONFIG_FILES([
