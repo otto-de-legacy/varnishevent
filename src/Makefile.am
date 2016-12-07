@@ -6,8 +6,6 @@ SUBDIRS = test
 
 bin_PROGRAMS = varnishevent
 
-dist_man_MANS = varnishevent.1
-
 varnishevent_SOURCES = \
 	varnishevent.c \
 	varnishevent.h \
@@ -40,16 +38,6 @@ varnishevent_SOURCES = \
 varnishevent_LDADD = \
 	${PTHREAD_LIBS} ${RT_LIBS} ${LIBM} @VARNISH_LIBS@ \
 	-L${VARNISH_PKG_LIB}/varnish -lvarnish
-
-varnishevent.1: $(top_srcdir)/doc/varnishevent.rst
-if HAVE_RST2MAN
-	${RST2MAN} $? $@
-else
-	@echo "========================================"
-	@echo "You need rst2man installed to make dist"
-	@echo "========================================"
-	@false
-endif
 
 # from Varnish include/Makefile.am
 BUILT_SOURCES = vcs_version.h
