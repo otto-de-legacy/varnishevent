@@ -1179,7 +1179,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
         case '{': {
             const char *tmp;
-            char *fname, ltr;
+            char *fname = NULL, ltr;
             tmp = p;
             ltr = '\0';
             while (*tmp != '\0' && *tmp != '}')
