@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2015 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2015 Otto Gmbh & Co KG
+ * Copyright (c) 2016 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2016 Otto Gmbh & Co KG
  * All rights reserved.
  * Use only with permission
  *
@@ -42,18 +42,15 @@
 static inline int
 hdr_next(const char c)
 {
-    int n = toupper(c) - 32;
     if (c == '~')
-        n = ':' - 32;
-    return n;
+        return ':' - 32;
+    return toupper(c) - 32;
 }
 
 int
 HDR_FindIdx(struct hdrt_node *hdrt, const char *hdr)
 {
     const char *h = hdr;
-    char *s;
-    int n;
 
     if (hdrt == NULL)
         return -1;
@@ -62,9 +59,12 @@ HDR_FindIdx(struct hdrt_node *hdrt, const char *hdr)
     if (*h == '\0')
         return -1;
     while (1) {
+        char *s;
+        int n;
+
         CHECK_OBJ(hdrt, HDRT_NODE_MAGIC);
         s = hdrt->str;
-        while (*h && *s && (toupper(*h) == toupper(*s))) {
+        while (*h && *s && (toupper(*h) == *s)) {
             h++;
             s++;
         }
@@ -97,6 +97,8 @@ HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr, int idx)
         AN(hdrt);
         hdrt->str = strdup(hdr);
         AN(hdrt->str);
+        for (s = hdrt->str; *s; s++)
+            *s = toupper(*s);
         hdrt->next = calloc(64, sizeof(struct hdrt_node *));
         AN(hdrt->next);
         hdrt->idx = idx;
@@ -105,7 +107,7 @@ HDR_InsertIdx(struct hdrt_node *hdrt, const char *hdr, int idx)
 
     CHECK_OBJ(hdrt, HDRT_NODE_MAGIC);
     s = hdrt->str;
-    while (*h && *s && (toupper(*h) == toupper(*s))) {
+    while (*h && *s && (toupper(*h) == *s)) {
         h++;
         s++;
     }
@@ -203,7 +205,7 @@ hdr_traverse(struct hdrt_node *hdrt, struct vsb *sb, struct vsb *prefix)
             char c = i + 32;
             if (i + 32 == ':')
                 c = '~';
-            VSB_putc(next, tolower(c));
+            VSB_putc(next, toupper(c));
             hdr_traverse(hdrt->next[i], sb, next);
         }
     VSB_delete(current);

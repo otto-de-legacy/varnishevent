@@ -60,7 +60,7 @@ static char
         hdrt[i].next = calloc(64, sizeof(struct hdrt_node *));
     }
 
-    hdrt[0].str = strdup("Foo");
+    hdrt[0].str = strdup("FOO");
     hdrt[0].idx = 4711;
 
     MASSERT(HDR_FindIdx(&hdrt[0], "Foo:") == 4711);
@@ -80,7 +80,7 @@ static char
     MASSERT(HDR_FindIdx(&hdrt[0], "      ") == -1);
     MASSERT(HDR_FindIdx(&hdrt[0], "") == -1);
 
-    hdrt[0].str = strdup("Accept");
+    hdrt[0].str = strdup("ACCEPT");
     hdrt[0].next[next_idx('-')] = &hdrt[1];
 
     hdrt[1].str = strdup("");
@@ -90,16 +90,16 @@ static char
     hdrt[1].next[next_idx('D')] = &hdrt[5];
     hdrt[1].idx = -1;
 
-    hdrt[2].str = strdup("harset");
+    hdrt[2].str = strdup("HARSET");
     hdrt[2].idx = 1;
 
-    hdrt[3].str = strdup("ncoding");
+    hdrt[3].str = strdup("NCODING");
     hdrt[3].idx = 2;
 
-    hdrt[4].str = strdup("anguage");
+    hdrt[4].str = strdup("ANGUAGE");
     hdrt[4].idx = 3;
 
-    hdrt[5].str = strdup("atetime");
+    hdrt[5].str = strdup("ATETIME");
     hdrt[5].idx = 4;
 
     MASSERT(HDR_FindIdx(&hdrt[0], "Accept:") == 4711);
@@ -120,7 +120,7 @@ static char
     MASSERT(HDR_FindIdx(&hdrt[0], "Accept-CharsetFoo:") == -1);
     MASSERT(HDR_FindIdx(&hdrt[0], "Accept-Charse:") == -1);
 
-    hdrt[0].str = strdup("Content-");
+    hdrt[0].str = strdup("CONTENT-");
     memset(hdrt[0].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[0].next[next_idx('D')] = &hdrt[1];
     hdrt[0].next[next_idx('E')] = &hdrt[2];
@@ -130,11 +130,11 @@ static char
     hdrt[0].next[next_idx('T')] = &hdrt[6];
     hdrt[0].idx = -1;
 
-    hdrt[1].str = strdup("isposition");
+    hdrt[1].str = strdup("ISPOSITION");
     memset(hdrt[1].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[1].idx = 1;
 
-    hdrt[2].str = strdup("ncoding");
+    hdrt[2].str = strdup("NCODING");
     memset(hdrt[2].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[2].idx = 2;
 
@@ -149,20 +149,20 @@ static char
     memset(hdrt[4].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[4].idx = 3;
 
-    hdrt[5].str = strdup("ange");
+    hdrt[5].str = strdup("ANGE");
     memset(hdrt[5].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[5].idx = 4;
 
-    hdrt[6].str = strdup("ype");
+    hdrt[6].str = strdup("YPE");
     hdrt[6].idx = 5;
 
-    hdrt[7].str = strdup("nguage");
+    hdrt[7].str = strdup("NGUAGE");
     hdrt[7].idx = 6;
 
-    hdrt[8].str = strdup("ngth");
+    hdrt[8].str = strdup("NGTH");
     hdrt[8].idx = 7;
 
-    hdrt[9].str = strdup("cation");
+    hdrt[9].str = strdup("CATION");
     hdrt[9].idx = 8;
 
     MASSERT(HDR_FindIdx(&hdrt[0], "Content-Disposition:") == 1);
@@ -188,26 +188,26 @@ static char
     hdrt[0].next[next_idx('F')] = &hdrt[2];
     hdrt[0].idx = -1;
 
-    hdrt[1].str = strdup("srf-Token");
+    hdrt[1].str = strdup("SRF-TOKEN");
     memset(hdrt[1].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[1].idx = 1;
 
-    hdrt[2].str = strdup("orwarded-");
+    hdrt[2].str = strdup("ORWARDED-");
     memset(hdrt[2].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[2].next[next_idx('F')] = &hdrt[3];
     hdrt[2].next[next_idx('H')] = &hdrt[4];
     hdrt[2].next[next_idx('P')] = &hdrt[5];
     hdrt[2].idx = -1;
 
-    hdrt[3].str = strdup("or");
+    hdrt[3].str = strdup("OR");
     memset(hdrt[3].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[3].idx = 2;
 
-    hdrt[4].str = strdup("ost");
+    hdrt[4].str = strdup("OST");
     memset(hdrt[4].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[4].idx = 3;
 
-    hdrt[5].str = strdup("roto");
+    hdrt[5].str = strdup("ROTO");
     memset(hdrt[5].next, 0, 64 * sizeof(struct hdrt_node *));
     hdrt[5].idx = 4;
 
@@ -239,7 +239,7 @@ static char
 
     hdrt = HDR_InsertIdx(NULL, "Foo", 4711);
     MCHECK_OBJ_NOTNULL(hdrt, HDRT_NODE_MAGIC);
-    MASSERT(strcmp(hdrt->str, "Foo") == 0);
+    MASSERT(strcmp(hdrt->str, "FOO") == 0);
     MASSERT(hdrt->idx == 4711);
     MASSERT(memcmp(hdrt->next, next, SIZEOF_NEXTTBL) == 0);
     MASSERT(HDR_FindIdx(hdrt, "Foo:") == 4711);
@@ -272,12 +272,12 @@ static char
             MAZ(hdrt->next[i]);
     hdrt2 = hdrt->next[next_idx('B')];
     MCHECK_OBJ_NOTNULL(hdrt2, HDRT_NODE_MAGIC);
-    MASSERT(strcmp(hdrt2->str, "ar") == 0);
+    MASSERT(strcmp(hdrt2->str, "AR") == 0);
     MASSERT(hdrt2->idx == 1147);
     MASSERT(memcmp(hdrt2->next, next, SIZEOF_NEXTTBL) == 0);
     hdrt2 = hdrt->next[next_idx('F')];
     MCHECK_OBJ_NOTNULL(hdrt2, HDRT_NODE_MAGIC);
-    MASSERT(strcmp(hdrt2->str, "oo") == 0);
+    MASSERT(strcmp(hdrt2->str, "OO") == 0);
     MASSERT(hdrt2->idx == 4711);
     MASSERT(memcmp(hdrt2->next, next, SIZEOF_NEXTTBL) == 0);
     MASSERT(HDR_FindIdx(hdrt, "Foo:") == 4711);
@@ -287,14 +287,14 @@ static char
     MCHECK_OBJ_NOTNULL(hdrt, HDRT_NODE_MAGIC);
     hdrt = HDR_InsertIdx(hdrt, "Accept-Encoding", 2);
     MCHECK_OBJ_NOTNULL(hdrt, HDRT_NODE_MAGIC);
-    MASSERT(strcmp(hdrt->str, "Accept") == 0);
+    MASSERT(strcmp(hdrt->str, "ACCEPT") == 0);
     MASSERT(hdrt->idx == 1);
     for (int i = 0; i < 64; i ++)
         if (i != next_idx('-'))
             MAZ(hdrt->next[i]);
     hdrt2 = hdrt->next[next_idx('-')];
     MCHECK_OBJ_NOTNULL(hdrt2, HDRT_NODE_MAGIC);
-    MASSERT(strcmp(hdrt2->str, "Encoding") == 0);
+    MASSERT(strcmp(hdrt2->str, "ENCODING") == 0);
     MASSERT(hdrt2->idx == 2);
     MASSERT(memcmp(hdrt2->next, next, SIZEOF_NEXTTBL) == 0);
     MASSERT(HDR_FindIdx(hdrt, "Accept:") == 1);
@@ -306,7 +306,7 @@ static char
     MCHECK_OBJ_NOTNULL(hdrt, HDRT_NODE_MAGIC);
     hdrt = HDR_InsertIdx(hdrt, "Accept-Datetime", 5);
     MCHECK_OBJ_NOTNULL(hdrt, HDRT_NODE_MAGIC);
-    MASSERT(strcmp(hdrt->str, "Accept") == 0);
+    MASSERT(strcmp(hdrt->str, "ACCEPT") == 0);
     MASSERT(hdrt->idx == 1);
     for (int i = 0; i < 64; i ++)
         if (i != next_idx('-'))
@@ -323,13 +323,13 @@ static char
     MCHECK_OBJ_NOTNULL(hdrt2->next[next_idx('D')], HDRT_NODE_MAGIC);
     MCHECK_OBJ_NOTNULL(hdrt2->next[next_idx('E')], HDRT_NODE_MAGIC);
     MCHECK_OBJ_NOTNULL(hdrt2->next[next_idx('L')], HDRT_NODE_MAGIC);
-    MASSERT(strcmp(hdrt2->next[next_idx('C')]->str, "harset") == 0);
+    MASSERT(strcmp(hdrt2->next[next_idx('C')]->str, "HARSET") == 0);
     MASSERT(hdrt2->next[next_idx('C')]->idx == 3);
-    MASSERT(strcmp(hdrt2->next[next_idx('D')]->str, "atetime") == 0);
+    MASSERT(strcmp(hdrt2->next[next_idx('D')]->str, "ATETIME") == 0);
     MASSERT(hdrt2->next[next_idx('D')]->idx == 5);
-    MASSERT(strcmp(hdrt2->next[next_idx('E')]->str, "ncoding") == 0);
+    MASSERT(strcmp(hdrt2->next[next_idx('E')]->str, "NCODING") == 0);
     MASSERT(hdrt2->next[next_idx('E')]->idx == 2);
-    MASSERT(strcmp(hdrt2->next[next_idx('L')]->str, "anguage") == 0);
+    MASSERT(strcmp(hdrt2->next[next_idx('L')]->str, "ANGUAGE") == 0);
     MASSERT(hdrt2->next[next_idx('L')]->idx == 4);
     MASSERT(HDR_FindIdx(hdrt, "Accept:") == 1);
     MASSERT(HDR_FindIdx(hdrt, "Accept-Charset:") == 3);
