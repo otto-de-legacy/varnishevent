@@ -31,4 +31,4 @@
 
 #include "varnishevent.h"
 
-extern rec_t * const magic_end_rec;
+extern const void * const magic_end_rec;

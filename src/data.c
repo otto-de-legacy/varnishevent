@@ -46,6 +46,7 @@
 #include "vqueue.h"
 #include "vsb.h"
 #include "vmb.h"
+#include "common/common.h"
 
 #define __offsetof(st, m) offsetof(st,m)
 
@@ -73,8 +74,8 @@ static txhead_t freetxhead;
 static rechead_t freerechead;
 static chunkhead_t freechunkhead;
 
-static char bogus_rec;
-rec_t * const magic_end_rec = (rec_t * const) &bogus_rec;
+static const char bogus_rec;
+const void * const magic_end_rec = &bogus_rec;
 
 static void
 data_Cleanup(void)
@@ -268,7 +269,7 @@ DATA_Init(void)
             }
             txn[i].recs[idx]->hdrs = (rec_t **) calloc(nhdrs + 1,
                                                        sizeof(rec_t *));
-            txn[i].recs[idx]->hdrs[nhdrs] = magic_end_rec;
+            txn[i].recs[idx]->hdrs[nhdrs] = TRUST_ME(magic_end_rec);
         }
 	VSTAILQ_INSERT_TAIL(&freetxhead, &txn[i], freelist);
     }

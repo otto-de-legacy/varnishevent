@@ -32,6 +32,8 @@
 #include <string.h>
 #include <stddef.h>
 
+#include "common/common.h"
+
 #include "minunit.h"
 
 #include "../varnishevent.h"
@@ -376,7 +378,7 @@ static const char
             fill_rec(&records[idx], &chunks[idx * CHUNKS_PER_REC],
                      CHUNKS_PER_REC);
         }
-        rec_nodes[i].hdrs[HDRS_PER_NODE] = magic_end_rec;
+        rec_nodes[i].hdrs[HDRS_PER_NODE] = TRUST_ME(magic_end_rec);
     }
 
     DATA_Clear_Tx(&tx, &local_freetx, &local_freerec, &local_freechunk,
