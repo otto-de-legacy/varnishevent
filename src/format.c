@@ -800,7 +800,7 @@ void
 format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     format_slt(tx, args->tag, args->hdr_idx, args->fld, s, len);
-    if (VSL_tagflags[args->tag] & SLT_F_BINARY) {
+    if (VSL_tagflags[args->tag] & SLT_F_BINARY && *s != NULL && *len > 0) {
         VSB_clear(scratch);
         VSB_quote(scratch, *s, (int) *len, 0);
         VSB_finish(scratch);
