@@ -7,8 +7,8 @@ Display Varnish log contents in formats for client, backend and other events
 ----------------------------------------------------------------------------
 
 :Author: Geoffrey Simmons
-:Date:   2016-12-06
-:Version: 4.0
+:Date:   2016-12-08
+:Version: trunk
 :Manual section: 1
 
 
@@ -42,8 +42,10 @@ The main differences between varnishevent and varnishncsa(1) are:
 * Outputs differ in a few cases where varnishevent emits an empty
   string for data that are absent or unknown, while varnishncsa emits a
   '-'.
-* varnishncsa only logs client transactions, while varnishevent may
-  also log backend or raw transactions.
+* varnishncsa only logs client and/or backend transactions, and does so
+  with one output format. varnishevent also allows raw transactions,
+  as well as simultaneous client and backend logging with different
+  output formats.
 * Some additional output formatters are available.
 * varnishevent is designed to keep pace reading the Varnish shared
   memory log while varnishd is writing to it rapidly under heavy load,
@@ -137,6 +139,18 @@ OPTIONS
 	the -a option was specified. If the application receives a
 	SIGHUP the file will be reopened allowing the old one to be
 	rotated away.
+
+
+The ``-f`` option is incompatible with varnishncsa's
+option. varnishncsa uses ``-f`` to read a single output format from a
+file, while varnishevent's config file, read with ``-f``, specifies a
+configuration (as described below), which may have different output
+formats for client and backend logging.
+
+varnishncsa has the ``-b`` and ``-c`` options to select backend and/or
+client loggging. In varnishevent, this is determined by whether output
+formats are specified for client or backend logging in the
+configuration.
 
 FORMAT
 ======
@@ -294,7 +308,7 @@ then:
 REQUIREMENTS
 ============
 
-This version of varnishevent requires Varnish 4.1.0 through 4.1.2.
+This version of varnishevent requires Varnish 4.1.3 through 5.0.0.
 See the project repository for version that are compatible with other
 versions of Varnish.
 
@@ -712,8 +726,8 @@ COPYRIGHT AND LICENCE
 For both the software and this document are governed by a BSD 2-clause
 licence.
 
-| Copyright (c) 2012-2015 UPLEX Nils Goroll Systemoptimierung
-| Copyright (c) 2012-2015 Otto Gmbh & Co KG
+| Copyright (c) 2012-2016 UPLEX Nils Goroll Systemoptimierung
+| Copyright (c) 2012-2016 Otto Gmbh & Co KG
 | All rights reserved
 
 Redistribution and use in source and binary forms, with or without
@@ -743,4 +757,4 @@ as Varnish itself. See LICENCE in the Varnish distribution for
 details.
 
 * Copyright (c) 2006 Verdens Gang AS
-* Copyright (c) 2006-2015 Varnish Software AS
+* Copyright (c) 2006-2016 Varnish Software AS

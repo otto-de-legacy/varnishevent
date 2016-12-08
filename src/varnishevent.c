@@ -623,12 +623,12 @@ main(int argc, char *argv[])
             break;
         case 'V':
             fprintf(stderr, "varnishevent (%s)\n", version);
-            fprintf(stderr, "Copyright (c) 2012-2015 UPLEX Nils Goroll "
+            fprintf(stderr, "Copyright (c) 2012-2016 UPLEX Nils Goroll "
                     "Systemoptimierung\n");
-            fprintf(stderr, "Copyright (c) 2012-2015 Otto Gmbh & Co KG\n");
+            fprintf(stderr, "Copyright (c) 2012-2016 Otto Gmbh & Co KG\n");
             fprintf(stderr, "Portions adapted from Varnish:\n");
             fprintf(stderr, "Copyright (c) 2006 Verdens Gang AS\n");
-            fprintf(stderr, "Copyright (c) 2006-2015 Varnish Software AS\n");
+            fprintf(stderr, "Copyright (c) 2006-2016 Varnish Software AS\n");
             exit(EXIT_SUCCESS);
         case 'w':
             REPLACE(w_arg, optarg);
