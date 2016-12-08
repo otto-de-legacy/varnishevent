@@ -1,6 +1,6 @@
 /*-
- * Copyright (c) 2015 UPLEX Nils Goroll Systemoptimierung
- * Copyright (c) 2015 Otto Gmbh & Co KG
+ * Copyright (c) 2015-2016 UPLEX Nils Goroll Systemoptimierung
+ * Copyright (c) 2015-2016 Otto Gmbh & Co KG
  * All rights reserved
  *
  * Author: Geoffrey Simmons <geoffrey.simmons@uplex.de>
@@ -59,13 +59,13 @@
 #include <stdint.h>
 #include <errno.h>
 
-#include "vsb.h"
 #include "vqueue.h"
+#include "vapi/vsm.h"
 #include "vapi/vsl.h"
-#include "vre.h"
 #include "miniobj.h"
 #include "vas.h"
 #include "vdef.h"
+#include "vsb.h"
 
 #include "varnishevent.h"
 #include "vtim.h"
@@ -517,13 +517,34 @@ static vas_f assert_fail __attribute__((__noreturn__));
 
 static void
 assert_fail(const char *func, const char *file, int line, const char *cond,
-            int err, enum vas_e err_e)
+            enum vas_e err_e)
 {
-    (void) err_e;
-    
-    LOG_Log(LOG_ALERT, "Condition (%s) failed in %s(), %s line %d",
-            cond, func, file, line);
-    if (err)
+    int err = errno;
+
+    switch(err_e) {
+    case VAS_WRONG:
+        LOG_Log(LOG_ALERT, "Wrong turn in %s(), %s line %d: %s",
+                func, file, line, cond);
+        break;
+    case VAS_MISSING:
+        LOG_Log(LOG_ALERT, "Condition (%s) failed in %s(), %s line %d, "
+                "error handling code is missing", cond, func, file, line);
+        break;
+    case VAS_INCOMPLETE:
+        LOG_Log(LOG_ALERT, "Incomplete code in %s(), %s line %d",
+                func, file, line);
+        break;
+    case VAS_ASSERT:
+        LOG_Log(LOG_ALERT, "Condition (%s) failed in %s(), %s line %d",
+                cond, func, file, line);
+        break;
+    case VAS_VCL:
+    default:
+        LOG_Log(LOG_ALERT, "Unexpected error (%s) in %s(), %s line %d",
+                cond, func, file, line);
+        break;
+    }
+    if (err != 0)
         LOG_Log(LOG_ALERT, "errno = %d (%s)", err, strerror(err));
     abort();
 }
@@ -586,7 +607,7 @@ main(int argc, char *argv[])
             break;
         case 'F':
             VSB_clear(config.cformat);
-            VSB_cpy(config.cformat, optarg);
+            VSB_cat(config.cformat, optarg);
             VSB_finish(config.cformat);
             break;
         case 'D':

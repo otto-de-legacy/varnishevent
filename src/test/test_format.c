@@ -1965,7 +1965,7 @@ static const char
         "%{tag:VCL_acl}x %{tag:Debug}x %{tag:Timestamp:Req}x "\
         "%{tag:ReqAcct[0]}x %{tag:Timestamp:Resp[2]}x %{vxid}x %{pvxid}x"
     VSB_clear(config.cformat);
-    VSB_cpy(config.cformat, FULL_CLIENT_FMT);
+    VSB_cat(config.cformat, FULL_CLIENT_FMT);
     VSB_finish(config.cformat);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
@@ -2050,7 +2050,7 @@ static const char
         "%{tag:Fetch_Body}x %{tag:Debug}x %{tag:Timestamp:Bereq}x "\
         "%{tag:BereqAcct[5]}x %{tag:Timestamp:Bereq[1]}x %{vxid}x %{pvxid}x"
     VSB_clear(config.bformat);
-    VSB_cpy(config.bformat, FULL_BACKEND_FMT);
+    VSB_cat(config.bformat, FULL_BACKEND_FMT);
     VSB_finish(config.bformat);
     VSB_clear(config.cformat);
     status = FMT_Init(err);
@@ -2123,10 +2123,10 @@ static const char
     FMT_Fini();
 
     VSB_clear(config.cformat);
-    VSB_cpy(config.cformat, FULL_CLIENT_FMT);
+    VSB_cat(config.cformat, FULL_CLIENT_FMT);
     VSB_finish(config.cformat);
     VSB_clear(config.bformat);
-    VSB_cpy(config.bformat, FULL_BACKEND_FMT);
+    VSB_cat(config.bformat, FULL_BACKEND_FMT);
     VSB_finish(config.bformat);
     status = FMT_Init(err);
     VMASSERT(status == 0, "FMT_Init: %s", err);
@@ -2239,7 +2239,7 @@ static const char
 
 #define FULL_RAW_FMT "%t %{%F-%T.%i}t %{tag:Backend_health}x %{vxid}x"
     VSB_clear(config.rformat);
-    VSB_cpy(config.rformat, FULL_RAW_FMT);
+    VSB_cat(config.rformat, FULL_RAW_FMT);
     VSB_finish(config.rformat);
     VSB_clear(config.bformat);
     VSB_clear(config.cformat);
@@ -2277,7 +2277,7 @@ static const char
     /* Illegal backend formats */
     FMT_Fini();
     VSB_clear(config.bformat);
-    VSB_cpy(config.bformat, "%{Varnish:hitmiss}x");
+    VSB_cat(config.bformat, "%{Varnish:hitmiss}x");
     VSB_finish(config.bformat);
     VSB_clear(config.rformat);
     status = FMT_Init(err);
@@ -2287,7 +2287,7 @@ static const char
 
     FMT_Fini();
     VSB_clear(config.bformat);
-    VSB_cpy(config.bformat, "%{Varnish:handling}x");
+    VSB_cat(config.bformat, "%{Varnish:handling}x");
     VSB_finish(config.bformat);
     status = FMT_Init(err);
     MAN(status);
@@ -2297,7 +2297,7 @@ static const char
     /* Illegal raw formats */
     FMT_Fini();
     VSB_clear(config.rformat);
-    VSB_cpy(config.rformat, "%r");
+    VSB_cat(config.rformat, "%r");
     VSB_finish(config.rformat);
     VSB_clear(config.bformat);
     status = FMT_Init(err);
@@ -2307,7 +2307,7 @@ static const char
     /* Unknown formatters */
     FMT_Fini();
     VSB_clear(config.cformat);
-    VSB_cpy(config.cformat, "%a");
+    VSB_cat(config.cformat, "%a");
     VSB_finish(config.cformat);
     VSB_clear(config.rformat);
     status = FMT_Init(err);
@@ -2317,7 +2317,7 @@ static const char
     /* Illegal header name */
     FMT_Fini();
     VSB_clear(config.cformat);
-    VSB_cpy(config.cformat, "%{Foo:}i");
+    VSB_cat(config.cformat, "%{Foo:}i");
     VSB_finish(config.cformat);
     status = FMT_Init(err);
     MAN(status);
@@ -2326,7 +2326,7 @@ static const char
     /* Peculiar but legal header name */
     FMT_Fini();
     VSB_clear(config.cformat);
-    VSB_cpy(config.cformat, "%{!#$%'*+.^_`|~}i");
+    VSB_cat(config.cformat, "%{!#$%'*+.^_`|~}i");
     VSB_finish(config.cformat);
     status = FMT_Init(err);
     MAZ(status);

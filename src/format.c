@@ -35,6 +35,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <limits.h>
+#include <stdio.h>
 
 #include "vapi/vsl.h"
 #include "vas.h"
@@ -481,9 +482,9 @@ format_r(const tx_t *tx, int host_idx, enum VSL_tag_e mtag, enum VSL_tag_e htag,
     VSB_clear(scratch);
     rec_t *rec = get_tag(tx, mtag);
     if (rec != NULL)
-        VSB_cpy(scratch, get_payload(rec));
+        VSB_cat(scratch, get_payload(rec));
     else
-        VSB_cpy(scratch, "-");
+        VSB_cat(scratch, "-");
     VSB_cat(scratch, " ");
 
     if ((str = get_hdr(tx, htag, host_idx)) != NULL) {

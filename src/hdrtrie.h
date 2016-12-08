@@ -32,6 +32,7 @@
 #ifndef HDRTRIE_H_INCLUDED
 #define HDRTRIE_H_INCLUDED
 
+#include "vdef.h"
 #include "vsb.h"
 
 struct hdrt_node {

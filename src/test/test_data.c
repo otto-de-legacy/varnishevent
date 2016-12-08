@@ -39,9 +39,6 @@
 #include "../varnishevent.h"
 #include "../data.h"
 
-/* __offsetof() used in VSTAILQ_LAST() */
-#define __offsetof(t,f) offsetof(t,f)
-
 int tests_run = 0;
 
 static txhead_t local_freetx = VSTAILQ_HEAD_INITIALIZER(local_freetx);
@@ -361,8 +358,6 @@ static const char
         rec_nodes[i].magic = REC_NODE_MAGIC;
         rec_nodes[i].rec = &records[i];
         fill_rec(&records[i], &chunks[i * CHUNKS_PER_REC], CHUNKS_PER_REC);
-        MASSERT(&chunks[(i * CHUNKS_PER_REC) + CHUNKS_PER_REC - 1]
-                == VSTAILQ_LAST(&records[i].chunks, chunk_t, chunklist));
         rec_nodes[i].hdrs = NULL;
     }
     for (int i = max_idx/2; i < max_idx; i++) {

@@ -2,17 +2,17 @@
 
 echo
 echo "TEST: $0"
-echo '... testing output and log against known checksums (long)'
+echo '... testing output and log against known checksums'
 
 LOG=test.log
 OUT=output.log
 
 rm -f $LOG $OUT
 
-../varnishevent -f varnishevent.conf -r sw-doc.log -w $OUT -v
+../varnishevent -f varnishevent.conf -r varnish-4.1.0-doc.log -w $OUT -v
 
 CKSUM=$( cksum $OUT )
-if [ "$CKSUM" != "953184597 22701157 $OUT" ]; then
+if [ "$CKSUM" != "1792530013 308464 $OUT" ]; then
     echo "ERROR: Regression test log output incorrect cksum: $CKSUM"
     exit 1
 fi
@@ -23,7 +23,7 @@ fi
 # predictable from one run to the next.
 CKSUM=$( sed -e 's/\(initializing\) \(.*\)/\1/' $LOG | egrep -v 'Writer: returned|Reader: took|^DEBUG: Allocating' | cksum )
 
-if [ "$CKSUM" != '3946061167 61504698' ]; then
+if [ "$CKSUM" != '3629500636 836995' ]; then
     echo "ERROR: Regression test varnishevent log incorrect cksum: $CKSUM"
     exit 1
 fi

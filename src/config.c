@@ -111,7 +111,7 @@ conf_getDouble(const char *rval, double *d)
 #define confVSB(name,fld)                       \
     if (strcmp(lval, (name)) == 0) {            \
         VSB_clear(config.fld);                  \
-        VSB_cpy(config.fld, rval);              \
+        VSB_cat(config.fld, rval);              \
         VSB_finish(config.fld);                 \
         return(0);                              \
     }
@@ -209,14 +209,14 @@ CONF_Init(void)
     bprintf(config.syslog_facility_name, "%s", "LOCAL0");
 
     config.cformat = VSB_new_auto();
-    VSB_cpy(config.cformat, DEFAULT_CFORMAT);
+    VSB_cat(config.cformat, DEFAULT_CFORMAT);
     VSB_finish(config.cformat);
     config.bformat = VSB_new_auto();
     VSB_finish(config.bformat);
     config.rformat = VSB_new_auto();
     VSB_finish(config.rformat);
     config.syslog_ident = VSB_new_auto();
-    VSB_cpy(config.syslog_ident, "varnishevent");
+    VSB_cat(config.syslog_ident, "varnishevent");
     VSB_finish(config.syslog_ident);
 
     config.syslog_facility = LOG_LOCAL0;
@@ -283,7 +283,7 @@ CONF_ReadFile(const char *file) {
             ;
 
         VSB_clear(orig);
-        VSB_cpy(orig, ptr);
+        VSB_cat(orig, ptr);
         VSB_finish(orig);
 
         char *lval, *rval;

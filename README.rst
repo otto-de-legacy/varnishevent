@@ -294,7 +294,9 @@ then:
 REQUIREMENTS
 ============
 
-This version of varnishevent requires Varnish 4.0.3 or 4.0.4.
+This version of varnishevent requires Varnish 4.1.0 through 4.1.2.
+See the project repository for version that are compatible with other
+versions of Varnish.
 
 
 DATA BUFFERS
@@ -690,6 +692,7 @@ SEE ALSO
 
 * varnishd(1)
 * varnishncsa(1)
+* project repository: https://code.uplex.de/uplex-varnish/varnishevent
 
 HISTORY
 =======

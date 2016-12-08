@@ -49,8 +49,8 @@
 #endif
 
 #include "vas.h"
-#include "vsb.h"
 #include "vdef.h"
+#include "vsb.h"
 
 #include "varnishevent.h"
 

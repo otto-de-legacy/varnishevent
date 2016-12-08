@@ -174,9 +174,9 @@ vsb_dup(struct vsb *vsb)
 
     VSB_finish(vsb);
     str = strdup(VSB_data(vsb));
-    VSB_cpy(dup, str);
+    VSB_cat(dup, str);
     VSB_clear(vsb);
-    VSB_cpy(vsb, str);
+    VSB_cat(vsb, str);
     free(str);
     return dup;
 }

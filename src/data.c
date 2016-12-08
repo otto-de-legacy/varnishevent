@@ -44,6 +44,7 @@
 #include "vas.h"
 #include "miniobj.h"
 #include "vqueue.h"
+#include "vdef.h"
 #include "vsb.h"
 #include "vmb.h"
 #include "common/common.h"
