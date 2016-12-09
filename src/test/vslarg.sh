@@ -11,7 +11,7 @@ LOG=/dev/null
 echo "... no VSL args"
 CKSUM=$( ../varnishevent -r ${IN} -f ${CONF} -l ${LOG} | cksum)
 
-if [ "$CKSUM" != '2003023342 417731' ]; then
+if [ "$CKSUM" != '529173277 421182' ]; then
     echo "ERROR: no VSL args unexpected cksum: $CKSUM"
     exit 1
 fi
@@ -20,7 +20,7 @@ echo "... -g vxid"
 CKSUM=$( ../varnishevent -g vxid -r ${IN} -f ${CONF} -l ${LOG} | cksum)
 
 # Same as default (no -g arg)
-if [ "$CKSUM" != '2003023342 417731' ]; then
+if [ "$CKSUM" != '529173277 421182' ]; then
     echo "ERROR: -g vxid unexpected cksum: $CKSUM"
     exit 1
 fi
@@ -28,7 +28,7 @@ fi
 echo "... -g request"
 CKSUM=$( ../varnishevent -g request -r ${IN} -f ${CONF} -l ${LOG} | cksum)
 
-if [ "$CKSUM" != '2546462943 418726' ]; then
+if [ "$CKSUM" != '2424281468 422177' ]; then
     echo "ERROR: -g request unexpected cksum: $CKSUM"
     exit 1
 fi
@@ -36,10 +36,12 @@ fi
 echo "... -g raw"
 # Timestamps for raw grouping are always the time at which the tx was read,
 # even for binary file reads. So we check against the last four columns.
-CKSUM=$( ../varnishevent -g raw -r ${IN} -f raw.conf -l ${LOG} | cut -d' ' -f4- | cksum)
+# The query restricts output to Begin records; the previous invocation
+# rendered every record with just the VXIDs.
+CKSUM=$( ../varnishevent -g raw -r ${IN} -f raw.conf -l ${LOG} -q 'Begin' | cut -d' ' -f4- | cksum)
 
 if [ "$CKSUM" != '3267477005 21053' ]; then
-    echo "ERROR: -g raw unexpected cksum: $CKSUM"
+    echo "ERROR: -g raw with query unexpected cksum: $CKSUM"
     exit 1
 fi
 

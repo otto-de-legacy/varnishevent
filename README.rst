@@ -7,7 +7,7 @@ Display Varnish log contents in formats for client, backend and other events
 ----------------------------------------------------------------------------
 
 :Author: Geoffrey Simmons
-:Date:   2016-12-08
+:Date:   2016-12-09
 :Version: trunk
 :Manual section: 1
 
@@ -278,6 +278,9 @@ transactions, only the formatters ``%t``, ``%{X}t``, ``%{tag}x`` and
 
   vxid
     The transaction XID (an ID set by Varnish).
+		     
+  Varnish:vxid
+    Same as the ``vxid`` formatter (for varnishncsa compatibility)
 		     
   pvxid
     The parent transaction XID. Always 0 except when request grouping

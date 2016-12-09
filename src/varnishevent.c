@@ -446,7 +446,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             nrec++;
         }
 
-        if (nrec == 0) {
+        if (nrec == 0 && !xids_wanted[t->type]) {
             tx->state = TX_FREE;
             tx->type = VSL_t_unknown;
             tx->vxid = -1;
@@ -903,9 +903,19 @@ main(int argc, char *argv[])
     assert(!VSTAILQ_EMPTY(&rdr_tx_freelist));
     assert(rdr_tx_free == config.max_data);
     rdr_rec_free = DATA_Take_Freerec(&rdr_rec_freelist);
-    assert(!VSTAILQ_EMPTY(&rdr_rec_freelist));
+    /*
+     * Either the record and chunk lists are non-empty, or (p)vxids are
+     * all that we're looking for.
+     */
+    assert(!VSTAILQ_EMPTY(&rdr_rec_freelist)
+           || (!VSB_EMPTY(config.cformat) && xids_wanted[VSL_t_req])
+           || (!VSB_EMPTY(config.bformat) && xids_wanted[VSL_t_bereq])
+           || (!VSB_EMPTY(config.rformat) && xids_wanted[VSL_t_raw]));
     rdr_chunk_free = DATA_Take_Freechunk(&rdr_chunk_freelist);
-    assert(!VSTAILQ_EMPTY(&rdr_chunk_freelist));
+    assert(!VSTAILQ_EMPTY(&rdr_chunk_freelist)
+           || (!VSB_EMPTY(config.cformat) && xids_wanted[VSL_t_req])
+           || (!VSB_EMPTY(config.bformat) && xids_wanted[VSL_t_bereq])
+           || (!VSB_EMPTY(config.rformat) && xids_wanted[VSL_t_raw]));
 
     tx_thresh = config.max_data >> 1;
     rec_thresh = nrecords >> 1;

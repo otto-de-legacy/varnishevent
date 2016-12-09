@@ -1031,6 +1031,8 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
     for (int i = 0; i < n; i++)
         fmt->args[i].hdr_idx = -1;
 
+    xids_wanted[type] = 0;
+
     n = 0;
     os = VSB_new_auto();
     
@@ -1313,11 +1315,14 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                     }
                     add_tag(type, t, hdr);
                 }
-                else if (strncmp(fname, "vxid", 4) == 0) {
+                else if (strncmp(fname, "vxid", 4) == 0
+                         || strncmp(fname, "Varnish:vxid", 12) == 0) {
                     add_formatter(fmt, os, n, format_vxid);
+                    xids_wanted[type] = 1;
                 }
                 else if (strncmp(fname, "pvxid", 5) == 0) {
                     add_formatter(fmt, os, n, format_pvxid);
+                    xids_wanted[type] = 1;
                 }
                 else {
                     sprintf(err, "Unknown format starting at: %s", fname);
