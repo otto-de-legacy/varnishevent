@@ -1055,6 +1055,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
            format (neither client nor backend) */
         if (R(type)
             && sscanf(p, "{tag:%s}x", buf) != 1
+            && sscanf(p, "{VSL:%s}x", buf) != 1
             && sscanf(p, "{vxid}x") != 1
             && *p != 't'
             && sscanf(p, "{%s}t", buf) != 1) {
@@ -1269,7 +1270,8 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                                 fname+8);
                     add_tag(type, SLT_VCL_Log, fname+8);
                 }
-                else if (strncmp(fname, "tag:", 4) == 0) {
+                else if (strncmp(fname, "tag:", 4) == 0
+                         || strncmp(fname, "VSL:", 4) == 0) {
                     /* retrieve the tag contents from the log */
                     char *c, *tagname = fname+4, *hdr = NULL, *fld = NULL;
                     int t = 0, fld_nr = -1;

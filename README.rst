@@ -271,6 +271,11 @@ transactions, only the formatters ``%t``, ``%{X}t``, ``%{tag}x`` and
     e.g. ``%{tag:ReqEnd}x``.  The contents of the payload may be
     restricted by header or field specifiers, as explained below.
 
+  VSL:tagname{:header}{[field]}
+    Identical to the ``tag`` formatter. This is similar to the
+    ``%{VSL:tag}x`` formatter used by varnishncsa, but is not fully
+    compatible.  Details are given below.
+
   vxid
     The transaction XID (an ID set by Varnish).
 		     
@@ -304,12 +309,34 @@ then:
 
   ``%{tag:Timestamp:Resp[1]}`` yields ``0.000195``
 
+The ``%{VSL:tagname}x`` formatter is just an alias for
+``%{tag:tagname}x``.  It is compatible with the ``VSL`` formatter of
+varnishncsa if neither the header nor the field syntax is used. The
+varnishncsa formatter does not support the header specifier, and its
+field specifiers count from 1, while in varnishevent they count
+from 0.
+
+So for example:
+
+* The formatter ``%{VSL:Backend}x`` has the same effect in both
+  varnishevent and varnishncsa, and is equivalent to
+  ``%{tag:Backend}x`` in varnishevent.
+* ``%{VSL:Timestamp:Resp}`` may be used in varnishevent but not in
+  varnishncsa. It has the same effect as ``%{tag:Timestamp:Resp}`` in
+  varnishevent.
+* ``%{VSL:Backend[2]}x`` in varnishevent (the same as
+  ``%{tag:Backend[2]}x``) is equivalent to ``%{VSL:Backend[3]}x`` in
+  varnishncsa.
+* ``%{VSL:Timestamp:Resp[1]}`` may be used in varnishevent and is the
+  same as ``%{tag:Timestamp:Resp[1]}``, but it may not be used in
+  varnishncsa.
+
 
 REQUIREMENTS
 ============
 
 This version of varnishevent requires Varnish 4.1.3 through 5.0.0.
-See the project repository for version that are compatible with other
+See the project repository for versions that are compatible with other
 versions of Varnish.
 
 

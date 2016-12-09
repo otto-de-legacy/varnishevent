@@ -58,4 +58,38 @@ if [ "$RC" -ne "0" ]; then
     exit 1
 fi
 
+FORMAT_EVENT='%{VSL:Timestamp[1]}x'
+FORMAT_NCSA='%{VSL:Timestamp[2]}x'
+
+echo "... VSL formatter"
+$EVENT -r $INPUT -F "$FORMAT_EVENT" > $EVENT_LOG
+$NCSA -r $INPUT -F "$FORMAT_NCSA"  > $NCSA_LOG
+
+$DIFF_CMD
+RC=$?
+rm $EVENT_LOG
+rm $NCSA_LOG
+
+if [ "$RC" -ne "0" ]; then
+    echo "ERROR: outputs of varnishevent/varnishncsa VSL formatter differ"
+    exit 1
+fi
+
+FORMAT_EVENT='%{tag:Timestamp[1]}x'
+FORMAT_NCSA='%{VSL:Timestamp[2]}x'
+
+echo "... compatibility of tag and VSL formatter"
+$EVENT -r $INPUT -F "$FORMAT_EVENT" > $EVENT_LOG
+$NCSA -r $INPUT -F "$FORMAT_NCSA" > $NCSA_LOG
+
+$DIFF_CMD
+RC=$?
+rm $EVENT_LOG
+rm $NCSA_LOG
+
+if [ "$RC" -ne "0" ]; then
+    echo "ERROR: tag and VSL formatters for varnishevent and varnishncsa differ"
+    exit 1
+fi
+
 exit 0
