@@ -1608,18 +1608,34 @@ static const char
     MASSERT(max_idx == 1);
     init_tx(&tx, node, nptr);
     add_record_data(&tx, SLT_Debug, &rec, &chunk, "");
-    memcpy(chunk.data, "foo\0\xFF bar\0", 10);
-    rec.len = 10;
+    memcpy(chunk.data, "foo\0\xFF bar\0\\\"\n\r\t", 16);
+    rec.len = 16;
     str = NULL;
     len = 0;
     args.tag = SLT_Debug;
     format_SLT(&tx, &args, &str, &len);
     MAN(str);
-#define EXP_SLT_BINARY "\"foo\\0\\377 bar\""
+#define EXP_SLT_BINARY "\"foo\\0\\377 bar\\0\\\\\\\"\\n\\r\\t\""
     VMASSERT(strncmp(str, EXP_SLT_BINARY, strlen(EXP_SLT_BINARY)) == 0,
              "format_SLT with binary data: Expected '%s', got '%s'",
              EXP_SLT_BINARY, str);
     MASSERT(len == strlen(EXP_SLT_BINARY));
+
+    /* Binary tag with no non-printables in the payload */
+    reset_tag2idx(1, SLT_Debug);
+    MASSERT(max_idx == 1);
+    init_tx(&tx, node, nptr);
+    add_record_data(&tx, SLT_Debug, &rec, &chunk, "RES_MODE 2");
+    str = NULL;
+    len = 0;
+    args.tag = SLT_Debug;
+    format_SLT(&tx, &args, &str, &len);
+    MAN(str);
+#define EXP_SLT "RES_MODE 2"
+    VMASSERT(strcmp(str, EXP_SLT) == 0,
+             "format_SLT with no binary data: Expected '%s', got '%s'",
+             EXP_SLT, str);
+    MASSERT(len == strlen(EXP_SLT));
 
     /* header selector */
     reset_tag2idx(1, SLT_Timestamp);

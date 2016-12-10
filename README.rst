@@ -334,6 +334,23 @@ So for example:
   same as ``%{tag:Timestamp:Resp[1]}``, but it may not be used in
   varnishncsa.
 
+varnishevent and varnishncsa format non-printable characters from the
+log differently. What varnishevent does is similar to varnishlog: for
+the tags classified by the logging API as potentially containing
+binary data (such as ``Debug``), if the payload contains non-printable
+characters, then the output is enclosed in quotation marks, and the
+non-printables are escaped, using common sequences such as ``\n`` and
+``\t``, and ``\%o`` for other bytes, where ``%o`` is the octal
+representation of the value. For example, byte value 255 is formatted
+as ``\377``. (varnishlog always encloses the payload in quotation
+marks for a tag such as ``Debug``, regardless of whether any of its
+contents need escaping, whereas varnishevent uses the quotation marks
+only when escaping is necessary.)
+
+varnishncsa escapes any non-printable character, also using ``\n`` and
+``\t`` and so forth, and two-digit hex representations for other
+values (for example ``\xff`` for byte value 255). varnishncsa does
+this for all log payloads, regardless of the tag.
 
 REQUIREMENTS
 ============

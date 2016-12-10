@@ -42,9 +42,9 @@ fi
 
 # Cannot test the %D formatter, because varnishevent gets it more accurately
 # (varnishncsa has floating point errors).
-# XXX: WIP -- bugs discovered with Debug and VSL:Timestamp
+# XXX: WIP -- bugs discovered with VSL:Timestamp
 #FORMAT='%b %H %h %I %{Host}i %{Connection}i %{User-Agent}i %{X-Forwarded-For}i %{Accept-Ranges}o %{Age}o %{Connection}o %{Content-Encoding}o %{Content-Length}o %{Content-Type}o %{Date}o %{Last-Modified}o %{Server}o %{Transfer-Encoding}o %{Via}o %{X-Varnish}o %l %m %O %q %r %s %t %{%F-%T}t %U %u %{Varnish:time_firstbyte}x %{Varnish:hitmiss}x %{Varnish:handling}x %{VSL:Begin}x %{VSL:Debug}x %{VSL:End}x %{VSL:Gzip}x %{VSL:Hit}x %{VSL:Length}x %{VSL:Link}x %{VSL:ReqAcct}x %{VSL:ReqStart}x %{VSL:RespProtocol}x %{VSL:ReqMethod}x %{VSL:ReqURL}x %{VSL:ReqProtocol}x %{VSL:RespReason}x %{VSL:RespStatus}x %{VSL:Timestamp}x %{Varnish:vxid}x'
-FORMAT='%b %H %h %I %{Host}i %{Connection}i %{User-Agent}i %{X-Forwarded-For}i %{Accept-Ranges}o %{Age}o %{Connection}o %{Content-Encoding}o %{Content-Length}o %{Content-Type}o %{Date}o %{Last-Modified}o %{Server}o %{Transfer-Encoding}o %{Via}o %{X-Varnish}o %l %m %O %q %r %s %t %{%F-%T}t %U %u %{Varnish:time_firstbyte}x %{Varnish:hitmiss}x %{Varnish:handling}x %{VSL:Begin}x %{VSL:End}x %{VSL:Gzip}x %{VSL:Hit}x %{VSL:Length}x %{VSL:Link}x %{VSL:ReqAcct}x %{VSL:ReqStart}x %{VSL:RespProtocol}x %{VSL:ReqMethod}x %{VSL:ReqURL}x %{VSL:ReqProtocol}x %{VSL:RespReason}x %{VSL:RespStatus}x %{Varnish:vxid}x'
+FORMAT='%b %H %h %I %{Host}i %{Connection}i %{User-Agent}i %{X-Forwarded-For}i %{Accept-Ranges}o %{Age}o %{Connection}o %{Content-Encoding}o %{Content-Length}o %{Content-Type}o %{Date}o %{Last-Modified}o %{Server}o %{Transfer-Encoding}o %{Via}o %{X-Varnish}o %l %m %O %q %r %s %t %{%F-%T}t %U %u %{Varnish:time_firstbyte}x %{Varnish:hitmiss}x %{Varnish:handling}x %{VSL:Begin}x %{VSL:Debug}x %{VSL:End}x %{VSL:Gzip}x %{VSL:Hit}x %{VSL:Length}x %{VSL:Link}x %{VSL:ReqAcct}x %{VSL:ReqStart}x %{VSL:RespProtocol}x %{VSL:ReqMethod}x %{VSL:ReqURL}x %{VSL:ReqProtocol}x %{VSL:RespReason}x %{VSL:RespStatus}x %{Varnish:vxid}x'
 
 echo "... custom -F format"
 $EVENT -r $INPUT -F "$FORMAT" -v | sed 's/-//g' > $EVENT_LOG
