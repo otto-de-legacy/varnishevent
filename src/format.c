@@ -1035,7 +1035,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
         fmt->args[i].hdr_idx = -1;
 
     nonrecs_wanted[type] = 0;
-    tag_no_hdr[type] = vbit_init(MAX_VSL_TAG);
+    tag_no_hdr[type] = vbit_new(MAX_VSL_TAG);
 
     n = 0;
     os = VSB_new_auto();
@@ -1582,6 +1582,10 @@ FMT_Fini(void)
             HDR_Fini(hdr_trie[i]);
             hdr_trie[i] = NULL;
         }
+
+    for (int i = 0; i < VSL_t__MAX; i++)
+        if (tag_no_hdr[i] != NULL)
+            vbit_destroy(tag_no_hdr[i]);
 
     if (!VSB_EMPTY(config.cformat))
         free_format(&cformat);
