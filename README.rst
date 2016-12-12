@@ -343,17 +343,26 @@ the tags classified by the logging API as potentially containing
 binary data (such as ``Debug``), if the payload contains non-printable
 characters, then the output is enclosed in quotation marks, and the
 non-printables are escaped, using common sequences such as ``\n`` and
-``\t``, and ``\%o`` for other bytes, where ``%o`` is the octal
+``\t``, prepending a backslash before quotation marks and backslashes,
+and emitting ``\%o`` for other bytes, where ``%o`` is the octal
 representation of the value. For example, byte value 255 is formatted
 as ``\377``. (varnishlog always encloses the payload in quotation
 marks for a tag such as ``Debug``, regardless of whether any of its
 contents need escaping, whereas varnishevent uses the quotation marks
 only when escaping is necessary.)
 
-varnishncsa escapes any non-printable character, also using ``\n`` and
-``\t`` and so forth, and two-digit hex representations for other
-values (for example ``\xff`` for byte value 255). varnishncsa does
-this for all log payloads, regardless of the tag.
+varnishncsa escapes any non-printable character, also using ``\n``,
+``\t``, ``\"`` and so forth, and two-digit hex representations for
+other values (for example ``\xff`` for byte value 255). varnishncsa
+does this for all log payloads, regardless of the tag.
+
+Numeric values emitted by varnishevent and varnishncsa may differ
+slightly (on the order of floating point error) when they are derived
+from data in the Varnish log represented by floating point numbers,
+such as in the payload for the ``Timestamp`` tag. varnishevent
+reproduces the same value that was present in the log, while
+varnishncsa performs floating point conversions, with some loss of
+precision.
 
 REQUIREMENTS
 ============
