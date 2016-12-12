@@ -76,4 +76,12 @@ if [ "$?" != "1" ]; then
     exit 1
 fi
 
+echo "... -C"
+CKSUM=$( ../varnishevent -C -q 'ReqURL ~ "_STATIC"' -r ${IN} -l ${LOG} | cksum)
+
+if [ "$CKSUM" != '3256944209 830' ]; then
+    echo "ERROR: -q query unexpected cksum: $CKSUM"
+    exit 1
+fi
+
 exit 0

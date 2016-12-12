@@ -617,7 +617,7 @@ main(int argc, char *argv[])
     CONF_Init();
     read_default_config();
 
-    while ((c = getopt(argc, argv, "adDhvVP:w:F:g:f:q:r:n:N:L:T:l:")) != -1) {
+    while ((c = getopt(argc, argv, "aCdDhvVP:w:F:g:f:q:r:n:N:L:T:l:")) != -1) {
         switch (c) {
         case 'a':
             a_flag = 1;
@@ -684,6 +684,7 @@ main(int argc, char *argv[])
             break;
         case 'L':
         case 'T':
+        case 'C':
             if ((errnum = VSL_Arg(vsl, c, optarg)) < 0) {
                 fprintf(stderr, "%s\n", VSL_Error(vsl));
                 usage(EXIT_FAILURE);

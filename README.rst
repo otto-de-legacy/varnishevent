@@ -58,6 +58,9 @@ OPTIONS
 
 	When writing to a file, append to it rather than overwrite it.
 
+-C
+
+	Do all regular expression and string matching caseless.
 -d
 
 	Start processing log records at the head of the log instead of the tail.
