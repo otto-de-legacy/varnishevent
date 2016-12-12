@@ -45,7 +45,7 @@ fi
 FORMAT='%b %H %h %I %{Host}i %{Connection}i %{User-Agent}i %{X-Forwarded-For}i %{Accept-Ranges}o %{Age}o %{Connection}o %{Content-Encoding}o %{Content-Length}o %{Content-Type}o %{Date}o %{Last-Modified}o %{Server}o %{Transfer-Encoding}o %{Via}o %{X-Varnish}o %l %m %O %q %r %s %t %{%F-%T}t %U %u %{Varnish:time_firstbyte}x %{Varnish:hitmiss}x %{Varnish:handling}x %{VSL:Begin}x %{VSL:Debug}x %{VSL:End}x %{VSL:Gzip}x %{VSL:Hit}x %{VSL:Length}x %{VSL:Link}x %{VSL:ReqAcct}x %{VSL:ReqStart}x %{VSL:RespProtocol}x %{VSL:ReqMethod}x %{VSL:ReqURL}x %{VSL:ReqProtocol}x %{VSL:RespReason}x %{VSL:RespStatus}x %{VSL:Timestamp}x %{Varnish:vxid}x %{Varnish:side}x'
 
 echo "... custom -F format"
-$EVENT -r $INPUT -F "$FORMAT" -v | sed 's/-//g' > $EVENT_LOG
+$EVENT -r $INPUT -F "$FORMAT" | sed 's/-//g' > $EVENT_LOG
 $NCSA -r $INPUT -F "$FORMAT" | sed 's/-//g' > $NCSA_LOG
 
 $DIFF_CMD
@@ -55,6 +55,24 @@ rm $NCSA_LOG
 
 if [ "$RC" -ne "0" ]; then
     echo "ERROR: outputs of varnishevent/varnishncsa -F differ"
+    exit 1
+fi
+
+FORMAT='%b %H %h %I %{Host}i %{User-Agent}i %{X-Forwarded-For}i %{Accept-Ranges}o %{Connection}o %{Content-Encoding}o %{Content-Length}o %{Content-Type}o %{Date}o %{Last-Modified}o %{ETag}o %{Server}o %l %m %O %q %r %s %t %{%F-%T}t %U %u %{Varnish:time_firstbyte}x %{VSL:Begin}x %{VSL:End}x %{VSL:Link}x %{VSL:Timestamp}x %{Varnish:vxid}x %{Varnish:side}x'
+
+# Skip the first line of varnishevent output ("Reading config file ...")
+# Remove \" escaping from varnishncsa output (done for ETag)
+echo "... client and backend logging"
+$EVENT -r $INPUT -f backend_client.conf | tail -n +2 | sed 's/-//g' > $EVENT_LOG
+$NCSA -r $INPUT -F "$FORMAT" -b -c | sed 's/-//g; s/\\"/"/g' > $NCSA_LOG
+
+$DIFF_CMD
+RC=$?
+rm $EVENT_LOG
+rm $NCSA_LOG
+
+if [ "$RC" -ne "0" ]; then
+    echo "ERROR: varnishevent/varnishncsa backend and client logs differ"
     exit 1
 fi
 
