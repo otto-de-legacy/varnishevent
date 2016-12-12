@@ -890,7 +890,7 @@ main(int argc, char *argv[])
             VSB_finish(hdrs);
             LOG_Log(LOG_INFO, "Reading tags %s with headers: %s", VSL_tags[i],
                     VSB_data(hdrs));
-            VSB_delete(hdrs);
+            VSB_destroy(&hdrs);
         }
     }
 

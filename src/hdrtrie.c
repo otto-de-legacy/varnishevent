@@ -197,7 +197,7 @@ hdr_traverse(struct hdrt_node *hdrt, struct vsb *sb, struct vsb *prefix)
         VSB_finish(word);
         VSB_cat(sb, VSB_data(word));
         VSB_cat(sb, ",");
-        VSB_delete(word);
+        VSB_destroy(&word);
     }
     for (int i = 0; i < 64; i++)
         if (hdrt->next[i] != NULL) {
@@ -208,7 +208,7 @@ hdr_traverse(struct hdrt_node *hdrt, struct vsb *sb, struct vsb *prefix)
             VSB_putc(next, toupper(c));
             hdr_traverse(hdrt->next[i], sb, next);
         }
-    VSB_delete(current);
+    VSB_destroy(&current);
 }
 
 void

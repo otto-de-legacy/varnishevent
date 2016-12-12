@@ -1365,7 +1365,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
      */
     VSB_putc(os, '\n');
     add_formatter(fmt, os, n, NULL);
-    VSB_delete(os);
+    VSB_destroy(&os);
     return 0;
 }
 
@@ -1570,7 +1570,7 @@ void
 FMT_Fini(void)
 {
     free(obuf);
-    VSB_delete(scratch);
+    VSB_destroy(&scratch);
     free(payload);
 
     free_incl(cincl);

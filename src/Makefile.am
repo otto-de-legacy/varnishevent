@@ -36,8 +36,7 @@ varnishevent_SOURCES = \
 	hdrtrie.c
 
 varnishevent_LDADD = \
-	${PTHREAD_LIBS} ${RT_LIBS} ${LIBM} @VARNISH_LIBS@ \
-	-L${VARNISH_PKG_LIB}/varnish -lvarnish
+	${PTHREAD_LIBS} ${RT_LIBS} ${LIBM} @VARNISH_LIBS@
 
 # from Varnish include/Makefile.am
 BUILT_SOURCES = vcs_version.h

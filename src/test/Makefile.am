@@ -20,7 +20,7 @@ test_data_LDADD = \
 	../format.$(OBJEXT) \
 	../strfTIM.$(OBJEXT) \
 	../hdrtrie.$(OBJEXT) \
-	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
+	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM}
 
 test_format_SOURCES = \
 	minunit.h \
@@ -33,7 +33,7 @@ test_format_LDADD = \
 	../data.$(OBJEXT) \
 	../hdrtrie.$(OBJEXT) \
 	../format.$(OBJEXT) \
-	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
+	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM}
 
 test_writer_SOURCES = \
 	minunit.h \
@@ -50,7 +50,7 @@ test_writer_LDADD = \
 	../strfTIM.$(OBJEXT) \
 	../hdrtrie.$(OBJEXT) \
 	../writer.$(OBJEXT) \
-	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
+	@VARNISH_LIBS@ @VARNISH_LIBVARNISH_LIB@ ${LIBM}
 
 test_strfTIM_SOURCES = \
 	minunit.h \
@@ -59,7 +59,7 @@ test_strfTIM_SOURCES = \
 
 test_strfTIM_LDADD = \
 	../strfTIM.$(OBJEXT) \
-	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
+	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ ${LIBM}
 
 test_hdrtrie_SOURCES = \
 	minunit.h \
@@ -68,4 +68,4 @@ test_hdrtrie_SOURCES = \
 
 test_hdrtrie_LDADD = \
 	../hdrtrie.$(OBJEXT) \
-	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ ${LIBM} -lvarnish
+	@VARNISH_LIBS@  @VARNISH_LIBVARNISH_LIB@ ${LIBM}

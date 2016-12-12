@@ -512,7 +512,7 @@ static char
     MASSERT(strcasecmp(VSB_data(sb), EXP) == 0);
 #undef EXP
 
-    VSB_delete(sb);
+    VSB_destroy(&sb);
 
     return NULL;
 }

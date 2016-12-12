@@ -375,9 +375,10 @@ precision.
 REQUIREMENTS
 ============
 
-This version of varnishevent requires Varnish 5.0.0 (exactly that
-version and no other). See the project repository for versions that
-are compatible with other versions of Varnish.
+This version of varnishevent requires the Varnish trunk since commit
+``d0bba14``; it is not currently compatible with any released version
+of Varnish. See the project repository for versions that are
+compatible with other versions of Varnish.
 
 
 DATA BUFFERS
