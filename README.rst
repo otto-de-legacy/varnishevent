@@ -7,8 +7,8 @@ Display Varnish log contents in formats for client, backend and other events
 ----------------------------------------------------------------------------
 
 :Author: Geoffrey Simmons
-:Date:   2016-12-09
-:Version: trunk
+:Date:   2016-12-12
+:Version: 4.1.3
 :Manual section: 1
 
 
@@ -375,8 +375,8 @@ precision.
 REQUIREMENTS
 ============
 
-This version of varnishevent requires Varnish 4.1.3 through 5.0.0.
-See the project repository for versions that are compatible with other
+This version of varnishevent requires Varnish 4.1.3 or 4.1.4.  See the
+project repository for versions that are compatible with other
 versions of Varnish.
 
 
