@@ -155,6 +155,11 @@ client loggging. In varnishevent, this is determined by whether output
 formats are specified for client or backend logging in the
 configuration.
 
+varnishevent does not implement varnishncsa's ``-t`` option (which
+repeatedly attempts to open the Varnish log on startup, if the first
+attempt fails, for a certain number of seconds). varnishevent fails if
+the log cannot be opened on the first try.
+
 FORMAT
 ======
 
