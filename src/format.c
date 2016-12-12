@@ -1035,6 +1035,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
         fmt->args[i].hdr_idx = -1;
 
     xids_wanted[type] = 0;
+    tag_no_hdr[type] = vbit_init(MAX_VSL_TAG);
 
     n = 0;
     os = VSB_new_auto();
@@ -1316,6 +1317,8 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                         }
                         add_hdr(fmt, t, hdr, n);
                     }
+                    else
+                        vbit_set(tag_no_hdr[type], t);
                     add_tag(type, t, hdr);
                 }
                 else if (strncmp(fname, "vxid", 4) == 0
@@ -1401,6 +1404,8 @@ FMT_Init(char *err)
         VSTAILQ_INIT(&bincl[i]);
         VSTAILQ_INIT(&rincl[i]);
     }
+    for (int i = 0; i < VSL_t__MAX; i++)
+        tag_no_hdr[i] = NULL;
 
     if (!VSB_EMPTY(config.cformat)) {
         if (compile_fmt(VSB_data(config.cformat), &cformat, VSL_t_req, err)

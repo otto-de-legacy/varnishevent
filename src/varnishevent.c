@@ -305,6 +305,19 @@ submit(tx_t *tx)
     submitted++;
 }
 
+/*
+ * True if, for the transaction type, a record for the tag should be saved
+ * in addition to records for payloads with specific headers. Needed when,
+ * for example, the output format specifies both %{Varnish:first_byte}x
+ * (which requires Timestamp:Resp) and also %{tag:Timestamp}x (which
+ * requires the first Timestamp).
+ */
+static inline int
+no_hdr(enum VSL_transaction_e type, enum VSL_tag_e tag)
+{
+    return tag_no_hdr[type] != NULL && vbit_test(tag_no_hdr[type], tag);
+}
+
 static int
 event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
 {
@@ -343,7 +356,7 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
         while ((status = VSL_Next(t->c)) > 0) {
             enum VSL_tag_e tag;
             int idx, hdr_idx, len, n, nchunk;
-            rec_t *rec, **rp;
+            rec_t *rec, **rp, **rp2 = NULL;
             chunk_t *chunk;
             const char *p;
 
@@ -377,18 +390,23 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             }
 
             CHECK_OBJ_NOTNULL(tx->recs[idx], REC_NODE_MAGIC);
-            if (tx->recs[idx]->rec != NULL)
+            rp = &tx->recs[idx]->rec;
+            if (*rp != NULL && tx->recs[idx]->hdrs == NULL)
                 continue;
             if (tx->recs[idx]->hdrs != NULL) {
                 hdr_idx = HDR_FindIdx(hdr_trie[tag], p);
-                if (hdr_idx == -1)
+                if (hdr_idx == -1) {
+                    if (*rp != NULL || !no_hdr(t->type, tag))
+                        continue;
+                }
+                else if (tx->recs[idx]->hdrs[hdr_idx] != NULL)
                     continue;
-                if (tx->recs[idx]->hdrs[hdr_idx] != NULL)
-                    continue;
-                rp = &tx->recs[idx]->hdrs[hdr_idx];
+                else {
+                    if (*rp == NULL && no_hdr(t->type, tag))
+                        rp2 = rp;
+                    rp = &tx->recs[idx]->hdrs[hdr_idx];
+                }
             }
-            else
-                rp = &tx->recs[idx]->rec;
 
             if (debug)
                 LOG_Log(LOG_DEBUG, "Record: [%u %s %.*s]",
@@ -406,6 +424,8 @@ event(struct VSL_data *vsl, struct VSL_transaction * const pt[], void *priv)
             assert(!OCCUPIED(rec));
             assert(VSTAILQ_EMPTY(&rec->chunks));
             *rp = rec;
+            if (rp2 != NULL)
+                *rp2 = rec;
 
             rec->tag = tag;
             n = len;
