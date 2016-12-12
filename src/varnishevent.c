@@ -688,11 +688,6 @@ main(int argc, char *argv[])
                 fprintf(stderr, "%s\n", VSL_Error(vsl));
                 usage(EXIT_FAILURE);
             }
-            /* XXX: VSL_Arg doesn't check this */
-            if (c == 'L' && atoi(optarg) == 0) {
-                fprintf(stderr, "-L: Range error\n");
-                usage(EXIT_FAILURE);
-            }
             AN(errnum);
             break;
         case 'h':
