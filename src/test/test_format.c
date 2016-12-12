@@ -752,8 +752,8 @@ static const char
 
     add_record_data(&tx, SLT_BereqAcct, &rec[1], &c[1], REQACCT_PAYLOAD);
     format_I_backend(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "283", 3) == 0);
-    MASSERT(len == 3);
+    MASSERT(strncmp(str, "60", 2) == 0);
+    MASSERT(len == 2);
 
 #define PIPEACCT_PAYLOAD "60 60 178 105"
     clear_rec(&tx, SLT_ReqAcct);
@@ -824,8 +824,8 @@ static const char
 
     add_record_data(&tx, SLT_BereqAcct, &rec[1], &c[1], REQACCT_PAYLOAD);
     format_O_backend(&tx, &args, &str, &len);
-    MASSERT(strncmp(str, "60", 2) == 0);
-    MASSERT(len == 2);
+    MASSERT(strncmp(str, "283", 3) == 0);
+    MASSERT(len == 3);
 
     clear_rec(&tx, SLT_ReqAcct);
     add_record_data(&tx, SLT_PipeAcct, &rec[0], &c[0], PIPEACCT_PAYLOAD);
@@ -2132,7 +2132,7 @@ static const char
     setup_full_backend_tx(&tx, node, nptr, rec, c);
     os = FMT_Format(&tx, &len);
 #define EXP_FULL_BACKEND_OUTPUT "105 b 15703 HTTP/1.1 default(127.0.0.1,,80) "\
-        "283 foohdr barhdr - GET 60 bar=baz&quux=wilco GET "\
+        "60 foohdr barhdr - GET 283 bar=baz&quux=wilco GET "\
         "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
         "2 chunked stream \"foo\\0\\377 bar\" "\

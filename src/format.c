@@ -411,7 +411,7 @@ void
 format_I_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_IO_backend(tx, 5, s, len);
+    format_IO_backend(tx, 2, s, len);
 }
 
 void
@@ -439,7 +439,7 @@ void
 format_O_backend(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
     (void) args;
-    format_IO_backend(tx, 2, s, len);
+    format_IO_backend(tx, 5, s, len);
 }
 
 static inline void

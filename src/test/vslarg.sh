@@ -11,7 +11,7 @@ LOG=/dev/null
 echo "... no VSL args"
 CKSUM=$( ../varnishevent -r ${IN} -f ${CONF} -l ${LOG} | cksum)
 
-if [ "$CKSUM" != '1280332296 442191' ]; then
+if [ "$CKSUM" != '2861633151 442191' ]; then
     echo "ERROR: no VSL args unexpected cksum: $CKSUM"
     exit 1
 fi
@@ -20,7 +20,7 @@ echo "... -g vxid"
 CKSUM=$( ../varnishevent -g vxid -r ${IN} -f ${CONF} -l ${LOG} | cksum)
 
 # Same as default (no -g arg)
-if [ "$CKSUM" != '1280332296 442191' ]; then
+if [ "$CKSUM" != '2861633151 442191' ]; then
     echo "ERROR: -g vxid unexpected cksum: $CKSUM"
     exit 1
 fi
@@ -28,7 +28,7 @@ fi
 echo "... -g request"
 CKSUM=$( ../varnishevent -g request -r ${IN} -f ${CONF} -l ${LOG} | cksum)
 
-if [ "$CKSUM" != '202886188 443186' ]; then
+if [ "$CKSUM" != '519771253 443186' ]; then
     echo "ERROR: -g request unexpected cksum: $CKSUM"
     exit 1
 fi
