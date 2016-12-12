@@ -187,7 +187,7 @@ transactions, only the formatters ``%t``, ``%{X}t``, ``%{tag}x`` and
 
 %d
   The 'direction' of the logged event: ``c`` for client transactions,
-  ``b`` for backend transactions, and the empty string otherwise.
+  ``b`` for backend transactions. Not permitted for raw transactions.
 
 %H 
   The request protocol. Defaults to HTTP/1.0 if not known.
@@ -263,6 +263,9 @@ transactions, only the formatters ``%t``, ``%{X}t``, ``%{tag}x`` and
     pass, pipe or error. This formatter is only permitted for client
     transactions.
 	
+  Varnish:side
+    Equivalent to ``%d``, for compatibility with varnishncsa.
+
   VCL_Log:key
     Output value set by std.log("key: value") in VCL.
 

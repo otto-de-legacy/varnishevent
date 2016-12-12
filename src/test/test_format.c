@@ -1979,7 +1979,8 @@ static const char
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x "\
         "%{Varnish:hitmiss}x %{Varnish:handling}x %{VCL_Log:baz}x "\
         "%{tag:VCL_acl}x %{tag:Debug}x %{tag:Timestamp:Req}x "\
-        "%{tag:ReqAcct[0]}x %{tag:Timestamp:Resp[2]}x %{vxid}x %{pvxid}x"
+        "%{tag:ReqAcct[0]}x %{tag:Timestamp:Resp[2]}x %{vxid}x %{pvxid}x "\
+        "%{Varnish:side}x"
     VSB_clear(config.cformat);
     VSB_cat(config.cformat, FULL_CLIENT_FMT);
     VSB_finish(config.cformat);
@@ -2052,7 +2053,7 @@ static const char
         "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.000166 hit hit "\
         "logload MATCH ACL \"10.0.0.0\"/8 \"foo\\0\\377 bar\" " \
-        "1429213569.602005 0.000000 0.000000 60 0.000125 4711 1147\n"
+        "1429213569.602005 0.000000 0.000000 60 0.000125 4711 1147 c\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_CLIENT_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);
@@ -2064,7 +2065,8 @@ static const char
 #define FULL_BACKEND_FMT "%b %d %D %H %h %I %{Foo}i %{Bar}o %l %m %O %q %r %s "\
         "%t %T %{%F-%T.%i}t %U %u %{Varnish:time_firstbyte}x %{VCL_Log:baz}x "\
         "%{tag:Fetch_Body}x %{tag:Debug}x %{tag:Timestamp:Bereq}x "\
-        "%{tag:BereqAcct[5]}x %{tag:Timestamp:Bereq[1]}x %{vxid}x %{pvxid}x"
+        "%{tag:BereqAcct[5]}x %{tag:Timestamp:Bereq[1]}x %{vxid}x %{pvxid}x "\
+        "%{Varnish:side}x"
     VSB_clear(config.bformat);
     VSB_cat(config.bformat, FULL_BACKEND_FMT);
     VSB_finish(config.bformat);
@@ -2129,7 +2131,7 @@ static const char
         "http://foobar.com/foo?bar=baz&quux=wilco HTTP/1.1 200 "\
         "[%d/%b/%Y:%T %z] 0 %F-%T.529143 /foo varnish 0.002837 logload "\
         "2 chunked stream \"foo\\0\\377 bar\" "\
-        "1429210777.728290 0.000048 0.000048 283 0.000048 4711 1147\n"
+        "1429210777.728290 0.000048 0.000048 283 0.000048 4711 1147 b\n"
     tm = localtime(&t);
     MAN(strftime(strftime_s, BUFSIZ, EXP_FULL_BACKEND_OUTPUT, tm));
     VMASSERT(strcmp(os, strftime_s) == 0, "'%s' != '%s'", os, strftime_s);

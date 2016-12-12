@@ -162,7 +162,7 @@ unsigned tx_occ, rec_occ, chunk_occ, tx_occ_hi, rec_occ_hi, chunk_occ_hi,
 struct hdrt_node *hdr_trie[MAX_VSL_TAG];
 
 /* non-zero if vxid or pvxid outputs are requested for a transaction type */
-int xids_wanted[VSL_t__MAX];
+int nonrecs_wanted[VSL_t__MAX];
 
 struct vbitmap *tag_no_hdr[VSL_t__MAX];
 

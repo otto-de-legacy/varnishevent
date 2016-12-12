@@ -1034,7 +1034,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
     for (int i = 0; i < n; i++)
         fmt->args[i].hdr_idx = -1;
 
-    xids_wanted[type] = 0;
+    nonrecs_wanted[type] = 0;
     tag_no_hdr[type] = vbit_init(MAX_VSL_TAG);
 
     n = 0;
@@ -1079,6 +1079,7 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
 
         case 'd':
             VSB_putc(os, C(type) ? 'c' : 'b');
+            nonrecs_wanted[type] = 1;
             break;
             
         case 'D':
@@ -1324,11 +1325,16 @@ compile_fmt(char * const format, compiled_fmt_t * const fmt,
                 else if (strncmp(fname, "vxid", 4) == 0
                          || strncmp(fname, "Varnish:vxid", 12) == 0) {
                     add_formatter(fmt, os, n, format_vxid);
-                    xids_wanted[type] = 1;
+                    nonrecs_wanted[type] = 1;
                 }
                 else if (strncmp(fname, "pvxid", 5) == 0) {
                     add_formatter(fmt, os, n, format_pvxid);
-                    xids_wanted[type] = 1;
+                    nonrecs_wanted[type] = 1;
+                }
+                else if (strncmp(fname, "Varnish:side", 12) == 0) {
+                    /* same as %d */
+                    VSB_putc(os, C(type) ? 'c' : 'b');
+                    nonrecs_wanted[type] = 1;
                 }
                 else {
                     sprintf(err, "Unknown format starting at: %s", fname);
