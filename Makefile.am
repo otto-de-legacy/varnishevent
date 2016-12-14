@@ -1,6 +1,6 @@
 #
 
-ACLOCAL_AMFLAGS = -I m4
+ACLOCAL_AMFLAGS = -I m4 -I ${VARNISH_DATAROOTDIR}/aclocal
 
 SUBDIRS = src
 

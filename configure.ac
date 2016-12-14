@@ -61,6 +61,7 @@ PKG_CHECK_VAR([VARNISH_PKG_INCLUDE], [varnishapi], [pkgincludedir])
 AC_SUBST(VARNISH_SHARE_INCLUDE, "${VARNISH_PKG_INCLUDE}/include")
 PKG_CHECK_VAR(VARNISH_PKG_LIB, [varnishapi], [libdir])
 AC_SUBST(VARNISH_LIBVARNISH_LIB, "-L${VARNISH_PKG_LIB}/varnish")
+PKG_CHECK_VAR(VARNISH_DATAROOTDIR, [varnishapi], [datarootdir])
 
 # Checks for header files.
 AC_HEADER_STDC
