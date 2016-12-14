@@ -76,13 +76,13 @@ static char
     size_t n;
     time_t t = 1382804827;
     long usec = 112625;
-    const char *exp = "2013-10-26-18:27:07.112625";
+    const char *exp = "2013-10-26-16:27:07.112625";
     char s[BUFSIZ];
     struct tm *tm;
 
     printf("... testing strfTIM %%i conversion specifier\n");
 
-    tm = localtime(&t);
+    tm = gmtime(&t);
     MAN(tm);
     
     n = strfTIM(s, BUFSIZ, "%F-%T.%i", tm, usec);
@@ -113,12 +113,16 @@ static char
 *test_strfTIMlocal(void)
 {
     size_t n;
+    time_t t = 1382804820;
+    struct tm *tm;
     char s[BUFSIZ], exp[BUFSIZ];
 
     printf("... testing strfTIMlocal\n");
 
     n = strfTIMlocal(s, BUFSIZ, "%F-%T.%i", 1382804820.112625);
-    sprintf(exp, "2013-10-26-18:27:0%.6f", 0.112625);
+    tm = localtime(&t);
+    MAN(tm);
+    strftime(exp, BUFSIZ, "%F-%T.112625", tm);
     VMASSERT(n == strlen(exp), "strfTIMlocal return value %zu (expected %zu)",
              n, strlen(exp));
 
