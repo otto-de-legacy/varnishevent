@@ -4,6 +4,10 @@ echo
 echo "TEST: $0"
 echo '... testing output and log against known checksums'
 
+# Ensure that the local time date formatters produce the same output
+# wherever the test is run.
+export TZ=UTC
+
 LOG=test.log
 OUT=output.log
 
@@ -12,7 +16,7 @@ rm -f $LOG $OUT
 ../varnishevent -f varnishevent.conf -r varnish-4.1.0-doc.log -w $OUT -v
 
 CKSUM=$( cksum $OUT )
-if [ "$CKSUM" != "1046111307 442153 $OUT" ]; then
+if [ "$CKSUM" != "54743924 442153 $OUT" ]; then
     echo "ERROR: Regression test log output incorrect cksum: $CKSUM"
     exit 1
 fi

@@ -372,6 +372,10 @@ reproduces the same value that was present in the log, while
 varnishncsa performs floating point conversions, with some loss of
 precision.
 
+The date/time formatters ``%t`` and ``%{X}t`` assume the local time
+zone, as set in varnishevent's environment. You can control the output
+by setting the ``TZ`` environment variable.
+
 REQUIREMENTS
 ============
 
