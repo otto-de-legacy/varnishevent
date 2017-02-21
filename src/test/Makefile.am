@@ -1,5 +1,8 @@
 AM_CPPFLAGS = @VARNISH_CFLAGS@ -I ${VARNISH_PKG_INCLUDE}
 
+AM_TESTS_ENVIRONMENT = \
+	PATH=@LIBVARNISHAPI_BINDIR@:$$PATH; export PATH;
+
 TESTS = test_data test_strfTIM test_hdrtrie test_format test_writer \
 	ncsa.sh vslarg.sh regress.sh
 
