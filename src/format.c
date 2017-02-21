@@ -796,6 +796,10 @@ format_VCL_Log(const tx_t *tx, const arg_t *args, char **s, size_t *len)
     *len = strlen(l);
 }
 
+/*
+ * XXX: apparently none of VSL, varnishlog or varnishncsa use VSB_quote
+ * for SLT_F_BINARY any more.
+ */
 void
 format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
 {
@@ -804,7 +808,9 @@ format_SLT(const tx_t *tx, const arg_t *args, char **s, size_t *len)
         for (int i = 0; i < *len; i++)
             if (!isprint(*(*s + i))) {
                 VSB_clear(scratch);
+                VSB_putc(scratch, '\"');
                 VSB_quote(scratch, *s, (int) *len, 0);
+                VSB_putc(scratch, '\"');
                 VSB_finish(scratch);
                 *s = VSB_data(scratch);
                 *len = VSB_len(scratch);
