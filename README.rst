@@ -7,7 +7,7 @@ Display Varnish log contents in formats for client, backend and other events
 ----------------------------------------------------------------------------
 
 :Author: Geoffrey Simmons
-:Date:   2016-12-12
+:Date:   2017-03-15
 :Version: trunk
 :Manual section: 1
 
@@ -379,10 +379,9 @@ by setting the ``TZ`` environment variable.
 REQUIREMENTS
 ============
 
-This version of varnishevent requires the Varnish trunk since commit
-``d0bba14``; it is not currently compatible with any released version
-of Varnish. See the project repository for versions that are
-compatible with other versions of Varnish.
+This version of varnishevent requires the Varnish trunk since version
+5.1. See the project repository for versions that are compatible with
+other versions of Varnish.
 
 
 DATA BUFFERS
