@@ -1,7 +1,7 @@
 AC_PREREQ(2.59)
 AC_COPYRIGHT([Copyright (c) 2015 UPLEX Nils Goroll Systemoptimierung
 Copyright (c) 2015 Otto Gmbh & Co KG])
-AC_INIT([varnishevent], [trunk])
+AC_INIT([varnishevent], [5.1.0])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR(src/varnishevent.h)
 AM_CONFIG_HEADER(config.h)
@@ -53,8 +53,8 @@ AM_CONDITIONAL(HAVE_RST2HTML,[test "x$RST2HTML" != "xno"])
 m4_ifndef([PKG_PROG_PKG_CONFIG], [m4_fatal([pkg.m4 missing, please install pkg-config])])
 PKG_PROG_PKG_CONFIG
 
-PKG_CHECK_MODULES([VARNISH], [varnishapi = trunk], [],
-                  [AC_MSG_ERROR([Varnish trunk is required])])
+PKG_CHECK_MODULES([VARNISH], [varnishapi = 5.1.0], [],
+                  [AC_MSG_ERROR([Varnish 5.1.0 is required])])
 AC_SUBST(VARNISH_CFLAGS)
 AC_SUBST(VARNISH_LIBS)
 PKG_CHECK_VAR([VARNISH_PKG_INCLUDE], [varnishapi], [pkgincludedir])

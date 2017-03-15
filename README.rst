@@ -379,9 +379,9 @@ by setting the ``TZ`` environment variable.
 REQUIREMENTS
 ============
 
-This version of varnishevent requires the Varnish trunk since version
-5.1. See the project repository for versions that are compatible with
-other versions of Varnish.
+This version of varnishevent requires the Varnish version 5.1. See the
+project repository for versions that are compatible with other
+versions of Varnish.
 
 
 DATA BUFFERS
