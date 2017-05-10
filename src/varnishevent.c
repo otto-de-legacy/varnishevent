@@ -589,10 +589,10 @@ usage(int status)
 {
     fprintf(stderr,
             "usage: varnishevent [-adDhvV] [-f configfile] [-F format]\n"
-            "                    [-g grouping] [-L txlimit] [-n name] \n"
-            "                    [-N vsmfile] [-P pidfile] [-q query] \n"
-            "                    [-r binlog] [-T txtimeout] [-w outputfile]\n"
-            "                    [-l logfile]\n");
+            "                    [-g grouping] [-L txlimit] [-n name]\n"
+            "                    [-P pidfile] [-q query] [-r binlog]\n"
+            "                    [-T txtimeout] [-w outputfile] [-l logfile]\n"
+            );
     exit(status);
 }
 
@@ -698,11 +698,6 @@ main(int argc, char *argv[])
         }
     }
 
-    if (n_arg && N_arg) {
-        fprintf(stderr, "Cannot have both -n and -N options\n");
-        usage(EXIT_FAILURE);
-    }
-
     if (! EMPTY(cli_config_filename)) {
         printf("Reading config from %s\n", cli_config_filename);
         if (CONF_ReadFile(cli_config_filename) != 0) {
@@ -712,9 +707,9 @@ main(int argc, char *argv[])
         }
     }
 
-    if (!EMPTY(config.varnish_bindump) && (n_arg || N_arg)) {
-        fprintf(stderr, "Cannot specify -r/varnish.bindump together with -n "
-                " or -N\n");
+    if (!EMPTY(config.varnish_bindump) && n_arg) {
+        fprintf(stderr, "Cannot specify -r/varnish.bindump together with -n"
+                "\n");
         usage(EXIT_FAILURE);
     }
 
@@ -795,10 +790,6 @@ main(int argc, char *argv[])
         AN(vsm);
         if (n_arg && VSM_n_Arg(vsm, n_arg) <= 0) {
             LOG_Log(LOG_CRIT, "-n %s: %s\n", n_arg, VSM_Error(vsm));
-            exit(EXIT_FAILURE);
-        }
-        else if (N_arg && VSM_N_Arg(vsm, N_arg) <= 0) {
-            LOG_Log(LOG_CRIT, "-N %s: %s\n", n_arg, VSM_Error(vsm));
             exit(EXIT_FAILURE);
         }
         if (VSM_Open(vsm) < 0) {

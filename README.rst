@@ -17,10 +17,10 @@ SYNOPSIS
 
 ::
 
-  varnishevent [-a] [-d] [-D] [-f configfile] [-F format] [-g grouping]
-               [-L txlimit] [-n varnish_name] [-N vsmfile] [-P file]
-               [-q query] [-r file] [-T txtimeout] [-v] [-V] [-w file]
-               [-l logfile]
+  varnishevent [-adDhvV] [-f configfile] [-F format]
+               [-g grouping] [-L txlimit] [-n name]
+               [-P pidfile] [-q query] [-r binlog]
+               [-T txtimeout] [-w outputfile] [-l logfile]
 
 
 DESCRIPTION
@@ -102,11 +102,6 @@ OPTIONS
 
 	Specify the name of the varnishd instance to get logs
 	from. If -n is not specified, the host name is used.
-
--N filename
-
-	Specify the filename of a stale VSM instance. When using this
-	option the abandonment checking is disabled.
 
 -P file
 
@@ -475,8 +470,8 @@ Parameter              CLI Option Description                                   
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``varnish.bindump``    ``-r``     A binary dump of the Varnish shared memory log obtained from ``varnishlog -B -w``. If a   none
                                   value is specified, ``varnishevent`` reads from that file instead of a live Varnish log
-                                  (useful for testing, debugging and replaying traffic). This parameter and the ``-n`` or
-                                  ``-N`` options are mutually exclusive.
+                                  (useful for testing, debugging and replaying traffic). This parameter and the ``-n``
+                                  option are mutually exclusive.
 ---------------------- ---------- ----------------------------------------------------------------------------------------- -------
 ``cformat``            ``-F``     Output format for client transactions, using the formatter syntax shown for the ``-F``    default for ``-F``
                                   option above. By default, client transactions are logged, using the default format
