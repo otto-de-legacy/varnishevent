@@ -703,9 +703,8 @@ main(int argc, char *argv[])
         }
     }
 
-    if (!EMPTY(config.varnish_bindump) && n_arg) {
-        fprintf(stderr, "Cannot specify -r/varnish.bindump together with -n"
-                "\n");
+    if (!EMPTY(config.varnish_bindump) && (n_arg)) {
+        fprintf(stderr, "Cannot specify -r/varnish.bindump together with -n\n");
         usage(EXIT_FAILURE);
     }
 
