@@ -601,12 +601,13 @@ main(int argc, char *argv[])
 {
     int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0, D_flag = 0;
     char *P_arg = NULL, *w_arg = NULL, *q_arg = NULL, *g_arg = NULL,
-        *n_arg = NULL, *N_arg = NULL, *l_arg = NULL, scratch[BUFSIZ];
+        *n_arg = NULL, *N_arg = NULL, *l_arg = NULL, scratch[BUFSIZ],
+        *vsm_name = NULL;
     char cli_config_filename[PATH_MAX + 1] = "";
     struct vpf_fh *pfh = NULL;
     struct VSL_data *vsl;
     struct VSLQ *vslq;
-    struct VSM_data *vsm = NULL;
+    struct vsm *vsm = NULL;
     struct VSL_cursor *cursor;
     enum VSL_grouping_e grouping = VSL_g_vxid;
     unsigned long last_seen = 0;
@@ -788,15 +789,17 @@ main(int argc, char *argv[])
         unsigned options = VSL_COPT_BATCH;
         vsm = VSM_New();
         AN(vsm);
-        if (n_arg && VSM_n_Arg(vsm, n_arg) <= 0) {
+        if (n_arg && VSM_Arg(vsm, 'n', n_arg) <= 0) {
             LOG_Log(LOG_CRIT, "-n %s: %s\n", n_arg, VSM_Error(vsm));
             exit(EXIT_FAILURE);
         }
-        if (VSM_Open(vsm) < 0) {
-            LOG_Log(LOG_CRIT, "Cannot attach to shared memory for instance %s: "
-                    "%s", VSM_Name(vsm), VSM_Error(vsm));
+        if (VSM_Attach(vsm, -1) < 0) {
+            LOG_Log(LOG_CRIT, "Cannot attach to shared memory: %s",
+                    VSM_Error(vsm));
             exit(EXIT_FAILURE);
         }
+        vsm_name = VSM_Dup(vsm, "-i", "Arg");
+        AN(vsm_name);
         if (!d_flag)
             options |= VSL_COPT_TAIL;
         cursor = VSL_CursorVSM(vsl, vsm, options);
@@ -858,10 +861,10 @@ main(int argc, char *argv[])
     if (!EMPTY(config.varnish_bindump))
         LOG_Log(LOG_INFO, "Reading from file: %s", config.varnish_bindump);
     else {
-        if (EMPTY(VSM_Name(vsm)))
+        if (EMPTY(vsm_name))
             LOG_Log0(LOG_INFO, "Reading default varnish instance");
         else
-            LOG_Log(LOG_INFO, "Reading varnish instance %s", VSM_Name(vsm));
+            LOG_Log(LOG_INFO, "Reading varnish instance %s", vsm_name);
     }
 
     if (!VSB_EMPTY(config.cformat) && VSB_EMPTY(config.bformat))
@@ -1035,7 +1038,7 @@ main(int argc, char *argv[])
                 while (!term && vslq == NULL) {
                     AN(vsm);
                     VTIM_sleep(0.1);
-                    if (VSM_Open(vsm)) {
+                    if (VSM_Attach(vsm, -1) < 0) {
                         VSM_ResetError(vsm);
                         continue;
                     }
@@ -1043,7 +1046,6 @@ main(int argc, char *argv[])
                                            VSL_COPT_TAIL | VSL_COPT_BATCH);
                     if (cursor == NULL) {
                         VSL_ResetError(vsl);
-                        VSM_Close(vsm);
                         continue;
                     }
                     vslq = VSLQ_New(vsl, &cursor, grouping, q_arg);
