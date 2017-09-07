@@ -792,7 +792,7 @@ main(int argc, char *argv[])
                     VSM_Error(vsm));
             exit(EXIT_FAILURE);
         }
-        vsm_name = VSM_Dup(vsm, "-i", "Arg");
+        vsm_name = VSM_Dup(vsm, "Arg", "-i");
         AN(vsm_name);
         if (!d_flag)
             options |= VSL_COPT_TAIL;
