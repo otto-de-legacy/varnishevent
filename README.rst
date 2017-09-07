@@ -7,7 +7,7 @@ Display Varnish log contents in formats for client, backend and other events
 ----------------------------------------------------------------------------
 
 :Author: Geoffrey Simmons
-:Date:   2017-03-15
+:Date:   2017-09-07
 :Version: trunk
 :Manual section: 1
 

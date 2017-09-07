@@ -601,8 +601,7 @@ main(int argc, char *argv[])
 {
     int c, errnum, status, a_flag = 0, v_flag = 0, d_flag = 0, D_flag = 0;
     char *P_arg = NULL, *w_arg = NULL, *q_arg = NULL, *g_arg = NULL,
-        *n_arg = NULL, *N_arg = NULL, *l_arg = NULL, scratch[BUFSIZ],
-        *vsm_name = NULL;
+        *n_arg = NULL,*l_arg = NULL, scratch[BUFSIZ], *vsm_name = NULL;
     char cli_config_filename[PATH_MAX + 1] = "";
     struct vpf_fh *pfh = NULL;
     struct VSL_data *vsl;
@@ -675,10 +674,6 @@ main(int argc, char *argv[])
             break;
         case 'n':
             REPLACE(n_arg, optarg);
-            break;
-        case 'N':
-            REPLACE(N_arg, optarg);
-            d_flag = 1;
             break;
         case 'r':
             bprintf(config.varnish_bindump, "%s", optarg);
